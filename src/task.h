@@ -1,10 +1,10 @@
 #pragma once
 #include <stddef.h>
-#include <ucontext.h>
 #include <functional>
 #include <exception>
 #include <vector>
 #include <list>
+#include "context.h"
 #include "ts_queue.h"
 #include "timer.h"
 
@@ -55,12 +55,9 @@ struct Task
     uint64_t id_;
     TaskState state_ = TaskState::init;
     uint64_t yield_count_ = 0;
-    ucontext_t ctx_;
-    TaskF fn_;
     Processer* proc_ = NULL;
-    char* stack_ = NULL;
-    uint32_t stack_size_ = 0;
-    uint32_t stack_capacity_ = 0;
+    Context ctx_;
+    TaskF fn_;
     std::string debug_info_;
     std::exception_ptr eptr_;           // 保存exception的指针
     std::atomic<uint32_t> ref_count_{1};// 引用计数
@@ -82,6 +79,9 @@ struct Task
     ~Task();
 
     void AddIntoProcesser(Processer *proc, char* shared_stack, uint32_t shared_stack_cap);
+
+    bool SwapIn();
+    bool SwapOut();
 
     void SetDebugInfo(std::string const& info);
     const char* DebugInfo();

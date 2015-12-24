@@ -33,11 +33,6 @@ public:
     void CoYield(ThreadLocalInfo &info);
 
     uint32_t GetTaskCount();
-
-private:
-    void SaveStack(Task *tk);
-
-    void RestoreStack(Task *tk);
 };
 
 } //namespace co

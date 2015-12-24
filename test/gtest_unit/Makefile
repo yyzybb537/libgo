@@ -2,7 +2,7 @@ CC=g++
 CFLAGS=-std=c++11 -O3 -Wall
 INCLUDE=-I../../third_party/gtest/include -I../../src -I../../src/linux
 LINK=-L../../third_party/gtest/build -L../../build -llibgo -ldl -lgtest_main -lgtest -lpthread \
-	 -lboost_thread -lboost_system -lpthread
+	 -lboost_coroutine -lboost_thread -lboost_system -lpthread -fuse-ld=gold 
 STATIC=-static -static-libgcc -static-libstdc++
 TARGET=$(patsubst %.cpp, %.t, $(wildcard *.cpp)) $(patsubst %.cpp, s_%.t, $(wildcard *.cpp))
 

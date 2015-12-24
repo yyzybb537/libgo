@@ -68,38 +68,29 @@ Task::Task(TaskF const& fn)
 Task::~Task()
 {
     --s_task_count;
-    if (stack_) {
-        free(stack_);
-        stack_ = NULL;
-    }
 }
 
 void Task::AddIntoProcesser(Processer *proc, char* shared_stack, uint32_t shared_stack_cap)
 {
     assert(!proc_);
     proc_ = proc;
-    if (-1 == getcontext(&ctx_)) {
+    if (!ctx_.Init([this]{C_func(this);}, shared_stack, shared_stack_cap)) {
         state_ = TaskState::fatal;
         fprintf(stderr, "task(%s) init, getcontext error:%s\n",
                 DebugInfo(), strerror(errno));
         return ;
     }
 
-    ctx_.uc_stack.ss_sp = shared_stack;
-    ctx_.uc_stack.ss_size = shared_stack_cap;
-    ctx_.uc_link = NULL;
-    makecontext(&ctx_, (void(*)(void))&C_func, 1, this);
-
-#ifndef CO_USE_WINDOWS_FIBER
-    // save coroutine stack first 16 bytes.
-    assert(!stack_);
-    stack_size_ = 16;
-    stack_capacity_ = std::max<uint32_t>(16, g_Scheduler.GetOptions().init_stack_size);
-    stack_ = (char*)malloc(stack_capacity_);
-    memcpy(stack_, shared_stack + shared_stack_cap - stack_size_, stack_size_);
-#endif
-
     state_ = TaskState::runnable;
+}
+
+bool Task::SwapIn()
+{
+    return ctx_.SwapIn();
+}
+bool Task::SwapOut()
+{
+    return ctx_.SwapOut();
 }
 
 void Task::SetDebugInfo(std::string const& info)

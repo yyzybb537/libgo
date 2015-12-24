@@ -1,12 +1,13 @@
 CC=g++
-CFLAGS=-std=c++11 -g -Wall
+CFLAGS=-std=c++11 -g -Wall -fsplit-stack
 TARGET=$(patsubst %.cpp, %.t, $(wildcard *.cpp)) pg_cpu.t
 OBJS=$(patsubst %, %.o, $(TARGET))
+LINK=-fuse-ld=gold -L../../src -lboost_coroutine -lboost_thread -lboost_system
 
 all : $(TARGET)
 
 pg_cpu.t: pg_cpu.o
-	@$(CC) $(CFLAGS) -pg $^ -o $@ -lboost_thread -lboost_system -L../../src -llibgo -ldl
+	@$(CC) $(CFLAGS) -pg $^ -o $@ ${LINK}  -llibgo -ldl
 	@echo "LD $@"
 
 pg_cpu.o: cpu.cpp
@@ -14,15 +15,15 @@ pg_cpu.o: cpu.cpp
 	@echo "MK $@"
 
 s_hiredis.t: hiredis.o
-	@$(CC) $(CFLAGS) $^ -o $@ -L../../src -lhiredis -llibgo -static -static-libgcc -static-libstdc++
+	@$(CC) $(CFLAGS) $^ -o $@ ${LINK} -lhiredis -llibgo -static -static-libgcc -static-libstdc++
 	@echo "LD $@"
 
 hiredis.t: hiredis.o
-	@$(CC) $(CFLAGS) $^ -o $@ -L../../src -lhiredis -llibgo -ldl
+	@$(CC) $(CFLAGS) $^ -o $@ ${LINK} -lhiredis -llibgo -ldl
 	@echo "LD $@"
 
 %.t: %.o
-	@$(CC) $(CFLAGS) $^ -o $@ -lboost_thread -lboost_system -L../../src -llibgo -ldl
+	@$(CC) $(CFLAGS) $^ -o $@ ${LINK} -L../../src -llibgo -ldl
 	@echo "LD $@"
 
 .cpp.o:
