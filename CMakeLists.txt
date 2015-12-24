@@ -33,5 +33,6 @@ install(DIRECTORY ${PROJECT_SOURCE_DIR}/src/ DESTINATION "include/libgo"
     PATTERN "windows" EXCLUDE
     PATTERN "*.h")
 install(DIRECTORY ${PROJECT_SOURCE_DIR}/src/linux/ DESTINATION "include/libgo" FILES_MATCHING PATTERN "*.h")
+install(FILES ${PROJECT_SOURCE_DIR}/tools/libgo.conf DESTINATION "/etc/ld.so.conf.d")
 
 add_subdirectory("${PROJECT_SOURCE_DIR}/src/main")
