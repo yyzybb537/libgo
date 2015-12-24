@@ -1,0 +1,32 @@
+TODO:
+重新尝试boost.context\boost.coroutine
+增加编译选项：ENABLE_BOOST_COROUTINE  DISABLE_HOOK  ENABLE_SEGMENTED_STACK
+增加适用于协程版的shared_ptr.(使用shared_ptr指向的对象时, 协程切换, 其他协程可能删除此对象)
+Work Stealing...
+HOOK select poll时, 正确处理文件句柄
+
+DONE:
+支持exception
+优化co_mutex, 为BlockWait抽象出一个WaitObject, 管理等待中的协程, 以免不同的WaitObject竞争同一个全局锁
+阻塞socket的超时设置(RECVTIMEO, SENDTIMEO)在协程中处理
+修复gtest单元测试代码链接错误的问题
+支持poll
+支持accept
+支持asio
+降低空转时的cpu资源占用
+解决http性能测试出现error, 无法加入epoll的问题
+支持sleep nanosleep poll(timeout)
+正确处理Add into epoll, add into wait_list, set timer And epoll_wait, cancel这几件事的同步关系
+支持select 
+支持channel特性
+添加命名空间
+HOOK read write时, 不要影响读文件
+使用shared-stack方案, 降低一点点协程切换速度换取内存的节约使用, 支持创建海量协程
+网络IO以外的阻塞调用, 可以使用co_await异步化
+select中对exceptfds正确检测!
+移植Windows: 
+    1.HOOK WINAPI, 使用多select模型
+        Hook List: accept connect select WSARecv WSASend
+    2.ucontext->windows.fiber
+WIN HOOK: send recv WSARecv** WSASend**
+

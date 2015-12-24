@@ -1,0 +1,174 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <Filter Include="源文件">
+      <UniqueIdentifier>{4FC737F1-C7A5-4376-A066-2A32D752A2FF}</UniqueIdentifier>
+      <Extensions>cpp;c;cc;cxx;def;odl;idl;hpj;bat;asm;asmx</Extensions>
+    </Filter>
+    <Filter Include="头文件">
+      <UniqueIdentifier>{93995380-89BD-4b04-88EB-625FBE52EBFB}</UniqueIdentifier>
+      <Extensions>h;hh;hpp;hxx;hm;inl;inc;xsd</Extensions>
+    </Filter>
+    <Filter Include="资源文件">
+      <UniqueIdentifier>{67DA6AB6-F800-4c08-8B7A-83BB121AAD01}</UniqueIdentifier>
+      <Extensions>rc;ico;cur;bmp;dlg;rc2;rct;bin;rgs;gif;jpg;jpeg;jpe;resx;tiff;tif;png;wav;mfcribbon-ms</Extensions>
+    </Filter>
+    <Filter Include="源文件\win_patch">
+      <UniqueIdentifier>{3cbba705-d5e3-4c99-a470-d0277c5895ec}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="源文件\win_patch\sys">
+      <UniqueIdentifier>{b26794aa-439f-49e4-a586-6f766f53947f}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="源文件\win_patch\arpa">
+      <UniqueIdentifier>{c30ed822-41eb-4d3c-8a62-aa35b800a81b}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="源文件\win_patch\mhook">
+      <UniqueIdentifier>{5f8739be-92a9-4695-b268-b134b2e046b6}</UniqueIdentifier>
+    </Filter>
+  </ItemGroup>
+  <ItemGroup>
+    <Text Include="ReadMe.txt" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="..\..\block_object.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\co_mutex.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\error.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\processer.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\scheduler.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\sleep_wait.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\task.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\thread_pool.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\timer.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="..\ucontext.cpp">
+      <Filter>源文件\win_patch</Filter>
+    </ClCompile>
+    <ClCompile Include="..\win_vc_hook.cpp">
+      <Filter>源文件\win_patch</Filter>
+    </ClCompile>
+    <ClCompile Include="..\platform_adapter.cpp">
+      <Filter>源文件\win_patch</Filter>
+    </ClCompile>
+    <ClCompile Include="..\io_wait.cpp">
+      <Filter>源文件\win_patch</Filter>
+    </ClCompile>
+    <ClCompile Include="..\mhook\mhook-lib\mhook.cpp">
+      <Filter>源文件\win_patch\mhook</Filter>
+    </ClCompile>
+    <ClCompile Include="..\mhook\disasm-lib\cpu.c">
+      <Filter>源文件\win_patch\mhook</Filter>
+    </ClCompile>
+    <ClCompile Include="..\mhook\disasm-lib\disasm.c">
+      <Filter>源文件\win_patch\mhook</Filter>
+    </ClCompile>
+    <ClCompile Include="..\mhook\disasm-lib\disasm_x86.c">
+      <Filter>源文件\win_patch\mhook</Filter>
+    </ClCompile>
+    <ClCompile Include="..\mhook\disasm-lib\misc.c">
+      <Filter>源文件\win_patch\mhook</Filter>
+    </ClCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="..\..\block_object.h">
+      <Filter>源文件</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\channel.h">
+      <Filter>源文件</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\co_mutex.h">
+      <Filter>源文件</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\coroutine.h">
+      <Filter>源文件</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\error.h">
+      <Filter>源文件</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\processer.h">
+      <Filter>源文件</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\scheduler.h">
+      <Filter>源文件</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\sleep_wait.h">
+      <Filter>源文件</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\spinlock.h">
+      <Filter>源文件</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\task.h">
+      <Filter>源文件</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\thread_pool.h">
+      <Filter>源文件</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\timer.h">
+      <Filter>源文件</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\ts_queue.h">
+      <Filter>源文件</Filter>
+    </ClInclude>
+    <ClInclude Include="..\ucontext.h">
+      <Filter>源文件\win_patch</Filter>
+    </ClInclude>
+    <ClInclude Include="..\sys\epoll.h">
+      <Filter>源文件\win_patch\sys</Filter>
+    </ClInclude>
+    <ClInclude Include="..\unistd.h">
+      <Filter>源文件\win_patch</Filter>
+    </ClInclude>
+    <ClInclude Include="..\arpa\inet.h">
+      <Filter>源文件\win_patch\arpa</Filter>
+    </ClInclude>
+    <ClInclude Include="..\sys\socket.h">
+      <Filter>源文件\win_patch\sys</Filter>
+    </ClInclude>
+    <ClInclude Include="..\sys\resource.h">
+      <Filter>源文件\win_patch\sys</Filter>
+    </ClInclude>
+    <ClInclude Include="..\platform_adapter.h">
+      <Filter>源文件\win_patch</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\platform_adapter.h">
+      <Filter>源文件</Filter>
+    </ClInclude>
+    <ClInclude Include="..\io_wait.h">
+      <Filter>源文件\win_patch</Filter>
+    </ClInclude>
+    <ClInclude Include="..\mhook\mhook-lib\mhook.h">
+      <Filter>源文件\win_patch\mhook</Filter>
+    </ClInclude>
+    <ClInclude Include="..\mhook\disasm-lib\cpu.h">
+      <Filter>源文件\win_patch\mhook</Filter>
+    </ClInclude>
+    <ClInclude Include="..\mhook\disasm-lib\disasm.h">
+      <Filter>源文件\win_patch\mhook</Filter>
+    </ClInclude>
+    <ClInclude Include="..\mhook\disasm-lib\disasm_x86.h">
+      <Filter>源文件\win_patch\mhook</Filter>
+    </ClInclude>
+    <ClInclude Include="..\mhook\disasm-lib\disasm_x86_tables.h">
+      <Filter>源文件\win_patch\mhook</Filter>
+    </ClInclude>
+    <ClInclude Include="..\mhook\disasm-lib\misc.h">
+      <Filter>源文件\win_patch\mhook</Filter>
+    </ClInclude>
+  </ItemGroup>
+</Project>
