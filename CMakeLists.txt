@@ -2,16 +2,15 @@ cmake_minimum_required(VERSION 2.8)
 
 ###################################################################################
 project(libgo)
-SET(CMAKE_CXX_COMPILER "g++")
 set(CXX_FLAGS "-std=c++11 -Wall -Werror -fPIC")
 set(CMAKE_CXX_FLAGS "-g ${CXX_FLAGS}")
 set(CMAKE_CXX_FLAGS_RELEASE "-O3 ${CXX_FLAGS}")
 
-aux_source_directory(${PROJECT_SOURCE_DIR}/src CO_SRC_LIST)
-aux_source_directory(${PROJECT_SOURCE_DIR}/src/linux CO_SRC_LIST)
+aux_source_directory(src CO_SRC_LIST)
+aux_source_directory(src/linux CO_SRC_LIST)
 
-include_directories("${PROJECT_SOURCE_DIR}/src")
-include_directories("${PROJECT_SOURCE_DIR}/src/linux")
+include_directories("/src")
+include_directories("/src/linux")
 
 set(TARGET "libgo")
 set(STATIC_T "libgo_static")
@@ -26,13 +25,13 @@ set_target_properties("${SHARED_T}" PROPERTIES OUTPUT_NAME "${TARGET}")
 
 set(CMAKE_INSTALL_PREFIX "/usr/local")
 install(TARGETS ${STATIC_T} ${SHARED_T} LIBRARY DESTINATION "lib" ARCHIVE DESTINATION "lib")
-install(DIRECTORY ${PROJECT_SOURCE_DIR}/src/ DESTINATION "include/libgo"
+install(DIRECTORY src/ DESTINATION "include/libgo"
     FILES_MATCHING
     PATTERN "linux" EXCLUDE
     PATTERN "main" EXCLUDE
     PATTERN "windows" EXCLUDE
     PATTERN "*.h")
-install(DIRECTORY ${PROJECT_SOURCE_DIR}/src/linux/ DESTINATION "include/libgo" FILES_MATCHING PATTERN "*.h")
-install(FILES ${PROJECT_SOURCE_DIR}/tools/libgo.conf DESTINATION "/etc/ld.so.conf.d")
+install(DIRECTORY src/linux/ DESTINATION "include/libgo" FILES_MATCHING PATTERN "*.h")
+install(FILES tools/libgo.conf DESTINATION "/etc/ld.so.conf.d")
 
-add_subdirectory("${PROJECT_SOURCE_DIR}/src/main")
+add_subdirectory("src/main")
