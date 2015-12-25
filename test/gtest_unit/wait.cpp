@@ -115,8 +115,14 @@ TEST_P(Wait_t, nthread_multi)
     printf("%d threads, do %d times, cost %d ms.\n", thread_count, tc, (int)ms);
 }
 
+#ifdef LARGE_NUM_CO
 INSTANTIATE_TEST_CASE_P(
         CoWaitTest,
         Wait_t,
-        Values(10000, 100000//, 400000
-            ));
+        Values(10000, 100000));
+#else
+INSTANTIATE_TEST_CASE_P(
+        CoWaitTest,
+        Wait_t,
+        Values(10000));
+#endif

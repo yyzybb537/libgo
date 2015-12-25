@@ -1,3 +1,5 @@
+#include <WinSock2.h>
+#include <Windows.h>
 #include <scheduler.h>
 #include <mhook.h>
 
@@ -8,7 +10,7 @@ namespace co {
         _In_    long   cmd,
         _Inout_ u_long *argp
         );
-    static ioctlsocket_t ioctlsocket_f = (ioctlsocket_t)GetProcAddress(GetModuleHandle(L"Ws2_32.dll"), "ioctlsocket");
+    static ioctlsocket_t ioctlsocket_f = (ioctlsocket_t)GetProcAddress(GetModuleHandleA("Ws2_32.dll"), "ioctlsocket");
 
     static int hook_ioctlsocket(
         _In_    SOCKET s,
@@ -37,7 +39,7 @@ namespace co {
         _In_  LPWSAOVERLAPPED                    lpOverlapped,
         _In_  LPWSAOVERLAPPED_COMPLETION_ROUTINE lpCompletionRoutine
         );
-    static WSAIoctl_t WSAIoctl_f = (WSAIoctl_t)GetProcAddress(GetModuleHandle(L"Ws2_32.dll"), "WSAIoctl");
+    static WSAIoctl_t WSAIoctl_f = (WSAIoctl_t)GetProcAddress(GetModuleHandleA("Ws2_32.dll"), "WSAIoctl");
 
     static int hook_WSAIoctl(
         _In_  SOCKET                             s,
@@ -85,7 +87,7 @@ namespace co {
         _Inout_ fd_set               *exceptfds,
         _In_    const struct timeval *timeout
         );
-    static select_t select_f = (select_t)GetProcAddress(GetModuleHandle(L"Ws2_32.dll"), "select");
+    static select_t select_f = (select_t)GetProcAddress(GetModuleHandleA("Ws2_32.dll"), "select");
 
     static inline int safe_select(int nfds, fd_set *readfds, fd_set *writefds, fd_set *exceptfds)
     {
@@ -229,7 +231,7 @@ namespace co {
         _In_ const struct sockaddr *name,
         _In_ int                   namelen
         );
-    static connect_t connect_f = (connect_t)GetProcAddress(GetModuleHandle(L"Ws2_32.dll"), "connect");
+    static connect_t connect_f = (connect_t)GetProcAddress(GetModuleHandleA("Ws2_32.dll"), "connect");
 
     static int hook_connect(
         _In_ SOCKET                s,
@@ -249,7 +251,7 @@ namespace co {
         _In_  LPQOS                 lpSQOS,
         _In_  LPQOS                 lpGQOS
         );
-    static WSAConnect_t WSAConnect_f = (WSAConnect_t)GetProcAddress(GetModuleHandle(L"Ws2_32.dll"), "WSAConnect");
+    static WSAConnect_t WSAConnect_f = (WSAConnect_t)GetProcAddress(GetModuleHandleA("Ws2_32.dll"), "WSAConnect");
 
     static int hook_WSAConnect(
         _In_  SOCKET                s,
@@ -323,7 +325,7 @@ namespace co {
         _Out_   struct sockaddr *addr,
         _Inout_ int             *addrlen
         );
-    static accept_t accept_f = (accept_t)GetProcAddress(GetModuleHandle(L"Ws2_32.dll"), "accept");
+    static accept_t accept_f = (accept_t)GetProcAddress(GetModuleHandleA("Ws2_32.dll"), "accept");
 
     static SOCKET hook_accept(
         _In_    SOCKET          s,
@@ -341,7 +343,7 @@ namespace co {
         _In_    LPCONDITIONPROC lpfnCondition,
         _In_    DWORD_PTR       dwCallbackData
         );
-    static WSAAccept_t WSAAccept_f = (WSAAccept_t)GetProcAddress(GetModuleHandle(L"Ws2_32.dll"), "WSAAccept");
+    static WSAAccept_t WSAAccept_f = (WSAAccept_t)GetProcAddress(GetModuleHandleA("Ws2_32.dll"), "WSAAccept");
 
     static SOCKET hook_WSAAccept(
         _In_    SOCKET          s,
@@ -363,7 +365,7 @@ namespace co {
         _In_    LPWSAOVERLAPPED                    lpOverlapped,
         _In_    LPWSAOVERLAPPED_COMPLETION_ROUTINE lpCompletionRoutine
         );
-    static WSARecv_t WSARecv_f = (WSARecv_t)GetProcAddress(GetModuleHandle(L"Ws2_32.dll"), "WSARecv");
+    static WSARecv_t WSARecv_f = (WSARecv_t)GetProcAddress(GetModuleHandleA("Ws2_32.dll"), "WSARecv");
 
     static int hook_WSARecv(
         _In_    SOCKET                             s,
@@ -385,7 +387,7 @@ namespace co {
         _In_  int    len,
         _In_  int    flags
         );
-    static recv_t recv_f = (recv_t)GetProcAddress(GetModuleHandle(L"Ws2_32.dll"), "recv");
+    static recv_t recv_f = (recv_t)GetProcAddress(GetModuleHandleA("Ws2_32.dll"), "recv");
 
     static int hook_recv(
         _In_  SOCKET s,
@@ -405,7 +407,7 @@ namespace co {
         _Out_       struct sockaddr *from,
         _Inout_opt_ int             *fromlen
         );
-    static recvfrom_t recvfrom_f = (recvfrom_t)GetProcAddress(GetModuleHandle(L"Ws2_32.dll"), "recvfrom");
+    static recvfrom_t recvfrom_f = (recvfrom_t)GetProcAddress(GetModuleHandleA("Ws2_32.dll"), "recvfrom");
 
     static int hook_recvfrom(
         _In_        SOCKET          s,
@@ -430,7 +432,7 @@ namespace co {
         _In_    LPWSAOVERLAPPED                    lpOverlapped,
         _In_    LPWSAOVERLAPPED_COMPLETION_ROUTINE lpCompletionRoutine
         );
-    static WSARecvFrom_t WSARecvFrom_f = (WSARecvFrom_t)GetProcAddress(GetModuleHandle(L"Ws2_32.dll"), "WSARecvFrom");
+    static WSARecvFrom_t WSARecvFrom_f = (WSARecvFrom_t)GetProcAddress(GetModuleHandleA("Ws2_32.dll"), "WSARecvFrom");
 
     static int hook_WSARecvFrom(
         _In_    SOCKET                             s,
@@ -455,7 +457,7 @@ namespace co {
         _In_    LPWSAOVERLAPPED                    lpOverlapped,
         _In_    LPWSAOVERLAPPED_COMPLETION_ROUTINE lpCompletionRoutine
         );
-    static WSARecvMsg_t WSARecvMsg_f = (WSARecvMsg_t)GetProcAddress(GetModuleHandle(L"Ws2_32.dll"), "WSARecvMsg");
+    static WSARecvMsg_t WSARecvMsg_f = (WSARecvMsg_t)GetProcAddress(GetModuleHandleA("Ws2_32.dll"), "WSARecvMsg");
 
     static int hook_WSARecvMsg(
         _In_    SOCKET                             s,
@@ -526,7 +528,7 @@ namespace co {
         _In_  LPWSAOVERLAPPED                    lpOverlapped,
         _In_  LPWSAOVERLAPPED_COMPLETION_ROUTINE lpCompletionRoutine
         );
-    static WSASend_t WSASend_f = (WSASend_t)GetProcAddress(GetModuleHandle(L"Ws2_32.dll"), "WSASend");
+    static WSASend_t WSASend_f = (WSASend_t)GetProcAddress(GetModuleHandleA("Ws2_32.dll"), "WSASend");
 
     static int hook_WSASend(
         _In_  SOCKET                             s,
@@ -548,7 +550,7 @@ namespace co {
         _In_       int    len,
         _In_       int    flags
         );
-    static send_t send_f = (send_t)GetProcAddress(GetModuleHandle(L"Ws2_32.dll"), "send");
+    static send_t send_f = (send_t)GetProcAddress(GetModuleHandleA("Ws2_32.dll"), "send");
 
     static int hook_send(
         _In_       SOCKET s,
@@ -568,7 +570,7 @@ namespace co {
         _In_       const struct sockaddr *to,
         _In_       int                   tolen
         );
-    static sendto_t sendto_f = (sendto_t)GetProcAddress(GetModuleHandle(L"Ws2_32.dll"), "sendto");
+    static sendto_t sendto_f = (sendto_t)GetProcAddress(GetModuleHandleA("Ws2_32.dll"), "sendto");
 
     static int hook_sendto(
         _In_       SOCKET                s,
@@ -593,7 +595,7 @@ namespace co {
         _In_  LPWSAOVERLAPPED                    lpOverlapped,
         _In_  LPWSAOVERLAPPED_COMPLETION_ROUTINE lpCompletionRoutine
         );
-    static WSASendTo_t WSASendTo_f = (WSASendTo_t)GetProcAddress(GetModuleHandle(L"Ws2_32.dll"), "WSASendTo");
+    static WSASendTo_t WSASendTo_f = (WSASendTo_t)GetProcAddress(GetModuleHandleA("Ws2_32.dll"), "WSASendTo");
 
     static int hook_WSASendTo(
         _In_  SOCKET                             s,
@@ -619,7 +621,7 @@ namespace co {
         _In_  LPWSAOVERLAPPED                    lpOverlapped,
         _In_  LPWSAOVERLAPPED_COMPLETION_ROUTINE lpCompletionRoutine
         );
-    static WSASendMsg_t WSASendMsg_f = (WSASendMsg_t)GetProcAddress(GetModuleHandle(L"Ws2_32.dll"), "WSASendMsg");
+    static WSASendMsg_t WSASendMsg_f = (WSASendMsg_t)GetProcAddress(GetModuleHandleA("Ws2_32.dll"), "WSASendMsg");
 
     static int hook_WSASendMsg(
         _In_  SOCKET                             s,

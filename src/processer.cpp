@@ -2,7 +2,6 @@
 #include "scheduler.h"
 #include "error.h"
 #include "assert.h"
-#include "platform_adapter.h"
 
 namespace co {
 
@@ -43,8 +42,6 @@ void Processer::AddTaskRunnable(Task *tk)
 
 uint32_t Processer::Run(ThreadLocalInfo &info, uint32_t &done_count)
 {
-	ProcesserRunGuard _run_guard(info);
-
     info.current_task = NULL;
     done_count = 0;
     uint32_t c = 0;

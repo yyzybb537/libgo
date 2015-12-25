@@ -1,5 +1,5 @@
 #pragma once
-#include <ucontext.h>
+#include "context.h"
 #include <unordered_map>
 #include <list>
 #include <sys/epoll.h>
@@ -85,7 +85,6 @@ struct CoroutineOptions
 struct ThreadLocalInfo
 {
     Task* current_task = NULL;
-    ucontext_t scheduler;
     uint32_t thread_id = 0;     // Run thread index, increment from 1.
 };
 

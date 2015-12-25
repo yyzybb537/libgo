@@ -21,7 +21,7 @@ TEST(Timer, OnTime1)
     int c = 1;
     co_timer_add(std::chrono::seconds(1), [&]{
             --c;
-            EXPECT_LT(std::abs(1.0 - second_duration(start)), 0.05);
+            EXPECT_LT(std::abs(1.0 - second_duration(start)), 0.2);
             });
     while (c)
         g_Scheduler.Run();
