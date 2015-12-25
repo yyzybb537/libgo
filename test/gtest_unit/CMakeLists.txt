@@ -47,7 +47,7 @@ foreach(var ${SRC_LIST})
     string(REGEX REPLACE ".cpp" "" tgt ${var})
     #message("${TEST_LINK_FLAGS}")
 
-    if ((NOT ${TEST_LINK_FLAGS}) AND UNIX)
+    if (("${TEST_LINK_FLAGS}" STREQUAL "") AND UNIX)
         add_executable(${tgt}.t ${var})
         target_link_libraries(${tgt}.t ${LINK_ARGS})
         if (WIN32)
