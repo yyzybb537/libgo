@@ -53,29 +53,24 @@ namespace co
         impl_->ctx_.uc_link = NULL;
         makecontext(&impl_->ctx_, (void(*)(void))&ucontext_func, 1, &impl_->fn_);
 
-#ifndef CO_USE_WINDOWS_FIBER
         // save coroutine stack first 16 bytes.
         assert(!impl_->stack_);
         impl_->stack_size_ = 16;
         impl_->stack_capacity_ = std::max<uint32_t>(16, g_Scheduler.GetOptions().init_stack_size);
         impl_->stack_ = (char*)malloc(impl_->stack_capacity_);
         memcpy(impl_->stack_, shared_stack + shared_stack_cap - impl_->stack_size_, impl_->stack_size_);
-#endif
 
         return true;
     }
 
     bool Context::SwapIn()
     {
-#ifndef CO_USE_WINDOWS_FIBER
         memcpy(impl_->shared_stack_ + impl_->shared_stack_cap_ - impl_->stack_size_, impl_->stack_, impl_->stack_size_);
-#endif
         return 0 == swapcontext(&impl_->GetTlsContext(), &impl_->ctx_);
     }
 
     bool Context::SwapOut()
     {
-#ifndef CO_USE_WINDOWS_FIBER
         char dummy = 0;
         char *top = impl_->shared_stack_ + impl_->shared_stack_cap_;
         uint32_t current_stack_size = top - &dummy;
@@ -86,7 +81,7 @@ namespace co
         }
         impl_->stack_size_ = current_stack_size;
         memcpy(impl_->stack_, &dummy, impl_->stack_size_);
-#endif
+
         return 0 == swapcontext(&impl_->ctx_, &impl_->GetTlsContext());
     }
 

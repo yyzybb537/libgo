@@ -55,7 +55,7 @@ TEST_P(MassCo, CnK)
 //    getchar();
 }
 
-#ifndef CO_USE_WINDOWS_FIBER
+#ifdef LARGE_NUM_CO
 INSTANTIATE_TEST_CASE_P(
         MassCoTest,
         MassCo,

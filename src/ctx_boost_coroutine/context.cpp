@@ -2,6 +2,10 @@
 #include <boost/coroutine/all.hpp>
 #include <scheduler.h>
 
+#ifndef BOOST_USE_SEGMENTED_STACKS
+//#define ENABLE_SHARED_STACK
+#endif
+
 namespace co
 {
     template <typename traitsT>
@@ -21,7 +25,8 @@ namespace co
         {
             BOOST_ASSERT( traits_type::minimum_size() <= size );
             BOOST_ASSERT( size <= size_ );
-            return stack_;
+            ctx.size = size_;
+            ctx.sp = stack_ + size_;
         }
 
         void deallocate(::boost::coroutines::stack_context & ctx)
@@ -36,46 +41,74 @@ namespace co
     public:
         ::boost::coroutines::symmetric_coroutine<void>::call_type ctx_;
         ::boost::coroutines::symmetric_coroutine<void>::yield_type *yield_ = nullptr;
+        char* stack_ = NULL;
+        uint32_t stack_size_ = 0;
+        uint32_t stack_capacity_ = 0;
+        char* shared_stack_;
+        uint32_t shared_stack_cap_;
     };
 
     Context::Context()
         : impl_(new Context::impl_t)
     { }
 
-    bool Context::Init(std::function<void()> const& fn, char* stack, uint32_t stack_size)
+    bool Context::Init(std::function<void()> const& fn, char* shared_stack, uint32_t shared_stack_cap)
     {
+#if defined(ENABLE_SHARED_STACK)
+        impl_->shared_stack_ = shared_stack;
+        impl_->shared_stack_cap_ = shared_stack_cap;
+#endif
+
         decltype(impl_->ctx_) c(
             [=](::boost::coroutines::symmetric_coroutine<void>::yield_type& yield){
                 impl_->yield_ = &yield;
                 fn();
             }
-#if !defined(BOOST_USE_SEGMENTED_STACKS)
-            , boost::coroutines::attributes(stack_size), shared_stack_allocator(stack, stack_size)
+#if defined(ENABLE_SHARED_STACK)
+            , boost::coroutines::attributes(shared_stack_cap), shared_stack_allocator(shared_stack, shared_stack_cap)
 #endif
             );
         if (!c) return false;
         impl_->ctx_.swap(c);
+
+#if defined(ENABLE_SHARED_STACK)
+        static const int default_base_size = 32;
+        // save coroutine stack first 16 bytes.
+        assert(!impl_->stack_);
+        impl_->stack_size_ = default_base_size;
+        impl_->stack_capacity_ = std::max<uint32_t>(default_base_size, g_Scheduler.GetOptions().init_stack_size);
+        impl_->stack_ = (char*)malloc(impl_->stack_capacity_);
+        memcpy(impl_->stack_, shared_stack + shared_stack_cap - impl_->stack_size_, impl_->stack_size_);
+#endif
+
         return true;
     }
 
     bool Context::SwapIn()
     {
-        try {
-            impl_->ctx_();
-            return true;
-        } catch(...) {
-            return false;
-        }
+#if defined(ENABLE_SHARED_STACK)
+        memcpy(impl_->shared_stack_ + impl_->shared_stack_cap_ - impl_->stack_size_, impl_->stack_, impl_->stack_size_);
+#endif
+        impl_->ctx_();
+        return true;
     }
 
     bool Context::SwapOut()
     {
-        try {
-            (*impl_->yield_)();
-            return true;
-        } catch(...) {
-            return false;
+#if defined(ENABLE_SHARED_STACK)
+        char dummy = 0;
+        char *top = impl_->shared_stack_ + impl_->shared_stack_cap_;
+        uint32_t current_stack_size = top - &dummy;
+        assert(current_stack_size <= impl_->shared_stack_cap_);
+        if (impl_->stack_capacity_ < current_stack_size) {
+            impl_->stack_ = (char*)realloc(impl_->stack_, current_stack_size);
+            impl_->stack_capacity_ = current_stack_size;
         }
+        impl_->stack_size_ = current_stack_size;
+        memcpy(impl_->stack_, &dummy, impl_->stack_size_);
+#endif
+        (*impl_->yield_)();
+        return true;
     }
 
 } //namespace co

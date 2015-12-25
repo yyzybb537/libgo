@@ -4,6 +4,7 @@ cmake_minimum_required(VERSION 2.8)
 project(libgo)
 
 aux_source_directory(src CO_SRC_LIST)
+set(LARGE_NUM_CO OFF)
 
 if (UNIX)
     # unix like platforms
@@ -15,9 +16,11 @@ if (UNIX)
         if (ENABLE_SEGMENTED_STACK)
             set(CXX_FLAGS_POSTFIX "-fsplit-stack -DBOOST_USE_SEGMENTED_STACKS")
             set(LINK_FLAGS "-fuse-ld=gold")
+            set(LARGE_NUM_CO ON)
         endif()
     else ()
         aux_source_directory(src/ctx_ucontext CO_SRC_LIST)
+        set(LARGE_NUM_CO ON)
         if (ENABLE_SEGMENTED_STACK)
             message(FATAL_ERROR "ENABLE_SEGMENTED_STACK depends ENABLE_BOOST_COROUTINE")
         endif()
@@ -85,7 +88,7 @@ install(FILES tools/libgo.conf DESTINATION "/etc/ld.so.conf.d")
 add_subdirectory("src/main")
 
 add_custom_target(test
-    COMMAND mkdir -p test && cd test && ${CMAKE_COMMAND} -DCXX_FLAGS="\"${CXX_FLAGS}\"" -DLINK_FLAGS="${LINK_FLAGS}" ${PROJECT_SOURCE_DIR}/test/gtest_unit && make -j4 -C gtest && make -j4
+    COMMAND mkdir -p test && cd test && ${CMAKE_COMMAND} -DCXX_FLAGS="\"${CXX_FLAGS}\"" -DLINK_FLAGS="${LINK_FLAGS}" -DLARGE_NUM_CO=${LARGE_NUM_CO} ${PROJECT_SOURCE_DIR}/test/gtest_unit && make -j4 -C gtest && make -j4
     COMMAND cp ${PROJECT_SOURCE_DIR}/test/gtest_unit/test.t ${PROJECT_BINARY_DIR}
     )
 

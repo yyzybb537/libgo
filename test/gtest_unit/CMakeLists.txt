@@ -16,8 +16,12 @@ link_directories(${PROJECT_SOURCE_DIR}/../../build)
 add_subdirectory(${PROJECT_SOURCE_DIR}/../../third_party/gtest ${PROJECT_BINARY_DIR}/gtest)
 
 set(LINK_ARGS -llibgo -ldl -lgtest_main -lgtest -lpthread -lboost_coroutine -lboost_context -lboost_thread -lboost_system -lpthread)
-set(DYNAMIC_LINK_ARG -Wl,-rpath ${PROJECT_SOURCE_DIR}/../../build)
+#set(DYNAMIC_LINK_ARG -Wl,-rpath ${PROJECT_SOURCE_DIR}/../../build)
 set(STATIC_LINK_ARG -static -static-libgcc -static-libstdc++)
+
+if (LARGE_NUM_CO)
+    add_definitions(-DLARGE_NUM_CO)
+endif()
 
 aux_source_directory(${PROJECT_SOURCE_DIR} SRC_LIST)
 
@@ -26,8 +30,11 @@ foreach(var ${SRC_LIST})
     string(REGEX REPLACE ".cpp" "" tgt ${var})
     #message("${LINK_FLAGS}")
 
-    add_executable(${tgt}.t ${var})
-    target_link_libraries(${tgt}.t ${LINK_FLAGS} ${LINK_ARGS} ${DYNAMIC_LINK_ARG})
+    if (LINK_FLAGS)
+    else ()
+        add_executable(${tgt}.t ${var})
+        target_link_libraries(${tgt}.t ${LINK_FLAGS} ${LINK_ARGS} ${DYNAMIC_LINK_ARG})
+    endif()
 
     add_executable(s_${tgt}.t ${var})
     target_link_libraries(s_${tgt}.t ${LINK_FLAGS} ${LINK_ARGS} ${STATIC_LINK_ARG})

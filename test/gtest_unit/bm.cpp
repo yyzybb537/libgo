@@ -150,4 +150,8 @@ TEST_P(Times, testBm)
 INSTANTIATE_TEST_CASE_P(
         BmTest,
         Times,
-        Values(100000, 1000000));
+        Values(100000
+#ifdef LARGE_NUM_CO
+            , 1000000
+#endif
+            ));

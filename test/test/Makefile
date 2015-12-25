@@ -1,8 +1,8 @@
 CC=g++
-CFLAGS=-std=c++11 -g -Wall -fsplit-stack
+CFLAGS=-std=c++11 -g -Wall
 TARGET=$(patsubst %.cpp, %.t, $(wildcard *.cpp)) pg_cpu.t
 OBJS=$(patsubst %, %.o, $(TARGET))
-LINK=-fuse-ld=gold -L../../src -lboost_coroutine -lboost_thread -lboost_system
+LINK=-L../../src -lboost_coroutine -lboost_thread -lboost_system
 
 all : $(TARGET)
 
