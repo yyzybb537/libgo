@@ -127,7 +127,11 @@ int main(int argc, char **argv)
     for (int i = 0; i < thread_count; ++i)
         tg.create_thread([]{ ios.run(); });
     for (;;) {
+#ifdef _WIN32
+		Sleep(1000);
+#else
         sleep(1);
+#endif
         show_status();
     }
     return 0;
