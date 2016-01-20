@@ -3,6 +3,7 @@
 #include <gtest/gtest.h>
 #include "coroutine.h"
 #include <boost/thread.hpp>
+#include "gtest_exit.h"
 using namespace std;
 using namespace co;
 

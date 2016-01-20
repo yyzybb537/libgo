@@ -5,6 +5,7 @@
 #include "coroutine.h"
 #include <chrono>
 #include <time.h>
+#include "gtest_exit.h"
 using namespace std;
 using namespace co;
 

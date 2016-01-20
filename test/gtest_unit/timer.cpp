@@ -5,6 +5,7 @@
 #include <list>
 #include <atomic>
 #include <boost/timer.hpp>
+#include "gtest_exit.h"
 using namespace co;
 
 double second_duration(std::chrono::system_clock::time_point start)

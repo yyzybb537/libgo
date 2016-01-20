@@ -1,7 +1,7 @@
 #include <WinSock2.h>
 #include <Windows.h>
 #include <scheduler.h>
-#include <mhook.h>
+#include <xhook.h>
 
 namespace co {
 
@@ -638,34 +638,39 @@ namespace co {
 
     void coroutine_hook_init()
     {
+		XHookRestoreAfterWith();
+		XHookTransactionBegin();
+		XHookUpdateThread(GetCurrentThread());
+
         BOOL ok = true;
         // ioctlsocket and select functions.
-        ok &= Mhook_SetHook((PVOID*)&ioctlsocket_f, &hook_ioctlsocket);
+		ok &= XHookAttach((PVOID*)&ioctlsocket_f, &hook_ioctlsocket) == NO_ERROR;
         //ok &= Mhook_SetHook((PVOID*)&WSAIoctl_f, &hook_WSAIoctl);
-        ok &= Mhook_SetHook((PVOID*)&select_f, &hook_select);
+		ok &= XHookAttach((PVOID*)&select_f, &hook_select) == NO_ERROR;
 
         // connect-like functions
-        ok &= Mhook_SetHook((PVOID*)&connect_f, &hook_connect);
-        ok &= Mhook_SetHook((PVOID*)&WSAConnect_f, &hook_WSAConnect);
+		ok &= XHookAttach((PVOID*)&connect_f, &hook_connect) == NO_ERROR;
+		ok &= XHookAttach((PVOID*)&WSAConnect_f, &hook_WSAConnect) == NO_ERROR;
 
         // accept-like functions
-        ok &= Mhook_SetHook((PVOID*)&accept_f, &hook_accept);
-        ok &= Mhook_SetHook((PVOID*)&WSAAccept_f, &hook_WSAAccept);
+		ok &= XHookAttach((PVOID*)&accept_f, &hook_accept) == NO_ERROR;
+		ok &= XHookAttach((PVOID*)&WSAAccept_f, &hook_WSAAccept) == NO_ERROR;
         
         // recv-like functions
-        ok &= Mhook_SetHook((PVOID*)&recv_f, &hook_recv);
-        ok &= Mhook_SetHook((PVOID*)&recvfrom_f, &hook_recvfrom);
-        ok &= Mhook_SetHook((PVOID*)&WSARecv_f, &hook_WSARecv);
-        ok &= Mhook_SetHook((PVOID*)&WSARecvFrom_f, &hook_WSARecvFrom);
+		ok &= XHookAttach((PVOID*)&recv_f, &hook_recv) == NO_ERROR;
+		ok &= XHookAttach((PVOID*)&recvfrom_f, &hook_recvfrom) == NO_ERROR;
+		ok &= XHookAttach((PVOID*)&WSARecv_f, &hook_WSARecv) == NO_ERROR;
+		ok &= XHookAttach((PVOID*)&WSARecvFrom_f, &hook_WSARecvFrom) == NO_ERROR;
         if (WSARecvMsg_f) // This function minimum support os is Windows 8.
-            ok &= Mhook_SetHook((PVOID*)&WSARecvMsg_f, &hook_WSARecvMsg);
+			ok &= XHookAttach((PVOID*)&WSARecvMsg_f, &hook_WSARecvMsg) == NO_ERROR;
 
         // send-like functions
-        ok &= Mhook_SetHook((PVOID*)&send_f, &hook_send);
-        ok &= Mhook_SetHook((PVOID*)&sendto_f, &hook_sendto);
-        ok &= Mhook_SetHook((PVOID*)&WSASend_f, &hook_WSASend);
-        ok &= Mhook_SetHook((PVOID*)&WSASendTo_f, &hook_WSASendTo);
-        ok &= Mhook_SetHook((PVOID*)&WSASendMsg_f, &hook_WSASendMsg);
+		ok &= XHookAttach((PVOID*)&send_f, &hook_send) == NO_ERROR;
+		ok &= XHookAttach((PVOID*)&sendto_f, &hook_sendto) == NO_ERROR;
+		ok &= XHookAttach((PVOID*)&WSASend_f, &hook_WSASend) == NO_ERROR;
+		ok &= XHookAttach((PVOID*)&WSASendTo_f, &hook_WSASendTo) == NO_ERROR;
+		ok &= XHookAttach((PVOID*)&WSASendMsg_f, &hook_WSASendMsg) == NO_ERROR;
+		XHookTransactionCommit();
         
         if (!ok) {
             fprintf(stderr, "Hook failed!");

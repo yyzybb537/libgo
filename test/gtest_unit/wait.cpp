@@ -6,6 +6,7 @@
 #include <atomic>
 #include "coroutine.h"
 #include <chrono>
+#include "gtest_exit.h"
 using namespace std::chrono;
 using namespace co;
 

@@ -3,6 +3,7 @@
 #include <vector>
 #include <list>
 #include <atomic>
+#include "gtest_exit.h"
 using namespace co;
 
 struct QueueElem : public TSQueueHook

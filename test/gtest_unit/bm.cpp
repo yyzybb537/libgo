@@ -3,6 +3,7 @@
 #include "coroutine.h"
 #include <chrono>
 #include <boost/thread.hpp>
+#include "gtest_exit.h"
 using namespace std;
 using namespace co;
 
@@ -122,14 +123,22 @@ TEST_P(Times, testBm)
     {
         stdtimer st(tc_, "Create Timer");
         for (int i = 0; i < tc_; ++i)
+#ifndef _WIN32
             co_timer_add(std::chrono::nanoseconds(i), []{});
+#else
+			co_timer_add(std::chrono::microseconds(i / 1000), []{});
+#endif
     }
 
     {
         std::vector<co_timer_id> id_list;
         id_list.reserve(tc_);
         for (int i = 0; i < tc_; ++i)
+#ifndef _WIN32
             id_list.push_back(co_timer_add(std::chrono::nanoseconds(i), []{}));
+#else
+			id_list.push_back(co_timer_add(std::chrono::microseconds(i / 1000), []{}));
+#endif
 
         stdtimer st(tc_, "Delete Timer");
         for (int i = 0; i < tc_; ++i)
@@ -159,6 +168,6 @@ INSTANTIATE_TEST_CASE_P(
 INSTANTIATE_TEST_CASE_P(
     BmTest,
     Times,
-    Values(100000));
+    Values(10000));
 
 #endif
