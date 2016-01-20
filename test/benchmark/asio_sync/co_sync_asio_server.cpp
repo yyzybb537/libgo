@@ -13,6 +13,7 @@ io_service ios;
 tcp::endpoint addr(address::from_string("127.0.0.1"), 43333);
 int thread_count = 4;
 int qdata = 4;
+std::atomic<int> session_count{0};
 
 void echo_server()
 {
@@ -21,7 +22,6 @@ void echo_server()
             thread_count, qdata,
             acc.local_endpoint().address().to_string().c_str(),
             acc.local_endpoint().port());
-    std::atomic<int> session_count{0};
     for (;;) {
         std::shared_ptr<tcp::socket> s(new tcp::socket(ios));
         error_code ec;
@@ -30,7 +30,7 @@ void echo_server()
             printf("accept exception %d:%s\n", ec.value(), ec.message().c_str());
             continue;
         }
-        go [&session_count, s]{
+        go [s]{
             tcp::endpoint addr = s->remote_endpoint();
             ++session_count;
             printf("connected(%d). %s:%d\n", (int)session_count, addr.address().to_string().c_str(), addr.port());

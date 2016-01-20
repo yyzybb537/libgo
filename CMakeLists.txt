@@ -116,8 +116,14 @@ if (UNIX)
         COMMAND mkdir -p test && cd test && ${CMAKE_COMMAND} -DCXX_FLAGS="\"${CXX_FLAGS}\"" -DTEST_LINK_FLAGS="${TEST_LINK_FLAGS}" -DLARGE_NUM_CO=${LARGE_NUM_CO} ${PROJECT_SOURCE_DIR}/test/gtest_unit && make -j4 -C gtest && make -j4
         COMMAND cp ${PROJECT_SOURCE_DIR}/test/gtest_unit/test.t ${PROJECT_BINARY_DIR}
     )
+
+    add_custom_target(bm
+        COMMAND mkdir -p benchmark && cd benchmark && ${CMAKE_COMMAND} -DCXX_FLAGS="\"${CXX_FLAGS}\"" -DTEST_LINK_FLAGS="${TEST_LINK_FLAGS}" -DLARGE_NUM_CO=${LARGE_NUM_CO} ${PROJECT_SOURCE_DIR}/test/benchmark && make -j4
+    )
+
 else ()
     add_subdirectory("${PROJECT_SOURCE_DIR}/test/gtest_unit")
+    add_subdirectory("${PROJECT_SOURCE_DIR}/test/benchmark")
     set_target_properties("${STATIC_T}" PROPERTIES COMPILE_FLAGS "/wd4819")
 endif()
 

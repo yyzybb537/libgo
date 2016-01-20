@@ -80,7 +80,7 @@ retry_write:
                return ;
         }
         wpos += wn;
-        if (wpos < sizeof(sping))
+        if ((std::size_t)wpos < sizeof(sping))
             goto retry_write;
         printf("ping\n");
 
@@ -98,7 +98,7 @@ retry_read:
             return ;
         }
         rpos += rn;
-        if (rpos < sizeof(pong))
+        if ((std::size_t)rpos < sizeof(pong))
             goto retry_read;
         printf("pong\n");
     }

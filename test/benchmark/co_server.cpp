@@ -9,6 +9,7 @@ static const char* g_ip = "127.0.0.1";
 static const uint16_t g_port = 43333;
 int thread_count = 4;
 int qdata = 4;
+std::atomic<int> session_count{0};
 
 void echo_server()
 {
@@ -32,7 +33,6 @@ void echo_server()
 
     printf("Coroutine server startup, thread:%d, qdata:%d, listen %s:%d\n",
             thread_count, qdata, g_ip, g_port);
-    std::atomic<int> session_count{0};
     for (;;) {
         socklen_t addr_len = sizeof(addr);
         int sock_fd = accept(accept_fd, (sockaddr*)&addr, &addr_len);
@@ -41,9 +41,9 @@ void echo_server()
             continue;
         }
 
-        go [sock_fd, &session_count]{
+        go [sock_fd]{
             ++session_count;
-            printf("connected(%d).\n", (int)session_count);
+            printf("connected(%d). socket=%d\n", (int)session_count, sock_fd);
             co_chan<bool> err;
 
             go [err, sock_fd] {
@@ -70,6 +70,7 @@ goon_write:
                         goto goon_write;
                     }
                 }
+                printf("error trigger, socket=%d\n", sock_fd);
                 err << true;
             };
 
