@@ -1,6 +1,3 @@
-[submodule "third_party/mhook"]
-	path = third_party/mhook
-	url = https://github.com/yyzybb537/mhook.git
 [submodule "xhook"]
 	path = third_party/xhook
 	url = https://github.com/XBased/xhook.git
