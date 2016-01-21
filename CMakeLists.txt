@@ -128,8 +128,10 @@ if (UNIX)
     )
 
 else ()
-    add_subdirectory("${PROJECT_SOURCE_DIR}/test/gtest_unit")
-    add_subdirectory("${PROJECT_SOURCE_DIR}/test/benchmark")
-    set_target_properties("${STATIC_T}" PROPERTIES COMPILE_FLAGS "/wd4819")
+    if (BOOST_ROOT)
+        add_subdirectory("${PROJECT_SOURCE_DIR}/test/gtest_unit")
+        add_subdirectory("${PROJECT_SOURCE_DIR}/test/benchmark")
+    endif()
+    set_target_properties("${STATIC_T}" PROPERTIES COMPILE_FLAGS "/wd4819 /wd4267")
 endif()
 

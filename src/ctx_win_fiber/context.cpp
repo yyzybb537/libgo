@@ -1,5 +1,6 @@
 #include <context.h>
 #include <scheduler.h>
+#include <Windows.h>
 
 namespace co
 {

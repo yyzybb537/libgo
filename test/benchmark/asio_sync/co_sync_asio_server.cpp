@@ -11,7 +11,11 @@ using boost::system::error_code;
 // io_service的生命期要长于socket
 io_service ios;
 tcp::endpoint addr(address::from_string("127.0.0.1"), 43333);
+#ifdef _WIN32
+int thread_count = 1;
+#else
 int thread_count = 4;
+#endif
 int qdata = 4;
 std::atomic<int> session_count{0};
 
@@ -75,7 +79,7 @@ int main(int argc, char **argv)
     if (argc > 1) 
         if (strcmp(argv[1], "-h") == 0 || strcmp(argv[1], "--help") == 0) {
             printf("\n    Usage: %s [ThreadCount] [QueryDataLength]\n", argv[0]);
-            printf("\n    Default: %s 4 4\n", argv[0]);
+            printf("\n    Default: %s %d 4\n", argv[0], thread_count);
             printf("\n    For example:\n         %s 2 32\n", argv[0]);
             printf("\n    That's means: start server with 2 threads, and per data-package is 32 bytes.\n\n");
             exit(1);

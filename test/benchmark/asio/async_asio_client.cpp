@@ -19,7 +19,11 @@ const int g_buflen = 4096;
 std::atomic<long long unsigned> g_sendbytes{0}, g_recvbytes{0}, g_qps{0};
 std::atomic<int> session_count{0};
 uint32_t qdata = 4;
+#ifdef _WIN32
+int thread_count = 1;
+#else
 int thread_count = 4;
+#endif
 int conn_count = 1024;
 
 void on_err(shared_ptr<tcp::socket> s, char* buf)
@@ -101,7 +105,7 @@ int main(int argc, char **argv)
     if (argc > 1) 
         if (strcmp(argv[1], "-h") == 0 || strcmp(argv[1], "--help") == 0) {
             printf("\n    Usage: %s [ThreadCount] [Connection_Count] [QueryDataLength]\n", argv[0]);
-            printf("\n    Default: %s 4 1024 4\n", argv[0]);
+            printf("\n    Default: %s %s 1024 4\n", argv[0], thread_count);
             printf("\n    For example:\n        %s 2 1000 32\n", argv[0]);
             printf("\n    That's means: start client with 2 threads, create 1000 tcp connection to server, and per data-package is 32 bytes.\n\n");
             exit(1);

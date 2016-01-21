@@ -28,6 +28,13 @@ aux_source_directory(${PROJECT_SOURCE_DIR} SRC_LIST)
 aux_source_directory(${PROJECT_SOURCE_DIR}/asio SRC_LIST)
 aux_source_directory(${PROJECT_SOURCE_DIR}/asio_sync SRC_LIST)
 
+if (WIN32)
+    list(REMOVE_ITEM SRC_LIST ${PROJECT_SOURCE_DIR}/co_server.cpp)
+    list(REMOVE_ITEM SRC_LIST ${PROJECT_SOURCE_DIR}/co_client.cpp)
+    list(REMOVE_ITEM SRC_LIST ${PROJECT_SOURCE_DIR}/high_concurrency_server.cpp)
+    list(REMOVE_ITEM SRC_LIST ${PROJECT_SOURCE_DIR}/high_concurrency_client.cpp)
+endif()
+
 message("${SRC_LIST}")
 
 foreach(var ${SRC_LIST})
