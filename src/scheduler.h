@@ -21,6 +21,13 @@
         } \
     } while(0)
 
+// VS2013不支持thread_local
+#if defined(_MSC_VER) && _MSC_VER < 1900
+#define co_thread_local __declspec(thread)
+#else 
+#define co_thread_local thread_local
+#endif
+
 namespace co
 {
 
@@ -71,6 +78,9 @@ struct CoroutineOptions
     //    这个值只是用来保存栈内存的内存块初始大小, 即使设置的很大, 栈大小也不会超过stack_size
     // @仅在Linux生效.
     uint32_t init_stack_size = 512; 
+
+    // 纤程栈大小 (尽在使用纤程时生效)
+    uint32_t fiber_stack_size = 64 * 1024;
 
     // P的数量, 首次Run时创建所有P, 随后只能增加新的P不能减少现有的P
     //    此值越大, 并行效果越好, 但是相应的每次Run时的消耗很会增加, 同时会占用大量内存.

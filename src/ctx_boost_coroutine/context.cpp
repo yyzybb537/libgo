@@ -8,6 +8,9 @@
 
 namespace co
 {
+    ContextScopedGuard::ContextScopedGuard() {}
+    ContextScopedGuard::~ContextScopedGuard() {}
+
     template <typename traitsT>
     struct basic_shared_stack_allocator
     {

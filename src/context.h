@@ -5,6 +5,12 @@
 
 namespace co
 {
+    struct ContextScopedGuard
+    {
+        ContextScopedGuard();
+        ~ContextScopedGuard();
+    };
+
     class Context
     {
         class impl_t;

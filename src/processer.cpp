@@ -42,6 +42,8 @@ void Processer::AddTaskRunnable(Task *tk)
 
 uint32_t Processer::Run(ThreadLocalInfo &info, uint32_t &done_count)
 {
+    ContextScopedGuard guard;
+
     info.current_task = NULL;
     done_count = 0;
     uint32_t c = 0;

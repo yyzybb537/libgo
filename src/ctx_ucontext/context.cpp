@@ -4,6 +4,9 @@
 
 namespace co
 {
+    ContextScopedGuard::ContextScopedGuard() {}
+    ContextScopedGuard::~ContextScopedGuard() {}
+
     class Context::impl_t
     {
     public:
