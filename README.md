@@ -11,7 +11,7 @@ libgo是一个使用C++11编写的调度式stackful协程库,
 
     Linux   (GCC4.8+)
     
-    Win7-64bit (VS2013/2015)
+    Windows (Win7、Win8、Win10 x86 and x64 使用VS2013/2015编译)
 
 使用libgo编写并行程序，即可以像golang、erlang这些并发语言一样开发迅速且逻辑简洁，又有C++原生的性能优势，鱼和熊掌从此可以兼得。
 
@@ -76,18 +76,17 @@ libgo有以下特点：
  
         1.使用git submodule update --init下载子模块
         
-        2.在Windows平台上，libgo是依赖boost-x64的静态库的，如果要编译请先编译64bit的boost库:
-
-            推荐编译参数：bjam.exe address-model=64 --build-type=compelete
-        
-        3.使用CMake构建工程文件. 
+        2.使用CMake构建工程文件. 
 			
-			比如vs2015：
+			比如vs2015(x64)：
 			$ cmake .. -G"Visual Studio 14 2015 Win64"
+
+			比如vs2015(x86)：
+			$ cmake .. -G"Visual Studio 14 2015"
 
 			其他编译参数参见Linux平台的编译方式
         
-        4.使用时需要添加两个include目录：coroutine和coroutine/windows
+        3.使用时需要添加两个include目录：coroutine和coroutine/windows
 
 ##### 注意事项(WARNING)：
 
