@@ -11,7 +11,7 @@ before_install:
 
 install:
     - sudo apt-get install cmake 
-    - sudo apt-get install -qq boost1.59
+    - sudo apt-get install -qq boost
 
 script: 
     - mkdir build; pushd build;
