@@ -150,7 +150,7 @@ if (UNIX)
     )
 
     add_custom_target(run_test
-        COMMAND cd test && ./*.t
+        COMMAND cd test && ./timer.t
     )
 
 else ()
