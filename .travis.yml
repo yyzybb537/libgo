@@ -11,13 +11,16 @@ before_install:
 
 install:
     - sudo apt-get install cmake 
+    - sudo apt-get install libboost-all-dev
     - .travis_scripts/gcc.sh
 
 script: 
     - mkdir build; pushd build;
     - cmake ..
     - make
-    - pushd test; ./sleep.t
+    - make test
+    - pushd test;
+    - ./*.t
     - popd;
     - popd;
 
