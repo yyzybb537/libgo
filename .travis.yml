@@ -11,6 +11,7 @@ before_install:
 
 install:
     - sudo apt-get install cmake 
+    - .travis_scripts/gcc.sh
 
 script: 
     - mkdir build; pushd build;
