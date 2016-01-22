@@ -15,7 +15,7 @@ include_directories(${PROJECT_SOURCE_DIR}/../../src/linux)
 link_directories(${PROJECT_SOURCE_DIR}/../../build)
 
 if (UNIX)
-    set(LINK_ARGS libgo dl pthread ${Boost_LIBRARIES} pthread)
+    set(LINK_ARGS libgo dl pthread ${Boost_LIBRARIES} pthread rt)
     set(STATIC_LINK_ARG -static -static-libgcc -static-libstdc++)
 else ()
     set(LINK_ARGS libgo ${Boost_LIBRARIES} ws2_32)
