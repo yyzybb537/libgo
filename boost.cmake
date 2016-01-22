@@ -4,7 +4,7 @@ if (NOT Boost_FOUND)
     set(Boost_USE_MULTITHREADED      ON)
     set(Boost_USE_STATIC_RUNTIME     ON)
 
-    find_package(Boost REQUIRED coroutine context thread system date_time chrono regex)
+    find_package(Boost REQUIRED coroutine context thread system)
     if (Boost_FOUND)
         include_directories(${Boost_INCLUDE_DIRS})
     endif()
