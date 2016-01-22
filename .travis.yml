@@ -17,11 +17,11 @@ install:
 script: 
     - mkdir build; pushd build;
     - cmake ..
-    - make
+    - make -j4
+    - sudo make install
     - make test
-    - pushd test;
-    - ./*.t
-    - popd;
+    - make bm
+    - make run_test
     - popd;
 
 after_success:
