@@ -141,6 +141,10 @@ if (UNIX)
         COMMAND mkdir -p test && cd test && ${CMAKE_COMMAND} -DCMAKE_BUILD_TYPE="${CMAKE_BUILD_TYPE}" -DCMAKE_CXX_FLAGS="\"${CMAKE_CXX_FLAGS}\"" -DTEST_LINK_FLAGS="${TEST_LINK_FLAGS}" ${PROJECT_SOURCE_DIR}/test/gtest_unit && make -j4 -C gtest && make -j4
     )
 
+    add_custom_target(test_static
+        COMMAND mkdir -p test && cd test && ${CMAKE_COMMAND} -DCMAKE_BUILD_TYPE="${CMAKE_BUILD_TYPE}" -DCMAKE_CXX_FLAGS="\"${CMAKE_CXX_FLAGS}\"" -DTEST_LINK_FLAGS="${TEST_LINK_FLAGS}" -DTEST_STATIC_LINK=1 ${PROJECT_SOURCE_DIR}/test/gtest_unit && make -j4 -C gtest && make -j4
+    )
+
     add_custom_target(bm
         COMMAND mkdir -p benchmark && cd benchmark && ${CMAKE_COMMAND} -DCMAKE_BUILD_TYPE="${CMAKE_BUILD_TYPE}" -DCMAKE_CXX_FLAGS="\"${CMAKE_CXX_FLAGS}\"" -DTEST_LINK_FLAGS="${TEST_LINK_FLAGS}" ${PROJECT_SOURCE_DIR}/test/benchmark && make -j4
     )

@@ -20,7 +20,6 @@ script:
     - make -j4
     - sudo make install
     - make test
-    - make bm
     - make run_test
     - popd;
 
