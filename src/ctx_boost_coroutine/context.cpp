@@ -2,10 +2,6 @@
 #include <boost/coroutine/all.hpp>
 #include <scheduler.h>
 
-#ifndef BOOST_USE_SEGMENTED_STACKS
-//#define ENABLE_SHARED_STACK
-#endif
-
 namespace co
 {
     ContextScopedGuard::ContextScopedGuard() {}

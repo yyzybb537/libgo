@@ -33,7 +33,7 @@ TEST_P(MassCo, CnK)
 //    if (n_ == 1)
 //        co_sched.GetOptions().debug = dbg_scheduler;
 
-    int n = n_ * 100;
+    int n = n_;
     for (int i = 0; i < n; ++i)
         go foo;
 
@@ -56,14 +56,7 @@ TEST_P(MassCo, CnK)
 //    getchar();
 }
 
-#ifdef LARGE_NUM_CO
-INSTANTIATE_TEST_CASE_P(
-        MassCoTest,
-        MassCo,
-        Values(1, 10, 100, 1000, 10000));
-#else
 INSTANTIATE_TEST_CASE_P(
 	MassCoTest,
 	MassCo,
-	Values(1, 10, 100, 1000));
-#endif
+	Values(100, 1000, 10000, 100000));

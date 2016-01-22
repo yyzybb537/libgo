@@ -11,7 +11,9 @@ Processer::Processer(uint32_t stack_size)
     : id_(++s_id_)
 {
     shared_stack_cap_ = stack_size;
+#if defined(ENABLE_SHARED_STACK)
     shared_stack_ = new char[shared_stack_cap_];
+#endif
 }
 Processer::~Processer()
 {

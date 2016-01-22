@@ -14,9 +14,12 @@ namespace co
         std::function<void()> fn_;
         char* stack_ = NULL;
         uint32_t stack_size_ = 0;
+
+#if defined(ENABLE_SHARED_STACK)
         uint32_t stack_capacity_ = 0;
         char* shared_stack_;
         uint32_t shared_stack_cap_;
+#endif
 
         ~impl_t()
         {
@@ -48,6 +51,8 @@ namespace co
             return false;
 
         impl_->fn_ = fn;
+
+#if defined(ENABLE_SHARED_STACK)
         impl_->shared_stack_ = shared_stack;
         impl_->shared_stack_cap_ = shared_stack_cap;
 
@@ -59,21 +64,33 @@ namespace co
         // save coroutine stack first 16 bytes.
         assert(!impl_->stack_);
         impl_->stack_size_ = 16;
-        impl_->stack_capacity_ = std::max<uint32_t>(16, g_Scheduler.GetOptions().init_stack_size);
+        impl_->stack_capacity_ = std::max<uint32_t>(16, g_Scheduler.GetOptions().init_commit_stack_size);
         impl_->stack_ = (char*)malloc(impl_->stack_capacity_);
         memcpy(impl_->stack_, shared_stack + shared_stack_cap - impl_->stack_size_, impl_->stack_size_);
+#else
+        impl_->stack_size_ = g_Scheduler.GetOptions().stack_size;
+        impl_->stack_ = (char*)malloc(impl_->stack_size_);
+
+        impl_->ctx_.uc_stack.ss_sp = impl_->stack_;
+        impl_->ctx_.uc_stack.ss_size = impl_->stack_size_;
+        impl_->ctx_.uc_link = NULL;
+        makecontext(&impl_->ctx_, (void(*)(void))&ucontext_func, 1, &impl_->fn_);
+#endif
 
         return true;
     }
 
     bool Context::SwapIn()
     {
+#if defined(ENABLE_SHARED_STACK)
         memcpy(impl_->shared_stack_ + impl_->shared_stack_cap_ - impl_->stack_size_, impl_->stack_, impl_->stack_size_);
+#endif
         return 0 == swapcontext(&impl_->GetTlsContext(), &impl_->ctx_);
     }
 
     bool Context::SwapOut()
     {
+#if defined(ENABLE_SHARED_STACK)
         char dummy = 0;
         char *top = impl_->shared_stack_ + impl_->shared_stack_cap_;
         uint32_t current_stack_size = top - &dummy;
@@ -84,7 +101,7 @@ namespace co
         }
         impl_->stack_size_ = current_stack_size;
         memcpy(impl_->stack_, &dummy, impl_->stack_size_);
-
+#endif
         return 0 == swapcontext(&impl_->ctx_, &impl_->GetTlsContext());
     }
 

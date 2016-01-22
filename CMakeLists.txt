@@ -3,11 +3,20 @@ cmake_minimum_required(VERSION 2.8)
 ###################################################################################
 project(libgo)
 
+if (CMAKE_BUILD_TYPE)
+else()
+    set(CMAKE_BUILD_TYPE RELEASE)
+endif()
+message("build type: ${CMAKE_BUILD_TYPE}")
+
 aux_source_directory(src CO_SRC_LIST)
-set(LARGE_NUM_CO OFF)
 
 if (ENABLE_BOOST_COROUTINE)
     include (${PROJECT_SOURCE_DIR}/boost.cmake)
+endif()
+
+if (ENABLE_SHARED_STACK)
+    add_definitions(-DENABLE_SHARED_STACK)
 endif()
 
 if (UNIX)
@@ -21,11 +30,9 @@ if (UNIX)
         if (ENABLE_SEGMENTED_STACK)
             set(CXX_FLAGS_POSTFIX "-fsplit-stack -DBOOST_USE_SEGMENTED_STACKS")
             set(TEST_LINK_FLAGS "-fuse-ld=gold")
-            set(LARGE_NUM_CO ON)
         endif()
     else ()
         aux_source_directory(${PROJECT_SOURCE_DIR}/src/ctx_ucontext CO_SRC_LIST)
-        set(LARGE_NUM_CO ON)
         if (ENABLE_SEGMENTED_STACK)
             message(FATAL_ERROR "ENABLE_SEGMENTED_STACK depends ENABLE_BOOST_COROUTINE")
         endif()
@@ -73,15 +80,15 @@ else ()
 endif()
 
 if (UNIX)
-    set(CXX_FLAGS "-std=c++11 -Wall -Werror -fPIC ${CXX_FLAGS_POSTFIX}")
-    set(CMAKE_CXX_FLAGS "-g ${CXX_FLAGS}")
-    set(CMAKE_CXX_FLAGS_RELEASE "-O3 ${CXX_FLAGS}")
+    set(CMAKE_CXX_FLAGS "-std=c++11 -fPIC -Wall ${CXX_FLAGS_POSTFIX}")
+    set(CMAKE_CXX_FLAGS_DEBUG "-g ${CMAKE_CXX_FLAGS} -Werror")
+    set(CMAKE_CXX_FLAGS_RELEASE "-O3 ${CMAKE_CXX_FLAGS} -Werror")
 else ()
     set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} /MTd")
     set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} /MT")
 endif()
 
-#message(FATAL_ERROR "${CXX_FLAGS}")
+#message(FATAL_ERROR "${CMAKE_CXX_FLAGS}")
 
 include_directories(src)
 
@@ -113,18 +120,29 @@ if (UNIX)
     install(DIRECTORY ${PROJECT_SOURCE_DIR}/src/linux/ DESTINATION "include/libgo" FILES_MATCHING PATTERN "*.h")
     install(FILES ${PROJECT_SOURCE_DIR}/tools/libgo.conf DESTINATION "/etc/ld.so.conf.d")
 
+    add_custom_target(debug
+        COMMAND ${CMAKE_COMMAND} -DCMAKE_BUILD_TYPE=DEBUG ${CMAKE_SOURCE_DIR}
+        COMMAND ${CMAKE_COMMAND} --build ${CMAKE_BINARY_DIR} --target all
+        COMMENT "Switch CMAKE_BUILD_TYPE to Debug"
+    )
+
+    add_custom_target(release
+        COMMAND ${CMAKE_COMMAND} -DCMAKE_BUILD_TYPE=RELEASE ${CMAKE_SOURCE_DIR}
+        COMMAND ${CMAKE_COMMAND} --build ${CMAKE_BINARY_DIR} --target all
+        COMMENT "Switch CMAKE_BUILD_TYPE to Release"
+    )
+
     add_custom_target(uninstall
         COMMAND rm ${CMAKE_INSTALL_PREFIX}/lib/liblibgo.a ${CMAKE_INSTALL_PREFIX}/lib/liblibgo.so ${CMAKE_INSTALL_PREFIX}/lib/liblibgo_main.a -f
         COMMAND rm ${CMAKE_INSTALL_PREFIX}/include/libgo -rf
     )
 
     add_custom_target(test
-        COMMAND mkdir -p test && cd test && ${CMAKE_COMMAND} -DCXX_FLAGS="\"${CXX_FLAGS}\"" -DTEST_LINK_FLAGS="${TEST_LINK_FLAGS}" -DLARGE_NUM_CO=${LARGE_NUM_CO} ${PROJECT_SOURCE_DIR}/test/gtest_unit && make -j4 -C gtest && make -j4
-        COMMAND cp ${PROJECT_SOURCE_DIR}/test/gtest_unit/test.t ${PROJECT_BINARY_DIR}
+        COMMAND mkdir -p test && cd test && ${CMAKE_COMMAND} -DCMAKE_BUILD_TYPE="${CMAKE_BUILD_TYPE}" -DCMAKE_CXX_FLAGS="\"${CMAKE_CXX_FLAGS}\"" -DTEST_LINK_FLAGS="${TEST_LINK_FLAGS}" ${PROJECT_SOURCE_DIR}/test/gtest_unit && make -j4 -C gtest && make -j4
     )
 
     add_custom_target(bm
-        COMMAND mkdir -p benchmark && cd benchmark && ${CMAKE_COMMAND} -DCXX_FLAGS="\"${CXX_FLAGS}\"" -DTEST_LINK_FLAGS="${TEST_LINK_FLAGS}" -DLARGE_NUM_CO=${LARGE_NUM_CO} ${PROJECT_SOURCE_DIR}/test/benchmark && make -j4
+        COMMAND mkdir -p benchmark && cd benchmark && ${CMAKE_COMMAND} -DCMAKE_BUILD_TYPE="${CMAKE_BUILD_TYPE}" -DCMAKE_CXX_FLAGS="\"${CMAKE_CXX_FLAGS}\"" -DTEST_LINK_FLAGS="${TEST_LINK_FLAGS}" ${PROJECT_SOURCE_DIR}/test/benchmark && make -j4
     )
 
     add_custom_target(run_test

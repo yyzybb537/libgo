@@ -60,34 +60,34 @@ enum class eCoExHandle : uint8_t
 ///---- 配置选项
 struct CoroutineOptions
 {
+    /*********************** Debug options **********************/
     // 调试选项, 例如: dbg_switch 或 dbg_hook|dbg_task|dbg_wait
     uint64_t debug = 0;            
 
     // 调试信息输出位置，改写这个配置项可以重定向输出位置
     FILE* debug_output = stdout;   
+    /************************************************************/
 
+    /**************** Stack and Exception options ***************/
     // 协程中抛出未捕获异常时的处理方式
     eCoExHandle exception_handle = eCoExHandle::immedaitely_throw;
 
     // 协程栈大小上限, 只会影响在此值设置之后新创建的P, 建议在首次Run前设置.
-    // @仅在Linux生效.
     uint32_t stack_size = 2 * 1024 * 1024; 
 
-    // 初始协程栈大小, 此值越小, 对内存消耗越少, 但不会低于16bytes.
-    //    设置一个恰当的初始栈大小, 可以避免栈内存重分配, 提高性能, 但可能会浪费一部分内存.
+    // 初始协程栈提交的内存大小(不会低于16bytes).
+    //    设置一个较大的初始栈大小, 可以避免栈内存重分配, 提高性能, 但可能会浪费一部分内存.
     //    这个值只是用来保存栈内存的内存块初始大小, 即使设置的很大, 栈大小也不会超过stack_size
-    // @仅在Linux生效.
-    uint32_t init_stack_size = 512; 
-
-    // 纤程栈大小 (尽在使用纤程时生效)
-    uint32_t fiber_stack_size = 64 * 1024;
+    uint32_t init_commit_stack_size = 1024;
+    /************************************************************/
 
     // P的数量, 首次Run时创建所有P, 随后只能增加新的P不能减少现有的P
-    //    此值越大, 并行效果越好, 但是相应的每次Run时的消耗很会增加, 同时会占用大量内存.
-    //    建议设置为Run线程数的两倍或四倍.
+    //    此值越大, 线程间负载均衡效果越好, 但是会增大线程间竞争的开销
+    //    如果使用ENABLE_SHARED_STACK选项, 每个P都会占用stack_size内存.
+    //    建议设置为Run线程数的2-8倍.
     uint32_t processer_count = 16;
 
-    // 没有协程需要调度时, Run最多休眠的毫秒数
+    // 没有协程需要调度时, Run最多休眠的毫秒数(开发高实时性系统可以考虑调低这个值)
     uint8_t max_sleep_ms = 20;
 };
 ///-------------------

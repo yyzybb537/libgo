@@ -48,8 +48,8 @@ namespace co
     bool Context::Init(std::function<void()> const& fn, char* shared_stack, uint32_t shared_stack_cap)
     {
         impl_->fn_ = fn;
-        impl_->native_ = CreateFiberEx(1024,
-                g_Scheduler.GetOptions().fiber_stack_size, FIBER_FLAG_FLOAT_SWITCH,
+        impl_->native_ = CreateFiberEx(g_Scheduler.GetOptions().init_commit_stack_size,
+                g_Scheduler.GetOptions().stack_size, FIBER_FLAG_FLOAT_SWITCH,
                 (LPFIBER_START_ROUTINE)FiberFunc, &impl_->fn_);
         return !!impl_->native_;
     }

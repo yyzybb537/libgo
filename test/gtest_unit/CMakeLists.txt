@@ -3,10 +3,7 @@ cmake_minimum_required(VERSION 2.8)
 ###################################################################################
 project(unit_test)
 
-if (UNIX)
-    set(CMAKE_CXX_FLAGS "-g ${CXX_FLAGS}")
-    set(CMAKE_CXX_FLAGS_RELEASE "-O3 ${CXX_FLAGS}")
-else ()
+if (WIN32)
     set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} /MTd")
     set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} /MT")
 endif()
@@ -26,10 +23,6 @@ if (UNIX)
     set(STATIC_LINK_ARG -static -static-libgcc -static-libstdc++)
 else ()
     set(LINK_ARGS libgo gtest_main gtest ${Boost_LIBRARIES} ws2_32)
-endif()
-
-if (LARGE_NUM_CO)
-    add_definitions(-DLARGE_NUM_CO)
 endif()
 
 aux_source_directory(${PROJECT_SOURCE_DIR} SRC_LIST)

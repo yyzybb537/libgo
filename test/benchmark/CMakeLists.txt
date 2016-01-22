@@ -3,10 +3,7 @@ cmake_minimum_required(VERSION 2.8)
 ###################################################################################
 project(unit_test)
 
-if (UNIX)
-    set(CMAKE_CXX_FLAGS "-g ${CXX_FLAGS}")
-    set(CMAKE_CXX_FLAGS_RELEASE "-O3 ${CXX_FLAGS}")
-else ()
+if (WIN32)
     set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} /MTd")
     set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} /MT")
 endif()
