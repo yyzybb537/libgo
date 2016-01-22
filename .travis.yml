@@ -11,18 +11,17 @@ before_install:
 
 install:
     - sudo apt-get install cmake 
-    - sudo apt-get install -qq boost
 
 script: 
     - mkdir build; pushd build;
     - cmake ..
-    - make test
+    - make
     - pushd test; ./sleep.t
     - popd;
     - popd;
 
 after_success:
-    - .travis_scripts/coveralls.sh
+    - 
 
 branches:
     only:
