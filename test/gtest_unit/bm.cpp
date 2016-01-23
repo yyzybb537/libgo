@@ -156,7 +156,14 @@ TEST_P(Times, testBm)
     }
 }
 
+#ifdef SMALL_TEST
 INSTANTIATE_TEST_CASE_P(
         BmTest,
         Times,
         Values(100000));
+#else
+INSTANTIATE_TEST_CASE_P(
+        BmTest,
+        Times,
+        Values(10000));
+#endif

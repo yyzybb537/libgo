@@ -8,6 +8,11 @@ if (WIN32)
     set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} /MT")
 endif()
 
+option(SMALL_TEST "run the test with small mem and cpu" OFF)
+if (${SMALL_TEST} STREQUAL "ON")
+    add_definitions(-DSMALL_TEST)
+endif()
+
 include(${PROJECT_SOURCE_DIR}/../../boost.cmake)
 
 set(TARGET "unit_test.t")

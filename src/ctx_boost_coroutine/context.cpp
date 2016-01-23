@@ -65,6 +65,8 @@ namespace co
             }
 #if defined(ENABLE_SHARED_STACK)
             , boost::coroutines::attributes(shared_stack_cap), shared_stack_allocator(shared_stack, shared_stack_cap)
+#else
+            , boost::coroutines::attributes(g_Scheduler.GetOptions().stack_size)
 #endif
             );
         if (!c) return false;

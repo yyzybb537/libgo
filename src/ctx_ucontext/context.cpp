@@ -69,7 +69,7 @@ namespace co
         memcpy(impl_->stack_, shared_stack + shared_stack_cap - impl_->stack_size_, impl_->stack_size_);
 #else
         impl_->stack_size_ = g_Scheduler.GetOptions().stack_size;
-        impl_->stack_ = (char*)malloc(impl_->stack_size_);
+        impl_->stack_ = (char*)valloc(impl_->stack_size_);
 
         impl_->ctx_.uc_stack.ss_sp = impl_->stack_;
         impl_->ctx_.uc_stack.ss_size = impl_->stack_size_;

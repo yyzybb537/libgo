@@ -73,7 +73,9 @@ struct CoroutineOptions
     eCoExHandle exception_handle = eCoExHandle::immedaitely_throw;
 
     // 协程栈大小上限, 只会影响在此值设置之后新创建的P, 建议在首次Run前设置.
-    uint32_t stack_size = 2 * 1024 * 1024; 
+    // 不开启ENABLE_SHARED_STACK选项时, stack_size建议设置不超过1MB
+    // 不开启ENABLE_SHARED_STACK选项时, Linux系统下, 设置2MB的stack_size会导致提交内存的使用量比1MB的stack_size多10倍.
+    uint32_t stack_size = 1 * 1024 * 1024; 
 
     // 初始协程栈提交的内存大小(不会低于16bytes).
     //    设置一个较大的初始栈大小, 可以避免栈内存重分配, 提高性能, 但可能会浪费一部分内存.
