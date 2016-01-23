@@ -4,8 +4,11 @@
 #include "test_server.h"
 #include "coroutine.h"
 #include <chrono>
+#include <fstream>
 #include <time.h>
+#include <stdlib.h>
 #include "gtest_exit.h"
+#include "pinfo.h"
 using namespace std;
 using namespace co;
 
@@ -21,6 +24,10 @@ struct MassCo : public TestWithParam<int>
 static uint32_t c = 0;
 void foo()
 {
+//    int buf[1024] = {};
+//    memset(buf, 1, sizeof(buf));
+//    buf[0] = 1;
+
     ++c;
     co_yield;
     ++c;
@@ -33,18 +40,42 @@ TEST_P(MassCo, CnK)
 //    if (n_ == 1)
 //        co_sched.GetOptions().debug = dbg_scheduler;
 
-    int n = n_ * 100;
+//    void* store[1024];
+//    for (int i = 0; i < 1024; ++i)
+//        store[i] = (char*)malloc(300 * 1024 * 1024);
+
+    int n = n_;
     for (int i = 0; i < n; ++i)
         go foo;
+
+    {
+        pinfo pi;
+        cout << n << " coroutines, VirtMem: " << pi.get_virt_str() << ", RealMem: " << pi.get_mem_str() << endl;
+    }
 
     co_sched.Run();
     EXPECT_EQ(c, n);
 
+    {
+        pinfo pi;
+        cout << n << " coroutines, VirtMem: " << pi.get_virt_str() << ", RealMem: " << pi.get_mem_str() << endl;
+    }
+
     co_sched.Run();
     EXPECT_EQ(c, n * 2);
 
+    {
+        pinfo pi;
+        cout << n << " coroutines, VirtMem: " << pi.get_virt_str() << ", RealMem: " << pi.get_mem_str() << endl;
+    }
+
     co_sched.RunUntilNoTask();
     EXPECT_TRUE(co_sched.IsEmpty());
+
+    {
+        pinfo pi;
+        cout << n << " coroutines, VirtMem: " << pi.get_virt_str() << ", RealMem: " << pi.get_mem_str() << endl;
+    }
 
 //    printf("press anykey to continue. task_c=%u\n", (uint32_t)co::Task::GetTaskCount());
 //    getchar();
@@ -54,16 +85,24 @@ TEST_P(MassCo, CnK)
     EXPECT_EQ(co::Task::GetTaskCount(), 0);
 //    printf("press anykey to continue. task_c=%u\n", (uint32_t)co::Task::GetTaskCount());
 //    getchar();
+
+    {
+        pinfo pi;
+        cout << n << " coroutines, VirtMem: " << pi.get_virt_str() << ", RealMem: " << pi.get_mem_str() << endl;
+    }
+
+//    for (int i = 0; i < 1024; ++i)
+//        free(store[i]);
 }
 
-#ifdef LARGE_NUM_CO
+#ifdef SMALL_TEST
 INSTANTIATE_TEST_CASE_P(
-        MassCoTest,
-        MassCo,
-        Values(1, 10, 100, 1000, 10000));
+	MassCoTest,
+	MassCo,
+	Values(100, 1000, 10000));
 #else
 INSTANTIATE_TEST_CASE_P(
 	MassCoTest,
 	MassCo,
-	Values(1, 10, 100, 1000));
+	Values(100, 1000, 10000, 100000));
 #endif

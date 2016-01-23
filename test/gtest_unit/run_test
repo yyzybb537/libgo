@@ -1,0 +1,25 @@
+#!/bin/sh
+set -e
+
+ulimit -c 500000
+echo '' > result
+for t in `ls test/*.t`
+do
+    echo ''
+    echo ------------ run $t -------------- | tee -a result
+    ./$t | tee -a result
+    echo ---------------------------------- | tee -a result
+done
+
+echo ------------ result --------------
+cat result | egrep \(PASSED\|FAIL\|^----------\)
+echo ----------------------------------
+
+runs=`ls test/*.t | wc -l`
+pass=`grep "^\[\s*PASSED" result | wc -l`
+if [ "${pass}" -eq "${runs}" ];
+then
+    exit 0
+else
+    exit 1
+fi

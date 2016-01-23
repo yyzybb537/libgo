@@ -156,18 +156,14 @@ TEST_P(Times, testBm)
     }
 }
 
-#ifdef LARGE_NUM_CO
-
+#ifdef SMALL_TEST
 INSTANTIATE_TEST_CASE_P(
         BmTest,
         Times,
-        Values(100000, 1000000));
-
+        Values(10000));
 #else
-
 INSTANTIATE_TEST_CASE_P(
-    BmTest,
-    Times,
-    Values(10000));
-
+        BmTest,
+        Times,
+        Values(10000, 100000));
 #endif
