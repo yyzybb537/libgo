@@ -154,7 +154,7 @@ if (UNIX)
     )
 
     add_custom_target(run_test
-        COMMAND cd test && ./timer.t
+        COMMAND cp ${PROJECT_SOURCE_DIR}/test/gtest_unit/run_test . && ./run_test
     )
 
 else ()
