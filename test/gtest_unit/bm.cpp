@@ -160,10 +160,10 @@ TEST_P(Times, testBm)
 INSTANTIATE_TEST_CASE_P(
         BmTest,
         Times,
-        Values(100000));
+        Values(10000));
 #else
 INSTANTIATE_TEST_CASE_P(
         BmTest,
         Times,
-        Values(10000));
+        Values(10000, 100000));
 #endif
