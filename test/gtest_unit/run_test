@@ -1,4 +1,5 @@
 #!/bin/sh
+set -e
 
 ulimit -c 500000
 echo '' > result
@@ -13,3 +14,6 @@ done
 echo ------------ result --------------
 cat result | egrep \(PASSED\|FAIL\|run\)
 echo ----------------------------------
+
+code=`grep FAIL result | wc -l`
+exit $code
