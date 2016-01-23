@@ -55,7 +55,7 @@ foreach(var ${SRC_LIST})
         endif()
     endif()
 
-    if (TEST_STATIC_LINK)
+    if (TEST_STATIC_LINK OR WIN32)
         add_executable(s_${tgt}.t ${var})
         target_link_libraries(s_${tgt}.t ${TEST_LINK_FLAGS} ${LINK_ARGS} ${STATIC_LINK_ARG})
         if (WIN32)
