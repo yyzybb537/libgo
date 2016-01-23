@@ -7,17 +7,39 @@ if (CMAKE_BUILD_TYPE)
 else()
     set(CMAKE_BUILD_TYPE RELEASE)
 endif()
-message("build type: ${CMAKE_BUILD_TYPE}")
+
+message("------------ Options -------------")
+message("  CMAKE_BUILD_TYPE: ${CMAKE_BUILD_TYPE}")
 
 aux_source_directory(src CO_SRC_LIST)
 
 if (ENABLE_BOOST_COROUTINE)
     include (${PROJECT_SOURCE_DIR}/boost.cmake)
+    message ("  ENABLE_BOOST_COROUTINE: ON")
+    message ("  BOOST_ROOT: ${BOOST_ROOT}")
+else()
+    message ("  ENABLE_BOOST_COROUTINE: OFF")
 endif()
 
 if (ENABLE_SHARED_STACK)
     add_definitions(-DENABLE_SHARED_STACK)
+    message ("  ENABLE_SHARED_STACK: ON")
+else()
+    message ("  ENABLE_SHARED_STACK: OFF")
 endif()
+
+if (DISABLE_HOOK)
+    message ("  DISABLE_HOOK: ON")
+else()
+    message ("  DISABLE_HOOK: OFF")
+endif()
+
+message("----------------------------------")
+
+message("-------------- Env ---------------")
+message("  CMAKE_SOURCE_DIR: ${CMAKE_SOURCE_DIR}")
+message("  CMAKE_BINARY_DIR: ${CMAKE_BINARY_DIR}")
+message("----------------------------------")
 
 # 选项互斥检查
 if (UNIX)
@@ -133,12 +155,14 @@ if (UNIX)
     add_custom_target(debug
         COMMAND ${CMAKE_COMMAND} -DCMAKE_BUILD_TYPE=DEBUG ${CMAKE_SOURCE_DIR}
         COMMAND ${CMAKE_COMMAND} --build ${CMAKE_BINARY_DIR} --target all
+        WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
         COMMENT "Switch CMAKE_BUILD_TYPE to Debug"
     )
 
     add_custom_target(release
         COMMAND ${CMAKE_COMMAND} -DCMAKE_BUILD_TYPE=RELEASE ${CMAKE_SOURCE_DIR}
         COMMAND ${CMAKE_COMMAND} --build ${CMAKE_BINARY_DIR} --target all
+        WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
         COMMENT "Switch CMAKE_BUILD_TYPE to Release"
     )
 
