@@ -29,6 +29,7 @@ after_success:
 branches:
     only:
     - dev
+    - master
 
 notifications:
   email: true
