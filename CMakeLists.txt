@@ -19,6 +19,7 @@ if (ENABLE_SHARED_STACK)
     add_definitions(-DENABLE_SHARED_STACK)
 endif()
 
+# 选项互斥检查
 if (UNIX)
     # unix like platforms
     aux_source_directory(${PROJECT_SOURCE_DIR}/src/linux CO_SRC_LIST)
@@ -30,6 +31,10 @@ if (UNIX)
         if (ENABLE_SEGMENTED_STACK)
             set(CXX_FLAGS_POSTFIX "-fsplit-stack -DBOOST_USE_SEGMENTED_STACKS")
             set(TEST_LINK_FLAGS "-fuse-ld=gold")
+        endif()
+
+        if (ENABLE_SHARED_STACK)
+            message(FATAL_ERROR "ENABLE_SHARED_STACK cannot used with ENABLE_BOOST_COROUTINE")
         endif()
     else ()
         aux_source_directory(${PROJECT_SOURCE_DIR}/src/ctx_ucontext CO_SRC_LIST)
@@ -53,8 +58,13 @@ elseif (WIN32)
 
     if (ENABLE_BOOST_COROUTINE)
         aux_source_directory(${PROJECT_SOURCE_DIR}/src/ctx_boost_coroutine CO_SRC_LIST)
+        message(WARNING "boost.coroutine was unstable in windows platform")
     else()
         aux_source_directory(${PROJECT_SOURCE_DIR}/src/ctx_win_fiber CO_SRC_LIST)
+    endif()
+
+    if (ENABLE_SHARED_STACK)
+        message(FATAL_ERROR "ENABLE_SHARED_STACK depends unix like platforms")
     endif()
 
     if (ENABLE_SEGMENTED_STACK)
