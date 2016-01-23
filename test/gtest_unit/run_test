@@ -12,8 +12,14 @@ do
 done
 
 echo ------------ result --------------
-cat result | egrep \(PASSED\|FAIL\|run\)
+cat result | egrep \(PASSED\|FAIL\|^----------\)
 echo ----------------------------------
 
-code=`grep FAIL result | wc -l`
-exit $code
+runs=`ls test/*.t | wc -l`
+pass=`grep "^\[\s*PASSED" result | wc -l`
+if [ "${pass}" -eq "${runs}" ];
+then
+    exit 0
+else
+    exit 1
+fi
