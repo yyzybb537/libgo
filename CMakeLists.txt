@@ -187,17 +187,22 @@ if (UNIX)
         COMMAND mkdir -p benchmark && cd benchmark && ${CMAKE_COMMAND} -DCMAKE_BUILD_TYPE="${CMAKE_BUILD_TYPE}" -DCMAKE_CXX_FLAGS="\"${CMAKE_CXX_FLAGS}\"" -DTEST_LINK_FLAGS="${TEST_LINK_FLAGS}" ${PROJECT_SOURCE_DIR}/test/benchmark && make -j4
     )
 
+    add_custom_target(samples
+        COMMAND mkdir -p samples && cd samples && ${CMAKE_COMMAND} -DCMAKE_BUILD_TYPE="${CMAKE_BUILD_TYPE}" -DCMAKE_CXX_FLAGS="\"${CMAKE_CXX_FLAGS}\"" -DTEST_LINK_FLAGS="${TEST_LINK_FLAGS}" ${PROJECT_SOURCE_DIR}/samples && make -j4
+    )
+
     add_custom_target(run_test
         COMMAND cp ${PROJECT_SOURCE_DIR}/test/gtest_unit/run_test . && ./run_test
     )
 
 else ()
+    add_subdirectory(${PROJECT_SOURCE_DIR}/src/main)
+    set_target_properties("${STATIC_T}" PROPERTIES COMPILE_FLAGS "/wd4819 /wd4267")
+
     if (BOOST_ROOT)
         add_subdirectory("${PROJECT_SOURCE_DIR}/test/gtest_unit")
         add_subdirectory("${PROJECT_SOURCE_DIR}/test/benchmark")
+        add_subdirectory(${PROJECT_SOURCE_DIR}/samples)
     endif()
-    add_subdirectory(${PROJECT_SOURCE_DIR}/src/main)
-    add_subdirectory(${PROJECT_SOURCE_DIR}/samples)
-    set_target_properties("${STATIC_T}" PROPERTIES COMPILE_FLAGS "/wd4819 /wd4267")
 endif()
 

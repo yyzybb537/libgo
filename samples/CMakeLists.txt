@@ -28,16 +28,22 @@ endif()
 
 aux_source_directory(${PROJECT_SOURCE_DIR} SRC_LIST)
 
+list(REMOVE_ITEM SRC_LIST ${PROJECT_SOURCE_DIR}/sample2_yield.cpp)
 add_executable(sample2_yield.t sample2_yield.cpp)
 add_dependencies(sample2_yield.t ${depend_libgo} libgo_main)
+
+list(REMOVE_ITEM SRC_LIST ${PROJECT_SOURCE_DIR}/sample9_curl.cpp)
+
 if (WIN32)
-    list(REMOVE_ITEM SRC_LIST ${PROJECT_SOURCE_DIR}/sample2_yield.cpp)
     list(REMOVE_ITEM SRC_LIST ${PROJECT_SOURCE_DIR}/sample3_echo.cpp)
-    list(REMOVE_ITEM SRC_LIST ${PROJECT_SOURCE_DIR}/sample9_curl.cpp)
     list(REMOVE_ITEM SRC_LIST ${PROJECT_SOURCE_DIR}/sample11_await.cpp)
     target_link_libraries(sample2_yield.t ${LINK_ARGS} libgo_main)
 else()
     target_link_libraries(sample2_yield.t ${LINK_ARGS} rt)
+
+    add_executable(sample9_curl.t sample9_curl.cpp)
+    add_dependencies(sample9_curl.t ${depend_libgo})
+    target_link_libraries(sample9_curl.t ${LINK_ARGS} rt -lcurl)
 endif()
 
 foreach(var ${SRC_LIST})
