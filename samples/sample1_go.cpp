@@ -45,6 +45,7 @@
  * coroutine sample1
 *************************************************/
 #include "coroutine.h"
+#include "win_exit.h"
 #include <stdio.h>
 
 void foo()

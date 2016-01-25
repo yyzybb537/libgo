@@ -12,6 +12,7 @@
 ************************************************/
 #include <chrono>
 #include "coroutine.h"
+#include "win_exit.h"
 
 int main()
 {

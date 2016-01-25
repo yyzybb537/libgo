@@ -8,6 +8,7 @@
 #include <boost/thread.hpp>
 #include <curl/curl.h>
 #include "coroutine.h"
+#include "win_exit.h"
 
 static std::atomic<int> g_ok{0}, g_error{0};
 

@@ -7,6 +7,7 @@
 #include <iostream>
 #include <boost/thread.hpp>
 #include "coroutine.h"
+#include "win_exit.h"
 using namespace std;
 using namespace std::chrono;
 
@@ -29,6 +30,7 @@ int main()
     cout << "for-loop, cost ";
     cout << duration_cast<milliseconds>(end - start).count() << "ms" << endl;
 
+    // 使用libgo做并行计算
     start = system_clock::now();
     for (int i = 0; i < 100; ++i)
         go foo;

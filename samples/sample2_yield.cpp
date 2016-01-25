@@ -2,6 +2,7 @@
  * coroutine sample2
 *************************************************/
 #include "coroutine.h"
+#include "win_exit.h"
 #include <stdio.h>
 
 // 也可以使用co_main宏定义main函数, 
