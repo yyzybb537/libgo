@@ -16,6 +16,7 @@
 ************************************************/
 #include <mutex>
 #include "coroutine.h"
+#include "win_exit.h"
 
 static int value = 0;
 

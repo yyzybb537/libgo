@@ -7,6 +7,7 @@
  * 我们来看一个更加cool的例子: echo server。
 ************************************************/
 #include "coroutine.h"
+#include "win_exit.h"
 #include <stdio.h>
 #include <unistd.h>
 #include <sys/socket.h>

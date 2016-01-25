@@ -22,6 +22,7 @@
 #include <sys/types.h>
 #include <fcntl.h>
 #include "coroutine.h"
+#include "win_exit.h"
 
 int main()
 {
