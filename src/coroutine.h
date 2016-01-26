@@ -16,6 +16,19 @@ struct __go
     }
 };
 
+struct __go_stack
+{
+    explicit __go_stack(std::size_t stack_size) : stack_size_(stack_size) {}
+
+    template <typename Arg>
+    inline void operator-(Arg const& arg)
+    {
+        Scheduler::getInstance().CreateTask(arg, stack_size_);
+    }
+
+    std::size_t stack_size_;
+};
+
 // co_channel
 template <typename T>
 using co_chan = Channel<T>;
@@ -73,6 +86,7 @@ struct __async_wait<void>
 } //namespace co
 
 #define go ::co::__go()-
+#define go_stack(size) ::co::__go_stack(size)-
 #define co_yield do { g_Scheduler.CoYield(); } while (0)
 
 // (uint32_t type, uint64_t id)

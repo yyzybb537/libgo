@@ -41,8 +41,8 @@ namespace co
         (*pfn)();
     }
 
-    Context::Context()
-        : impl_(new Context::impl_t)
+    Context::Context(std::size_t stack_size)
+        : impl_(new Context::impl_t), stack_size_(stack_size)
     {}
 
     bool Context::Init(std::function<void()> const& fn, char* shared_stack, uint32_t shared_stack_cap)
@@ -68,7 +68,7 @@ namespace co
         impl_->stack_ = (char*)malloc(impl_->stack_capacity_);
         memcpy(impl_->stack_, shared_stack + shared_stack_cap - impl_->stack_size_, impl_->stack_size_);
 #else
-        impl_->stack_size_ = g_Scheduler.GetOptions().stack_size;
+        impl_->stack_size_ = this->stack_size_;
         impl_->stack_ = (char*)valloc(impl_->stack_size_);
 
         impl_->ctx_.uc_stack.ss_sp = impl_->stack_;

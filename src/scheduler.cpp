@@ -41,9 +41,9 @@ CoroutineOptions& Scheduler::GetOptions()
     return options;
 }
 
-void Scheduler::CreateTask(TaskF const& fn)
+void Scheduler::CreateTask(TaskF const& fn, std::size_t stack_size)
 {
-    Task* tk = new Task(fn);
+    Task* tk = new Task(fn, stack_size ? stack_size : GetOptions().stack_size);
     ++task_count_;
     DebugPrint(dbg_task, "task(%s) created.", tk->DebugInfo());
     AddTaskRunnable(tk);

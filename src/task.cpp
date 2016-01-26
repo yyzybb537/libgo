@@ -59,8 +59,8 @@ static void C_func(Task* self)
     Scheduler::getInstance().CoYield();
 }
 
-Task::Task(TaskF const& fn)
-    : id_(++s_id), fn_(fn)
+Task::Task(TaskF const& fn, std::size_t stack_size)
+    : id_(++s_id), ctx_(stack_size), fn_(fn)
 {
     ++s_task_count;
 }

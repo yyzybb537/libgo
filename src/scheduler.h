@@ -117,7 +117,7 @@ class Scheduler
         CoroutineOptions& GetOptions();
 
         // 创建一个协程
-        void CreateTask(TaskF const& fn);
+        void CreateTask(TaskF const& fn, std::size_t stack_size = 0);
 
         // 当前是否处于协程中
         bool IsCoroutine();

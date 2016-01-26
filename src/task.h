@@ -75,7 +75,7 @@ struct Task
 
     int sleep_ms_ = 0;                  // 睡眠时间
 
-    explicit Task(TaskF const& fn);
+    explicit Task(TaskF const& fn, std::size_t stack_size);
     ~Task();
 
     void AddIntoProcesser(Processer *proc, char* shared_stack, uint32_t shared_stack_cap);

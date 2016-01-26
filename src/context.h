@@ -16,7 +16,7 @@ namespace co
         class impl_t;
 
     public:
-        Context();
+        explicit Context(std::size_t stack_size);
 
         bool Init(std::function<void()> const& fn, char* shared_stack, uint32_t shared_stack_cap);
         
@@ -26,6 +26,7 @@ namespace co
 
     private:
         std::shared_ptr<impl_t> impl_;
+        std::size_t stack_size_;
     };
 
 } //namespace co

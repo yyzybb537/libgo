@@ -76,6 +76,12 @@ int main()
     std::function<void()> fn(std::bind(&A::fB, A()));
     go fn;
 
+    // 也可以使用go_stack创建指定栈大小的协程
+    //   创建拥有10MB大栈的协程
+    go_stack(10 * 1024 * 1024) []{
+        printf("large stack\n");
+    };
+
     // 协程创建以后不会立即执行，而是暂存至可执行列表中，等待调度器调度。
     // co_sched是全局唯一的协程调度器，有以下接口可以调度协程：
     //   1.Run 执行单次调度, 返回本次执行的协程数量
