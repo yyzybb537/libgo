@@ -12,12 +12,13 @@ using namespace std;
 using namespace std::chrono;
 
 // 大计算量的函数
-int foo()
+int c = 0;
+void foo()
 {
     int v = 1;
     for (int i = 1; i < 20000000; ++i)
         v *= i;
-    return v;
+	c += v;
 }
 
 int main()
@@ -46,7 +47,7 @@ int main()
     end = system_clock::now();
     cout << "go with coroutine, cost ";
     cout << duration_cast<milliseconds>(end - start).count() << "ms" << endl;
-
+	cout << "result zero:" << c * 0 << endl;
     return 0;
 }
 
