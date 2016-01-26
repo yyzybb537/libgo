@@ -24,6 +24,8 @@ public:
 
     bool Wakeup();
 
+    bool CancelWait(Task* tk, uint32_t block_sequence);
+
     bool IsWakeup();
 
 private:

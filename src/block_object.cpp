@@ -71,8 +71,33 @@ bool BlockObject::Wakeup()
         return true;
     }
 
+    tk->block_ = nullptr;
     g_Scheduler.AddTaskRunnable(tk);
     DebugPrint(dbg_syncblock, "wakeup task(%s).", tk->DebugInfo());
+    return true;
+}
+bool BlockObject::CancelWait(Task* tk, uint32_t block_sequence)
+{
+    std::unique_lock<LFLock> lock(lock_);
+    if (tk->block_ != this) {
+        DebugPrint(dbg_syncblock, "cancelwait task(%s) failed. tk->block_ is not this!", tk->DebugInfo());
+        return false;
+    }
+
+    if (tk->block_sequence_ != block_sequence) {
+        DebugPrint(dbg_syncblock, "cancelwait task(%s) failed. tk->block_sequence_ = %u, block_sequence = %u.",
+                tk->DebugInfo(), tk->block_sequence_, block_sequence);
+        return false;
+    }
+
+    if (!wait_queue_.erase(tk)) {
+        DebugPrint(dbg_syncblock, "cancelwait task(%s) erase failed.", tk->DebugInfo());
+        return false;
+    }
+
+    tk->block_ = nullptr;
+    g_Scheduler.AddTaskRunnable(tk);
+    DebugPrint(dbg_syncblock, "cancelwait task(%s).", tk->DebugInfo());
     return true;
 }
 

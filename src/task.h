@@ -76,6 +76,7 @@ struct Task
     IoWaitData *io_wait_data_ = nullptr;// Network IO block所需的数据
 
     BlockObject* block_ = NULL;         // sys_block等待的block对象
+    uint32_t block_sequence_ = 0;       // sys_block等待序号(用于做超时校验)
     int sleep_ms_ = 0;                  // 睡眠时间
 
     explicit Task(TaskF const& fn, std::size_t stack_size);
