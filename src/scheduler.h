@@ -161,22 +161,6 @@ class Scheduler
         void SleepSwitch(int timeout_ms);
 
         /// ------------------------------------------------------------------------
-        // @{ 以计数的方式模拟实现的协程同步方式. 
-        //    初始计数为0, Wait减少计数, Wakeup增加计数.
-        //    UserBlockWait将阻塞式（yield）地等待计数大于0, 等待成功后将计数减一,
-        //        并将协程切换回可执行状态. 如果不在协程中调用, 则返回false, 且不做任何事.
-        //    TryBlockWait检查当前计数, 如果计数等于0, 则返回false; 否则计数减一并返回true.
-        //    UserBlockWakeup检查当前等待队列, 将等待队列中的前面最多wakeup_count个
-        //        协程唤醒（设置为可执行状态）, 累加剩余计数（wakeup_count减去唤醒的协程数量）
-        //
-        // 用户自定义的阻塞切换, type范围限定为: [0, 0xffffffff]
-        bool UserBlockWait(uint32_t type, uint64_t wait_id);
-        bool TryUserBlockWait(uint32_t type, uint64_t wait_id);
-        uint32_t UserBlockWakeup(uint32_t type, uint64_t wait_id, uint32_t wakeup_count = 1);
-        // }@
-        /// ------------------------------------------------------------------------
-        
-        /// ------------------------------------------------------------------------
         // @{ 定时器
         TimerId ExpireAt(CoTimerMgr::TimePoint const& time_point, CoTimer::fn_t const& fn);
 
@@ -216,23 +200,6 @@ class Scheduler
         // 将一个协程加入可执行队列中
         void AddTaskRunnable(Task* tk);
 
-        /// ------------------------------------------------------------------------
-        // 协程框架定义的阻塞切换, type范围不可与用户自定义范围重叠, 指定为:[-xxxxx, -1]
-        // 如果不在协程中调用, 则返回false, 且不做任何事.
-        bool BlockWait(int64_t type, uint64_t wait_id);
-
-        // 尝试等待某个事件发生, 功能等同于try_lock, 可在协程外调用.
-        bool TryBlockWait(int64_t type, uint64_t wait_id);
-
-        // 唤醒对某个时间等待的协程.
-        uint32_t BlockWakeup(int64_t type, uint64_t wait_id, uint32_t wakeup_count = 1);
-        // @
-        /// ------------------------------------------------------------------------
-
-        // 清理没有等待也没有被等待的WaitPair.
-        void ClearWaitPairWithoutLock(int64_t type, uint64_t wait_id, WaitZone& zone, WaitPair& wait_pair);
-
-    private:
         // Run函数的一部分, 处理runnable状态的协程
         uint32_t DoRunnable();
 
@@ -263,10 +230,6 @@ class Scheduler
         // sleep block waiter.
         SleepWait sleep_wait_;
 
-        // User define wait tasks table.
-        WaitTable user_wait_tasks_;
-        LFLock user_wait_lock_;
-
         // Timer manager.
         CoTimerMgr timer_mgr_;
 
@@ -276,11 +239,12 @@ class Scheduler
         std::atomic<uint8_t> sleep_ms_{0};
         std::atomic<uint32_t> thread_id_{0};
 
-    friend class CoMutex;
-    friend class BlockObject;
-    friend class IoWait;
-    friend class SleepWait;
-    friend class Processer;
+    private:
+        friend class CoMutex;
+        friend class BlockObject;
+        friend class IoWait;
+        friend class SleepWait;
+        friend class Processer;
 };
 
 } //namespace co

@@ -85,28 +85,13 @@ uint32_t Processer::Run(ThreadLocalInfo &info, uint32_t &done_count)
                 break;
 
             case TaskState::sys_block:
-            case TaskState::user_block:
                 {
+                    assert(tk->block_);
                     if (tk->block_) {
                         it = slist.erase(it);
                         if (!tk->block_->AddWaitTask(tk))
                             runnable_list_.push(tk);
                         tk->block_ = NULL;
-                    } else {
-                        std::unique_lock<LFLock> lock(g_Scheduler.user_wait_lock_);
-                        auto &zone = g_Scheduler.user_wait_tasks_[tk->user_wait_type_];
-                        auto &wait_pair = zone[tk->user_wait_id_];
-                        auto &task_queue = wait_pair.second;
-                        if (wait_pair.first) {
-                            --wait_pair.first;
-                            tk->state_ = TaskState::runnable;
-                            ++it;
-                        } else {
-                            it = slist.erase(it);
-                            task_queue.push(tk);
-                        }
-                        g_Scheduler.ClearWaitPairWithoutLock(tk->user_wait_type_,
-                                tk->user_wait_id_, zone, wait_pair);
                     }
                 }
                 break;

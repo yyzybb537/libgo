@@ -17,7 +17,6 @@ enum class TaskState
     runnable,
     io_block,       // write, writev, read, select, poll, ...
     sys_block,      // co_mutex, ...
-    user_block,     // user switch it.
     sleep,          // sleep nanosleep poll(NULL, 0, timeout)
     done,
     fatal,
