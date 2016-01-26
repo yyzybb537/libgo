@@ -34,6 +34,46 @@ void foo()
     co_yield;
 }
 
+TEST_P(MassCo, LittleStack)
+{
+    c = 0;
+    int n = n_;
+    for (int i = 0; i < n; ++i)
+        go_stack(1024) foo;
+
+    {
+        pinfo pi;
+        cout << n << " coroutines, VirtMem: " << pi.get_virt_str() << ", RealMem: " << pi.get_mem_str() << endl;
+    }
+
+    co_sched.Run();
+    EXPECT_EQ(c, n);
+
+    {
+        pinfo pi;
+        cout << n << " coroutines, VirtMem: " << pi.get_virt_str() << ", RealMem: " << pi.get_mem_str() << endl;
+    }
+
+    co_sched.Run();
+    EXPECT_EQ(c, n * 2);
+
+    {
+        pinfo pi;
+        cout << n << " coroutines, VirtMem: " << pi.get_virt_str() << ", RealMem: " << pi.get_mem_str() << endl;
+    }
+
+    co_sched.RunUntilNoTask();
+    EXPECT_TRUE(co_sched.IsEmpty());
+
+    {
+        pinfo pi;
+        cout << n << " coroutines, VirtMem: " << pi.get_virt_str() << ", RealMem: " << pi.get_mem_str() << endl;
+    }
+
+    co_sched.RunUntilNoTask();
+    EXPECT_EQ(co::Task::GetTaskCount(), 0);
+}
+
 TEST_P(MassCo, CnK)
 {
     c = 0;

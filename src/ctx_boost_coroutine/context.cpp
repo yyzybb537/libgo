@@ -47,8 +47,8 @@ namespace co
         uint32_t shared_stack_cap_;
     };
 
-    Context::Context()
-        : impl_(new Context::impl_t)
+    Context::Context(std::size_t stack_size)
+        : impl_(new Context::impl_t), stack_size_(stack_size)
     { }
 
     bool Context::Init(std::function<void()> const& fn, char* shared_stack, uint32_t shared_stack_cap)
@@ -66,7 +66,7 @@ namespace co
 #if defined(ENABLE_SHARED_STACK)
             , boost::coroutines::attributes(shared_stack_cap), shared_stack_allocator(shared_stack, shared_stack_cap)
 #else
-            , boost::coroutines::attributes(g_Scheduler.GetOptions().stack_size)
+            , boost::coroutines::attributes(stack_size_)
 #endif
             );
         if (!c) return false;
