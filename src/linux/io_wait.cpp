@@ -29,13 +29,13 @@ void IoWait::CoSwitch(std::vector<FdStruct> && fdsts, int timeout_ms)
     Task* tk = g_Scheduler.GetCurrentTask();
     if (!tk) return ;
 
-    uint32_t id = ++tk->io_block_id_;
+    uint32_t id = ++tk->GetIoWaitData().io_block_id_;
     tk->state_ = TaskState::io_block;
-    tk->wait_successful_ = 0;
-    tk->io_block_timeout_ = timeout_ms;
-    tk->io_block_timer_.reset();
-    tk->wait_fds_.swap(fdsts);
-    for (auto &fdst : tk->wait_fds_) {
+    tk->GetIoWaitData().wait_successful_ = 0;
+    tk->GetIoWaitData().io_block_timeout_ = timeout_ms;
+    tk->GetIoWaitData().io_block_timer_.reset();
+    tk->GetIoWaitData().wait_fds_.swap(fdsts);
+    for (auto &fdst : tk->GetIoWaitData().wait_fds_) {
         fdst.epoll_ptr.tk = tk;
         fdst.epoll_ptr.io_block_id = id;
     }
@@ -48,18 +48,18 @@ void IoWait::CoSwitch(std::vector<FdStruct> && fdsts, int timeout_ms)
 void IoWait::SchedulerSwitch(Task* tk)
 {
     bool ok = false;
-    std::unique_lock<LFLock> lock(tk->io_block_lock_, std::defer_lock);
-    if (tk->wait_fds_.size() > 1)
+    std::unique_lock<LFLock> lock(tk->GetIoWaitData().io_block_lock_, std::defer_lock);
+    if (tk->GetIoWaitData().wait_fds_.size() > 1)
         lock.lock();
 
     // id一定要先取出来, 因为在下面的for中, 有可能在另一个线程epoll_wait成功,
     // 并且重新进入一次syscall, 导致id变化.
-    uint32_t id = tk->io_block_id_;
+    uint32_t id = tk->GetIoWaitData().io_block_id_;
 
     RefGuard<> ref_guard(tk);
     wait_tasks_.push(tk);
     std::vector<std::pair<int, uint32_t>> rollback_list;
-    for (auto &fdst : tk->wait_fds_)
+    for (auto &fdst : tk->GetIoWaitData().wait_fds_)
     {
         epoll_event ev = {fdst.event, {(void*)&fdst.epoll_ptr}};
         int epoll_fd_ = ChooseEpoll(fdst.event);
@@ -97,7 +97,7 @@ void IoWait::SchedulerSwitch(Task* tk)
     }
 
     DebugPrint(dbg_ioblock, "task(%s) SchedulerSwitch id=%d, nfds=%d, timeout=%d, ok=%s",
-            tk->DebugInfo(), id, (int)tk->wait_fds_.size(), tk->io_block_timeout_,
+            tk->DebugInfo(), id, (int)tk->GetIoWaitData().wait_fds_.size(), tk->GetIoWaitData().io_block_timeout_,
             ok ? "true" : "false");
 
     if (!ok) {
@@ -105,37 +105,37 @@ void IoWait::SchedulerSwitch(Task* tk)
             g_Scheduler.AddTaskRunnable(tk);
         }
     }
-    else if (tk->io_block_timeout_ != -1) {
+    else if (tk->GetIoWaitData().io_block_timeout_ != -1) {
         // set timer.
         tk->IncrementRef();
         uint64_t task_id = tk->id_;
-        auto timer_id = timer_mgr_.ExpireAt(std::chrono::milliseconds(tk->io_block_timeout_),
+        auto timer_id = timer_mgr_.ExpireAt(std::chrono::milliseconds(tk->GetIoWaitData().io_block_timeout_),
                 [=]{ 
                     DebugPrint(dbg_ioblock, "task(%d) syscall timeout", (int)task_id);
                     this->Cancel(tk, id);
                     tk->DecrementRef();
                 });
-        tk->io_block_timer_ = timer_id;
+        tk->GetIoWaitData().io_block_timer_ = timer_id;
     }
 }
 
 void IoWait::Cancel(Task *tk, uint32_t id)
 {
-    DebugPrint(dbg_ioblock, "task(%s) Cancel id=%d, tk->io_block_id_=%d",
-            tk->DebugInfo(), id, (int)tk->io_block_id_);
+    DebugPrint(dbg_ioblock, "task(%s) Cancel id=%d, tk->GetIoWaitData().io_block_id_=%d",
+            tk->DebugInfo(), id, (int)tk->GetIoWaitData().io_block_id_);
 
-    if (tk->io_block_id_ != id)
+    if (tk->GetIoWaitData().io_block_id_ != id)
         return ;
 
     if (wait_tasks_.erase(tk)) { // sync between timer and epoll_wait.
         DebugPrint(dbg_ioblock, "task(%s) io_block wakeup. id=%d", tk->DebugInfo(), id);
 
-        std::unique_lock<LFLock> lock(tk->io_block_lock_, std::defer_lock);
-        if (tk->wait_fds_.size() > 1)
+        std::unique_lock<LFLock> lock(tk->GetIoWaitData().io_block_lock_, std::defer_lock);
+        if (tk->GetIoWaitData().wait_fds_.size() > 1)
             lock.lock();
 
         // 清理所有fd
-        for (auto &fdst: tk->wait_fds_)
+        for (auto &fdst: tk->GetIoWaitData().wait_fds_)
         {
             int epoll_fd_ = ChooseEpoll(fdst.event);
             if (0 == epoll_ctl(epoll_fd_, EPOLL_CTL_DEL, fdst.fd, NULL)) {   // sync 1
@@ -184,7 +184,7 @@ retry:
             EpollPtr* ep = (EpollPtr*)evs[i].data.ptr;
             ep->revent = evs[i].events;
             Task* tk = ep->tk;
-            ++tk->wait_successful_;
+            ++tk->GetIoWaitData().wait_successful_;
             // 将tk暂存, 最后再执行Cancel, 是为了poll和select可以得到正确的计数。
             // 以防Task被加入runnable列表后，被其他线程执行
             epollwait_tasks_.insert(EpollWaitSt{tk, ep->io_block_id});

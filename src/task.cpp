@@ -68,6 +68,10 @@ Task::Task(TaskF const& fn, std::size_t stack_size)
 Task::~Task()
 {
     --s_task_count;
+    if (io_wait_data_) {
+        delete io_wait_data_;
+        io_wait_data_ = nullptr;
+    }
 }
 
 void Task::AddIntoProcesser(Processer *proc, char* shared_stack, uint32_t shared_stack_cap)
@@ -96,6 +100,15 @@ bool Task::SwapOut()
 void Task::SetDebugInfo(std::string const& info)
 {
     debug_info_ = info + "(" + std::to_string(id_) + ")";
+}
+
+IoWaitData& Task::GetIoWaitData()
+{
+    // 首次进入不会并行, 所以无需加锁
+    if (!io_wait_data_)
+        io_wait_data_ = new IoWaitData;
+
+    return *io_wait_data_;
 }
 
 const char* Task::DebugInfo()

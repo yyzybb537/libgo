@@ -48,6 +48,18 @@ struct FdStruct
 
 class BlockObject;
 class Processer;
+
+// Network IO block所需的数据
+struct IoWaitData
+{
+    std::atomic<uint32_t> io_block_id_{0}; // 每次io_block请求分配一个ID
+    std::vector<FdStruct> wait_fds_;    // io_block等待的fd列表
+    uint32_t wait_successful_ = 0;      // io_block成功等待到的fd数量(用于poll和select)
+    LFLock io_block_lock_;              // 当等待的fd多余1个时, 用此锁sync添加到epoll和从epoll删除的操作, 以防在epoll中残留fd, 导致Task无法释放.
+    int io_block_timeout_ = 0;
+    CoTimerPtr io_block_timer_;
+};
+
 struct Task
     : public TSQueueHook
 {
@@ -61,15 +73,9 @@ struct Task
     std::exception_ptr eptr_;           // 保存exception的指针
     std::atomic<uint32_t> ref_count_{1};// 引用计数
 
-    std::atomic<uint32_t> io_block_id_; // 每次io_block请求分配一个ID
-    std::vector<FdStruct> wait_fds_;    // io_block等待的fd列表
-    uint32_t wait_successful_ = 0;      // io_block成功等待到的fd数量(用于poll和select)
-    LFLock io_block_lock_;              // 当等待的fd多余1个时, 用此锁sync添加到epoll和从epoll删除的操作, 以防在epoll中残留fd, 导致Task无法释放.
-    int io_block_timeout_ = 0;
-    CoTimerPtr io_block_timer_;
+    IoWaitData *io_wait_data_ = nullptr;// Network IO block所需的数据
 
     BlockObject* block_ = NULL;         // sys_block等待的block对象
-
     int sleep_ms_ = 0;                  // 睡眠时间
 
     explicit Task(TaskF const& fn, std::size_t stack_size);
@@ -82,6 +88,8 @@ struct Task
 
     void SetDebugInfo(std::string const& info);
     const char* DebugInfo();
+
+    IoWaitData& GetIoWaitData();
 
     static uint64_t s_id;
     static std::atomic<uint64_t> s_task_count;
