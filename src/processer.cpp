@@ -91,7 +91,6 @@ uint32_t Processer::Run(ThreadLocalInfo &info, uint32_t &done_count)
                         it = slist.erase(it);
                         if (!tk->block_->AddWaitTask(tk))
                             runnable_list_.push(tk);
-                        tk->block_ = NULL;
                     }
                 }
                 break;

@@ -336,7 +336,7 @@ TEST(Channel, capacity1Try)
     }
 }
 
-TEST(Channel, capacity0BlockTry)
+TEST(Channel, capacity0Timed)
 {
     {
         co_chan<int> ch;
@@ -344,7 +344,7 @@ TEST(Channel, capacity0BlockTry)
         // block try
         go [=] {
             auto s = system_clock::now();
-            bool ok = ch.BlockTryPush(1, milliseconds(32));
+            bool ok = ch.TimedPush(1, milliseconds(32));
             auto e = system_clock::now();
             auto c = duration_cast<milliseconds>(e - s).count();
             EXPECT_FALSE(ok);
@@ -356,7 +356,7 @@ TEST(Channel, capacity0BlockTry)
         // block try
         go [=] {
             auto s = system_clock::now();
-            bool ok = ch.BlockTryPush(1, milliseconds(100));
+            bool ok = ch.TimedPush(1, milliseconds(100));
             auto e = system_clock::now();
             auto c = duration_cast<milliseconds>(e - s).count();
             EXPECT_FALSE(ok);
@@ -368,7 +368,7 @@ TEST(Channel, capacity0BlockTry)
         go [=] {
             auto s = system_clock::now();
             int i;
-            bool ok = ch.BlockTryPop(i, milliseconds(100));
+            bool ok = ch.TimedPop(i, milliseconds(100));
             auto e = system_clock::now();
             auto c = duration_cast<milliseconds>(e - s).count();
             EXPECT_FALSE(ok);
@@ -379,7 +379,7 @@ TEST(Channel, capacity0BlockTry)
 
         go [=] {
             auto s = system_clock::now();
-            bool ok = ch.BlockTryPop(nullptr, milliseconds(100));
+            bool ok = ch.TimedPop(nullptr, milliseconds(100));
             auto e = system_clock::now();
             auto c = duration_cast<milliseconds>(e - s).count();
             EXPECT_FALSE(ok);
@@ -394,7 +394,7 @@ TEST(Channel, capacity0BlockTry)
 
         go [=] {
             auto s = system_clock::now();
-            bool ok = ch.BlockTryPush(nullptr, milliseconds(100));
+            bool ok = ch.TimedPush(nullptr, milliseconds(100));
             auto e = system_clock::now();
             auto c = duration_cast<milliseconds>(e - s).count();
             EXPECT_FALSE(ok);
@@ -405,13 +405,68 @@ TEST(Channel, capacity0BlockTry)
 
         go [=] {
             auto s = system_clock::now();
-            bool ok = ch.BlockTryPop(nullptr, milliseconds(100));
+            bool ok = ch.TimedPop(nullptr, milliseconds(100));
             auto e = system_clock::now();
             auto c = duration_cast<milliseconds>(e - s).count();
             EXPECT_FALSE(ok);
             EXPECT_GT(c, 99);
             EXPECT_LT(c, 133);
         };
+        g_Scheduler.RunUntilNoTask();
+    }
+
+    {
+        co_chan<void> ch;
+
+        for (int i = 0; i < 1000; ++i)
+            go [=] {
+                auto s = system_clock::now();
+                bool ok = ch.TimedPush(nullptr, milliseconds(500));
+                auto e = system_clock::now();
+                auto c = duration_cast<milliseconds>(e - s).count();
+                EXPECT_FALSE(ok);
+                EXPECT_GT(c, 499);
+                EXPECT_LT(c, 533);
+            };
+        g_Scheduler.RunUntilNoTask();
+    }
+
+    {
+        co_chan<void> ch;
+
+        for (int i = 0; i < 1000; ++i)
+            go [=] {
+                auto s = system_clock::now();
+                bool ok = ch.TimedPop(nullptr, milliseconds(500));
+                auto e = system_clock::now();
+                auto c = duration_cast<milliseconds>(e - s).count();
+                EXPECT_FALSE(ok);
+                EXPECT_GT(c, 499);
+                EXPECT_LT(c, 533);
+            };
+        g_Scheduler.RunUntilNoTask();
+    }
+
+    {
+        co_chan<int> ch;
+
+        for (int i = 0; i < 1000; ++i)
+            go [=] {
+                int v;
+                auto s = system_clock::now();
+                bool ok = ch.TimedPop(v, milliseconds(500));
+                auto e = system_clock::now();
+                auto c = duration_cast<milliseconds>(e - s).count();
+                EXPECT_TRUE(ok);
+                EXPECT_EQ(i, v);
+                EXPECT_LT(c, 50);
+            };
+
+        for (int i = 0; i < 1000; ++i)
+            go [=] {
+                ch << i;
+            };
+
         g_Scheduler.RunUntilNoTask();
     }
 }

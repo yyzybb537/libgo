@@ -36,13 +36,47 @@ void BlockObject::CoBlockWait()
         --wakeup_;
         return ;
     }
+    lock.unlock();
 
     Task* tk = g_Scheduler.GetLocalInfo().current_task;
     tk->block_ = this;
     tk->state_ = TaskState::sys_block;
-    lock.unlock();
+    tk->block_timeout_ = std::chrono::nanoseconds::zero();
+    tk->is_block_timeout_ = false;
+    ++ tk->block_sequence_;
     DebugPrint(dbg_syncblock, "wait to switch. task(%s)", tk->DebugInfo());
     g_Scheduler.CoYield();
+}
+
+bool BlockObject::CoBlockWaitTimed(std::chrono::nanoseconds timeo)
+{
+    auto begin = std::chrono::high_resolution_clock::now();
+    if (!g_Scheduler.IsCoroutine()) {
+        while (!TryBlockWait() &&
+                std::chrono::duration_cast<std::chrono::nanoseconds>
+                (std::chrono::high_resolution_clock::now() - begin) < timeo)
+            usleep(10 * 1000);
+        return false;
+    }
+
+    std::unique_lock<LFLock> lock(lock_);
+    if (wakeup_ > 0) {
+        DebugPrint(dbg_syncblock, "wait immedaitely done.");
+        --wakeup_;
+        return true;
+    }
+    lock.unlock();
+
+    Task* tk = g_Scheduler.GetLocalInfo().current_task;
+    tk->block_ = this;
+    tk->state_ = TaskState::sys_block;
+    ++tk->block_sequence_;
+    tk->block_timeout_ = timeo;
+    tk->is_block_timeout_ = false;
+    DebugPrint(dbg_syncblock, "wait to switch. task(%s)", tk->DebugInfo());
+    g_Scheduler.CoYield();
+
+    return !tk->is_block_timeout_;
 }
 
 bool BlockObject::TryBlockWait()
@@ -76,29 +110,29 @@ bool BlockObject::Wakeup()
     DebugPrint(dbg_syncblock, "wakeup task(%s).", tk->DebugInfo());
     return true;
 }
-bool BlockObject::CancelWait(Task* tk, uint32_t block_sequence)
+void BlockObject::CancelWait(Task* tk, uint32_t block_sequence)
 {
     std::unique_lock<LFLock> lock(lock_);
     if (tk->block_ != this) {
         DebugPrint(dbg_syncblock, "cancelwait task(%s) failed. tk->block_ is not this!", tk->DebugInfo());
-        return false;
+        return;
     }
 
     if (tk->block_sequence_ != block_sequence) {
         DebugPrint(dbg_syncblock, "cancelwait task(%s) failed. tk->block_sequence_ = %u, block_sequence = %u.",
                 tk->DebugInfo(), tk->block_sequence_, block_sequence);
-        return false;
+        return;
     }
 
     if (!wait_queue_.erase(tk)) {
         DebugPrint(dbg_syncblock, "cancelwait task(%s) erase failed.", tk->DebugInfo());
-        return false;
+        return;
     }
 
     tk->block_ = nullptr;
+    tk->is_block_timeout_ = true;
     g_Scheduler.AddTaskRunnable(tk);
     DebugPrint(dbg_syncblock, "cancelwait task(%s).", tk->DebugInfo());
-    return true;
 }
 
 bool BlockObject::IsWakeup()
@@ -116,6 +150,20 @@ bool BlockObject::AddWaitTask(Task* tk)
     }
 
     wait_queue_.push(tk);
+
+    // 带超时的, 增加定时器
+    if (std::chrono::nanoseconds::zero() != tk->block_timeout_) {
+        uint32_t seq = tk->block_sequence_;
+        tk->IncrementRef();
+        lock.unlock(); // sequence记录完成, task引用计数增加, 可以解锁了
+
+        g_Scheduler.ExpireAt(tk->block_timeout_, [=]{
+                if (tk->block_sequence_ == seq)
+                    this->CancelWait(tk, seq);
+                tk->DecrementRef();
+                });
+    }
+
     return true;
 }
 
