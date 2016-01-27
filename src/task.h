@@ -17,8 +17,7 @@ enum class TaskState
     runnable,
     io_block,       // write, writev, read, select, poll, ...
     sys_block,      // co_mutex, ...
-    user_block,     // user switch it.
-    sleep,          // sleep nanosleep poll(NULL, 0, timeout)
+    sleep,          // sleep, nanosleep, poll(NULL, 0, timeout)
     done,
     fatal,
 };
@@ -69,8 +68,6 @@ struct Task
     int io_block_timeout_ = 0;
     CoTimerPtr io_block_timer_;
 
-    int64_t user_wait_type_ = 0;        // user_block等待的类型
-    uint64_t user_wait_id_ = 0;         // user_block等待的id
     BlockObject* block_ = NULL;         // sys_block等待的block对象
 
     int sleep_ms_ = 0;                  // 睡眠时间

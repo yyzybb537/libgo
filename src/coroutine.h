@@ -89,10 +89,6 @@ struct __async_wait<void>
 #define go_stack(size) ::co::__go_stack(size)-
 #define co_yield do { g_Scheduler.CoYield(); } while (0)
 
-// (uint32_t type, uint64_t id)
-#define co_wait(type, id) do { g_Scheduler.UserBlockWait(type, id); } while (0)
-#define co_wakeup(type, id) do { g_Scheduler.UserBlockWakeup(type, id); } while (0)
-
 // coroutine sleep, never blocks current thread.
 #define co_sleep(milliseconds) do { g_Scheduler.SleepSwitch(milliseconds); } while (0)
 
