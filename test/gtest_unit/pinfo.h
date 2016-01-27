@@ -2,7 +2,12 @@
 #ifndef _WIN32
 #include <unistd.h>
 #include <boost/algorithm/string.hpp>
+#else
+#include <Windows.h>
+#include <Psapi.h>
+#pragma comment(lib,"Psapi.lib")
 #endif
+
 #include <fstream>
 #include <string>
 #include <vector>
@@ -51,6 +56,12 @@ struct pinfo
                 sscanf(s.c_str(), "VmSwap: %llu KB", (long long unsigned int*)&swap);
             } 
         }
+#else
+		PROCESS_MEMORY_COUNTERS meminfo;
+		GetProcessMemoryInfo(GetCurrentProcess(), &meminfo, sizeof(meminfo));
+		rss_high = meminfo.PeakWorkingSetSize / 1024;
+		rss = meminfo.WorkingSetSize / 1024;
+		virt_high = virt = 0;
 #endif
     }
 
