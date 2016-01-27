@@ -20,10 +20,14 @@ void IoWait::SchedulerSwitch(Task* tk)
 
 int IoWait::WaitLoop()
 {
-	Task::DeleteList delete_list;
-	Task::SwapDeleteList(delete_list);
-	for (auto tk : delete_list)
-		delete tk;
+    SList<Task> delete_list;
+    Task::PopDeleteList(delete_list);
+    for (auto it = delete_list.begin(); it != delete_list.end();)
+    {
+        Task* tk = &*it++;
+        DebugPrint(dbg_task, "task(%s) delete.", tk->DebugInfo());
+        delete tk;
+    }
     return 0;
 }
 

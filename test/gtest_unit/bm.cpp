@@ -61,6 +61,7 @@ TEST_P(Times, testBm)
     {
         stdtimer st(tc_, "Switch and Delete coroutine");
         g_Scheduler.RunUntilNoTask();
+        g_Scheduler.RunUntilNoTask();
     }
 
 //    {
@@ -74,19 +75,17 @@ TEST_P(Times, testBm)
 
     {
         for (int i = 0; i < tc_; ++i) {
-            go []{};
+            go []{ co_yield; co_yield; };
         }
-
-        stdtimer st1;
-        g_Scheduler.RunUntilNoTask();
-        auto s = st1.expired();
-
-        for (int i = 0; i < tc_; ++i) {
-            go []{ co_yield; };
-        }
+        g_Scheduler.Run();
 
         stdtimer st(tc_, "Switch coroutine");
-        st.except(s);
+        g_Scheduler.Run();
+    }
+
+    {
+        stdtimer st(tc_, "Switch and Delete coroutine");
+        g_Scheduler.RunUntilNoTask();
         g_Scheduler.RunUntilNoTask();
     }
 

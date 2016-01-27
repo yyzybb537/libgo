@@ -99,11 +99,10 @@ struct Task
     static uint64_t GetTaskCount();
 
     // Task引用计数归0时不要立即释放, 以防epoll_wait取到残余数据时访问野指针.
-    typedef std::list<Task*> DeleteList;
+    typedef TSQueue<Task> DeleteList;
     static DeleteList s_delete_list;
-    static LFLock s_delete_list_lock;
 
-    static void SwapDeleteList(DeleteList &output);
+    static void PopDeleteList(SList<Task> &output);
     static std::size_t GetDeletedTaskCount();
 };
 

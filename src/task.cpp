@@ -12,7 +12,6 @@ uint64_t Task::s_id = 0;
 std::atomic<uint64_t> Task::s_task_count{0};
 
 Task::DeleteList Task::s_delete_list;
-LFLock Task::s_delete_list_lock;
 
 static void C_func(Task* self)
 {
@@ -124,15 +123,13 @@ uint64_t Task::GetTaskCount()
     return s_task_count;
 }
 
-void Task::SwapDeleteList(DeleteList &output)
+void Task::PopDeleteList(SList<Task> &output)
 {
-    std::unique_lock<LFLock> lock(s_delete_list_lock);
-    s_delete_list.swap(output);
+    output = s_delete_list.pop_all();
 }
 
 std::size_t Task::GetDeletedTaskCount()
 {
-    std::unique_lock<LFLock> lock(s_delete_list_lock);
     return s_delete_list.size();
 }
 
@@ -148,11 +145,10 @@ void Task::DecrementRef()
     DebugPrint(dbg_task, "task(%s) DecrementRef ref=%d",
             DebugInfo(), (int)ref_count_);
     if (--ref_count_ == 0) {
-        std::unique_lock<LFLock> lock(s_delete_list_lock);
         assert(!this->prev);
         assert(!this->next);
         assert(!this->check_);
-        s_delete_list.push_back(this);
+        s_delete_list.push(this);
     }
 }
 

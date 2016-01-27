@@ -208,9 +208,11 @@ retry:
     // 由于epoll_wait的结果中会残留一些未计数的Task*,
     //     epoll的性质决定了这些Task无法计数, 
     //     所以这个析构的操作一定要在epoll_lock的保护中做
-    Task::DeleteList delete_list;
-    Task::SwapDeleteList(delete_list);
-    for (auto &tk : delete_list) {
+    SList<Task> delete_list;
+    Task::PopDeleteList(delete_list);
+    for (auto it = delete_list.begin(); it != delete_list.end();)
+    {
+        Task* tk = &*it++;
         DebugPrint(dbg_task, "task(%s) delete.", tk->DebugInfo());
         delete tk;
     }
