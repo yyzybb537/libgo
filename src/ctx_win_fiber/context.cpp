@@ -1,6 +1,7 @@
 #include <context.h>
 #include <scheduler.h>
 #include <Windows.h>
+#include <algorithm>
 
 namespace co
 {
@@ -48,8 +49,9 @@ namespace co
     bool Context::Init(std::function<void()> const& fn, char* shared_stack, uint32_t shared_stack_cap)
     {
         impl_->fn_ = fn;
-        impl_->native_ = CreateFiberEx(g_Scheduler.GetOptions().init_commit_stack_size,
-                stack_size_, FIBER_FLAG_FLOAT_SWITCH,
+		SIZE_T commit_size = g_Scheduler.GetOptions().init_commit_stack_size;
+		impl_->native_ = CreateFiberEx(commit_size,
+				(std::max)(stack_size_, commit_size), FIBER_FLAG_FLOAT_SWITCH,
                 (LPFIBER_START_ROUTINE)FiberFunc, &impl_->fn_);
         return !!impl_->native_;
     }
