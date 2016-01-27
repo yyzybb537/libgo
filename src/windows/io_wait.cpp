@@ -25,7 +25,6 @@ int IoWait::WaitLoop()
     for (auto it = delete_list.begin(); it != delete_list.end();)
     {
         Task* tk = &*it++;
-        DebugPrint(dbg_task, "task(%s) delete.", tk->DebugInfo());
         delete tk;
     }
     return 0;
