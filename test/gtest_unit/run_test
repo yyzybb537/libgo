@@ -19,7 +19,8 @@ runs=`ls test/*.t | wc -l`
 pass=`grep "^\[\s*PASSED" result | wc -l`
 if [ "${pass}" -eq "${runs}" ];
 then
+    echo "all test were PASSED"
     exit 0
 else
-    exit 1
+    echo "some test were FAIL"
 fi
