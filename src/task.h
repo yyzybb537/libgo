@@ -48,6 +48,18 @@ struct FdStruct
 
 class BlockObject;
 class Processer;
+
+// Network IO block所需的数据
+struct IoWaitData
+{
+    std::atomic<uint32_t> io_block_id_{0}; // 每次io_block请求分配一个ID
+    std::vector<FdStruct> wait_fds_;    // io_block等待的fd列表
+    uint32_t wait_successful_ = 0;      // io_block成功等待到的fd数量(用于poll和select)
+    LFLock io_block_lock_;              // 当等待的fd多余1个时, 用此锁sync添加到epoll和从epoll删除的操作, 以防在epoll中残留fd, 导致Task无法释放.
+    int io_block_timeout_ = 0;
+    CoTimerPtr io_block_timer_;
+};
+
 struct Task
     : public TSQueueHook
 {
@@ -61,14 +73,12 @@ struct Task
     std::exception_ptr eptr_;           // 保存exception的指针
     std::atomic<uint32_t> ref_count_{1};// 引用计数
 
-    std::atomic<uint32_t> io_block_id_; // 每次io_block请求分配一个ID
-    std::vector<FdStruct> wait_fds_;    // io_block等待的fd列表
-    uint32_t wait_successful_ = 0;      // io_block成功等待到的fd数量(用于poll和select)
-    LFLock io_block_lock_;              // 当等待的fd多余1个时, 用此锁sync添加到epoll和从epoll删除的操作, 以防在epoll中残留fd, 导致Task无法释放.
-    int io_block_timeout_ = 0;
-    CoTimerPtr io_block_timer_;
+    IoWaitData *io_wait_data_ = nullptr;// Network IO block所需的数据
 
-    BlockObject* block_ = NULL;         // sys_block等待的block对象
+    BlockObject* block_ = nullptr;      // sys_block等待的block对象
+    uint32_t block_sequence_ = 0;       // sys_block等待序号(用于做超时校验)
+    std::chrono::nanoseconds block_timeout_{0}; // sys_block超时时间
+    bool is_block_timeout_ = false;     // sys_block的等待是否超时
 
     int sleep_ms_ = 0;                  // 睡眠时间
 
@@ -83,6 +93,8 @@ struct Task
     void SetDebugInfo(std::string const& info);
     const char* DebugInfo();
 
+    IoWaitData& GetIoWaitData();
+
     static uint64_t s_id;
     static std::atomic<uint64_t> s_task_count;
 
@@ -91,11 +103,10 @@ struct Task
     static uint64_t GetTaskCount();
 
     // Task引用计数归0时不要立即释放, 以防epoll_wait取到残余数据时访问野指针.
-    typedef std::list<Task*> DeleteList;
+    typedef TSQueue<Task> DeleteList;
     static DeleteList s_delete_list;
-    static LFLock s_delete_list_lock;
 
-    static void SwapDeleteList(DeleteList &output);
+    static void PopDeleteList(SList<Task> &output);
     static std::size_t GetDeletedTaskCount();
 };
 

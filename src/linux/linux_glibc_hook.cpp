@@ -54,15 +54,15 @@ static ssize_t read_write_mode(int fd, OriginF fn, const char* hook_fn_name, uin
         // add into epoll, and switch other context.
         g_Scheduler.IOBlockSwitch(fd, event, timeout_ms);
         bool is_timeout = false;
-        if (tk->io_block_timer_) {
+        if (tk->GetIoWaitData().io_block_timer_) {
             is_timeout = true;
-            if (g_Scheduler.BlockCancelTimer(tk->io_block_timer_)) {
+            if (g_Scheduler.BlockCancelTimer(tk->GetIoWaitData().io_block_timer_)) {
                 is_timeout = false;
                 tk->DecrementRef(); // timer use ref.
             }
         }
 
-        if (tk->wait_successful_ == 0) {
+        if (tk->GetIoWaitData().wait_successful_ == 0) {
             if (is_timeout) {
                 fcntl(fd, F_SETFL, flags & ~O_NONBLOCK);
                 errno = EAGAIN;
@@ -171,7 +171,7 @@ int connect(int fd, const struct sockaddr *addr, socklen_t addrlen)
             g_Scheduler.IOBlockSwitch(fd, EPOLLOUT, -1);
         }
 
-        if (tk->wait_successful_ == 0) {
+        if (tk->GetIoWaitData().wait_successful_ == 0) {
             // 添加到epoll中失败了
             fcntl(fd, F_SETFL, flags & ~O_NONBLOCK);
             errno = e;
@@ -325,15 +325,15 @@ int poll(struct pollfd *fds, nfds_t nfds, int timeout)
     // add into epoll, and switch other context.
     g_Scheduler.IOBlockSwitch(std::move(fdsts), timeout);
     bool is_timeout = false; // 是否超时
-    if (tk->io_block_timer_) {
+    if (tk->GetIoWaitData().io_block_timer_) {
         is_timeout = true;
-        if (g_Scheduler.BlockCancelTimer(tk->io_block_timer_)) {
+        if (g_Scheduler.BlockCancelTimer(tk->GetIoWaitData().io_block_timer_)) {
             tk->DecrementRef(); // timer use ref.
             is_timeout = false;
         }
     }
 
-    if (tk->wait_successful_ == 0) {
+    if (tk->GetIoWaitData().wait_successful_ == 0) {
         if (is_timeout)
             return 0;
         else {
@@ -345,13 +345,13 @@ int poll(struct pollfd *fds, nfds_t nfds, int timeout)
     }
 
     int n = 0;
-    for (int i = 0; i < (int)tk->wait_fds_.size(); ++i)
+    for (int i = 0; i < (int)tk->GetIoWaitData().wait_fds_.size(); ++i)
     {
-        fds[i].revents = EpollEvent2Poll(tk->wait_fds_[i].epoll_ptr.revent);
+        fds[i].revents = EpollEvent2Poll(tk->GetIoWaitData().wait_fds_[i].epoll_ptr.revent);
         if (fds[i].revents) ++n;
     }
 
-    assert(n == (int)tk->wait_successful_);
+    assert(n == (int)tk->GetIoWaitData().wait_successful_);
 
     return n;
 }
@@ -414,15 +414,15 @@ int select(int nfds, fd_set *readfds, fd_set *writefds,
 
     g_Scheduler.IOBlockSwitch(std::move(fdsts), timeout_ms);
     bool is_timeout = false;
-    if (tk->io_block_timer_) {
+    if (tk->GetIoWaitData().io_block_timer_) {
         is_timeout = true;
-        if (g_Scheduler.BlockCancelTimer(tk->io_block_timer_)) {
+        if (g_Scheduler.BlockCancelTimer(tk->GetIoWaitData().io_block_timer_)) {
             is_timeout = false;
             tk->DecrementRef(); // timer use ref.
         }
     }
 
-    if (tk->wait_successful_ == 0) {
+    if (tk->GetIoWaitData().wait_successful_ == 0) {
         if (is_timeout) {
             if (readfds) FD_ZERO(readfds);
             if (writefds) FD_ZERO(writefds);
@@ -437,7 +437,7 @@ int select(int nfds, fd_set *readfds, fd_set *writefds,
     }
 
     int n = 0;
-    for (auto &fdst : tk->wait_fds_) {
+    for (auto &fdst : tk->GetIoWaitData().wait_fds_) {
         int fd = fdst.fd;
         for (int si = 0; si < 3; ++si) {
             if (!sets[si].first)
