@@ -104,10 +104,11 @@ bool BlockObject::Wakeup()
         DebugPrint(dbg_syncblock, "wakeup to %lu.", (long unsigned)wakeup_);
         return true;
     }
+    lock.unlock();
 
     tk->block_ = nullptr;
-    g_Scheduler.AddTaskRunnable(tk);
     DebugPrint(dbg_syncblock, "wakeup task(%s).", tk->DebugInfo());
+    g_Scheduler.AddTaskRunnable(tk);
     return true;
 }
 void BlockObject::CancelWait(Task* tk, uint32_t block_sequence)
@@ -128,11 +129,12 @@ void BlockObject::CancelWait(Task* tk, uint32_t block_sequence)
         DebugPrint(dbg_syncblock, "cancelwait task(%s) erase failed.", tk->DebugInfo());
         return;
     }
+    lock.unlock();
 
     tk->block_ = nullptr;
     tk->is_block_timeout_ = true;
-    g_Scheduler.AddTaskRunnable(tk);
     DebugPrint(dbg_syncblock, "cancelwait task(%s).", tk->DebugInfo());
+    g_Scheduler.AddTaskRunnable(tk);
 }
 
 bool BlockObject::IsWakeup()
