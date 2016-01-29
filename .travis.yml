@@ -12,6 +12,8 @@ before_install:
 
 install:
     - git clone https://github.com/yyzybb537/Boost-dev-bin.git /tmp/boost-dev-bin && sudo dpkg -i /tmp/boost-dev-bin/libboost1.59-all-dev.deb
+    - ls /usr/local/lib/libboost*
+    - sudo ldconfig
     #- sudo apt-get install -y -qq libboost1.58-dev
     #- sudo apt-get install -y -qq libboost-thread1.58-dev
     #- sudo apt-get install -y -qq libboost-coroutine1.58-dev
