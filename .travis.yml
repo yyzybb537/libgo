@@ -6,16 +6,20 @@ compiler:
     - gcc
 
 before_install:
-    #- sudo add-apt-repository -y ppa:andykimpe/cmake
     - sudo add-apt-repository -y ppa:kojoley/boost
-      #- sudo add-apt-repository -y ppa:ubuntu-toolchain-r/test
     - sudo apt-get update
     - lsb_release -a
 
 install:
     - sudo apt-get install libboost1.58-dev
+    - sudo apt-get install libboost-thread1.58-dev
+    - sudo apt-get install libboost-coroutine1.58-dev
+    - sudo apt-get install libboost-context1.58-dev
+    - sudo apt-get install libboost-system1.58-dev
+    - sudo apt-get install libboost-date_time1.58-dev
+    - sudo apt-get install libboost-chrono1.58-dev
+    - sudo apt-get install libboost-regex1.58-dev
     - sudo apt-get install cmake 
-      #- .travis_scripts/gcc.sh
 
 script: 
     - mkdir build; pushd build;
