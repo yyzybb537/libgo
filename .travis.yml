@@ -16,7 +16,7 @@ install:
     - sudo apt-get install -y -qq libboost-coroutine1.58-dev
     - sudo apt-get install -y -qq libboost-context1.58-dev
     - sudo apt-get install -y -qq libboost-system1.58-dev
-    - sudo apt-get install -y -qq libboost-date_time1.58-dev
+    - sudo apt-get install -y -qq libboost-date-time1.58-dev
     - sudo apt-get install -y -qq libboost-chrono1.58-dev
     - sudo apt-get install -y -qq libboost-regex1.58-dev
     - sudo apt-get install -y -qq cmake 
