@@ -7,19 +7,19 @@ compiler:
 
 before_install:
     - sudo add-apt-repository -y ppa:kojoley/boost
-    - sudo apt-get update
+    - sudo apt-get update -y
     - lsb_release -a
 
 install:
-    - sudo apt-get install libboost1.58-dev
-    - sudo apt-get install libboost-thread1.58-dev
-    - sudo apt-get install libboost-coroutine1.58-dev
-    - sudo apt-get install libboost-context1.58-dev
-    - sudo apt-get install libboost-system1.58-dev
-    - sudo apt-get install libboost-date_time1.58-dev
-    - sudo apt-get install libboost-chrono1.58-dev
-    - sudo apt-get install libboost-regex1.58-dev
-    - sudo apt-get install cmake 
+    - sudo apt-get install -y -qq libboost1.58-dev
+    - sudo apt-get install -y -qq libboost-thread1.58-dev
+    - sudo apt-get install -y -qq libboost-coroutine1.58-dev
+    - sudo apt-get install -y -qq libboost-context1.58-dev
+    - sudo apt-get install -y -qq libboost-system1.58-dev
+    - sudo apt-get install -y -qq libboost-date_time1.58-dev
+    - sudo apt-get install -y -qq libboost-chrono1.58-dev
+    - sudo apt-get install -y -qq libboost-regex1.58-dev
+    - sudo apt-get install -y -qq cmake 
 
 script: 
     - mkdir build; pushd build;
