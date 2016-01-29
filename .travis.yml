@@ -10,7 +10,6 @@ before_install:
     - sudo apt-get -qq update
 
 install:
-    - sudo apt-get install libtcmalloc-minimal4
     - sudo apt-get install cmake 
     - sudo apt-get install -qq boost1.55
     - .travis_scripts/gcc.sh
