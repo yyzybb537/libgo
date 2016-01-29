@@ -11,20 +11,21 @@ before_install:
     - lsb_release -a
 
 install:
-    - sudo apt-get install -y -qq libboost1.58-dev
-    - sudo apt-get install -y -qq libboost-thread1.58-dev
-    - sudo apt-get install -y -qq libboost-coroutine1.58-dev
-    - sudo apt-get install -y -qq libboost-context1.58-dev
-    - sudo apt-get install -y -qq libboost-system1.58-dev
-    - sudo apt-get install -y -qq libboost-date-time1.58-dev
-    - sudo apt-get install -y -qq libboost-chrono1.58-dev
-    - sudo apt-get install -y -qq libboost-regex1.58-dev
+    - git clone https://github.com/yyzybb537/Boost-dev-bin.git && cd Boost-dev-bin && sudo dpkg -i libboost1.59-all-dev.deb
+    #- sudo apt-get install -y -qq libboost1.58-dev
+    #- sudo apt-get install -y -qq libboost-thread1.58-dev
+    #- sudo apt-get install -y -qq libboost-coroutine1.58-dev
+    #- sudo apt-get install -y -qq libboost-context1.58-dev
+    #- sudo apt-get install -y -qq libboost-system1.58-dev
+    #- sudo apt-get install -y -qq libboost-date-time1.58-dev
+    #- sudo apt-get install -y -qq libboost-chrono1.58-dev
+    #- sudo apt-get install -y -qq libboost-regex1.58-dev
     - sudo apt-get install -y -qq cmake 
 
 script: 
     - mkdir build; pushd build;
     - cmake .. && make -j4 && sudo make install && make test_small && make samples && make run_test
-      #- sudo rm * -rf && cmake .. -DENABLE_BOOST_COROUTINE=ON && make -j4 && sudo make install && make test_small && make samples && make run_test
+    - sudo rm * -rf && cmake .. -DENABLE_BOOST_COROUTINE=ON && make -j4 && sudo make install && make test_small && make samples && make run_test
     - sudo rm * -rf && cmake .. -DENABLE_SHARED_STACK=ON && make -j4 && sudo make install && make test_small && make samples && make run_test
     - popd;
 
