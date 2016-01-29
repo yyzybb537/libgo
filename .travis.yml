@@ -8,6 +8,7 @@ before_install:
     - sudo add-apt-repository -y ppa:kojoley/boost
     - sudo add-apt-repository -y ppa:ubuntu-toolchain-r/test
     - sudo apt-get -qq update || echo 'warning'
+    - sudo apt-cache search boost | grep boost -i
 
 install:
     - sudo apt-get install cmake 
