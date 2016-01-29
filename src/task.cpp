@@ -11,7 +11,8 @@ namespace co
 uint64_t Task::s_id = 0;
 std::atomic<uint64_t> Task::s_task_count{0};
 
-Task::DeleteList Task::s_delete_list;
+std::list<Task::DeleteListPtr> Task::s_delete_lists;
+LFLock Task::s_delete_lists_lock;
 
 static void C_func(Task* self)
 {
@@ -59,7 +60,7 @@ static void C_func(Task* self)
 }
 
 Task::Task(TaskF const& fn, std::size_t stack_size)
-    : id_(++s_id), ctx_(stack_size), fn_(fn)
+    : id_(++s_id), ctx_(stack_size, [this]{C_func(this);}), fn_(fn)
 {
     ++s_task_count;
 }
@@ -77,7 +78,7 @@ void Task::AddIntoProcesser(Processer *proc, char* shared_stack, uint32_t shared
 {
     assert(!proc_);
     proc_ = proc;
-    if (!ctx_.Init([this]{C_func(this);}, shared_stack, shared_stack_cap)) {
+    if (!ctx_.Init(shared_stack, shared_stack_cap)) {
         state_ = TaskState::fatal;
         fprintf(stderr, "task(%s) init, getcontext error:%s\n",
                 DebugInfo(), strerror(errno));
@@ -123,14 +124,25 @@ uint64_t Task::GetTaskCount()
     return s_task_count;
 }
 
-void Task::PopDeleteList(SList<Task> &output)
+void Task::PopDeleteList(std::vector<SList<Task>> & output)
 {
-    output = s_delete_list.pop_all();
+    std::unique_lock<LFLock> lock(s_delete_lists_lock);
+    for (auto &sp : s_delete_lists)
+    {
+        SList<Task> s = sp->pop_all();
+        output.push_back(s);
+    }
 }
 
 std::size_t Task::GetDeletedTaskCount()
 {
-    return s_delete_list.size();
+    std::unique_lock<LFLock> lock(s_delete_lists_lock);
+    std::size_t n = 0;
+    for (auto &sp : s_delete_lists)
+    {
+        n += sp->size();
+    }
+    return n;
 }
 
 void Task::IncrementRef()
@@ -148,7 +160,14 @@ void Task::DecrementRef()
         assert(!this->prev);
         assert(!this->next);
         assert(!this->check_);
-        s_delete_list.push(this);
+
+		static co_thread_local DeleteList* delete_list;
+        if (!delete_list) {
+            delete_list = new DeleteList;
+            std::unique_lock<LFLock> lock(s_delete_lists_lock);
+			s_delete_lists.push_back(DeleteListPtr(delete_list));
+        }
+        delete_list->push(this);
     }
 }
 

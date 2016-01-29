@@ -4,6 +4,7 @@
 #include <exception>
 #include <vector>
 #include <list>
+#include "config.h"
 #include "context.h"
 #include "ts_queue.h"
 #include "timer.h"
@@ -77,7 +78,7 @@ struct Task
 
     BlockObject* block_ = nullptr;      // sys_block等待的block对象
     uint32_t block_sequence_ = 0;       // sys_block等待序号(用于做超时校验)
-    std::chrono::nanoseconds block_timeout_{0}; // sys_block超时时间
+	MininumTimeDurationType block_timeout_{ 0 }; // sys_block超时时间
     bool is_block_timeout_ = false;     // sys_block的等待是否超时
 
     int sleep_ms_ = 0;                  // 睡眠时间
@@ -104,9 +105,12 @@ struct Task
 
     // Task引用计数归0时不要立即释放, 以防epoll_wait取到残余数据时访问野指针.
     typedef TSQueue<Task> DeleteList;
-    static DeleteList s_delete_list;
+    typedef std::shared_ptr<DeleteList> DeleteListPtr;
 
-    static void PopDeleteList(SList<Task> &output);
+    static LFLock s_delete_lists_lock;
+    static std::list<DeleteListPtr> s_delete_lists;
+
+    static void PopDeleteList(std::vector<SList<Task>> & output);
     static std::size_t GetDeletedTaskCount();
 };
 

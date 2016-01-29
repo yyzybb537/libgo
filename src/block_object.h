@@ -25,7 +25,7 @@ public:
 
     // 带超时的阻塞式等待信号
     // @returns: 是否成功等到信号
-    bool CoBlockWaitTimed(std::chrono::nanoseconds timeo);
+	bool CoBlockWaitTimed(MininumTimeDurationType timeo);
 
     bool TryBlockWait();
 

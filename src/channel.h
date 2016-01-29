@@ -141,7 +141,7 @@ private:
         template <typename U, typename Duration>
         bool TimedPush(U && t, Duration const& dur)
         {
-            if (!write_block_.CoBlockWaitTimed(std::chrono::duration_cast<std::chrono::nanoseconds>(dur)))
+			if (!write_block_.CoBlockWaitTimed(std::chrono::duration_cast<MininumTimeDurationType>(dur)))
                 return false;
 
             {
@@ -158,7 +158,7 @@ private:
         bool TimedPop(U & t, Duration const& dur)
         {
             write_block_.Wakeup();
-            if (!read_block_.CoBlockWaitTimed(std::chrono::duration_cast<std::chrono::nanoseconds>(dur)))
+			if (!read_block_.CoBlockWaitTimed(std::chrono::duration_cast<MininumTimeDurationType>(dur)))
             {
                 if (write_block_.TryBlockWait())
                     return false;
@@ -183,7 +183,7 @@ private:
         bool TimedPop(nullptr_t ignore, Duration const& dur)
         {
             write_block_.Wakeup();
-            if (!read_block_.CoBlockWaitTimed(std::chrono::duration_cast<std::chrono::nanoseconds>(dur)))
+            if (!read_block_.CoBlockWaitTimed(std::chrono::duration_cast<MininumTimeDurationType>(dur)))
             {
                 if (write_block_.TryBlockWait())
                     return false;
@@ -344,7 +344,7 @@ private:
         template <typename Duration>
         bool TimedPush(nullptr_t ignore, Duration const& dur)
         {
-            if (!write_block_.CoBlockWaitTimed(std::chrono::duration_cast<std::chrono::nanoseconds>(dur)))
+			if (!write_block_.CoBlockWaitTimed(std::chrono::duration_cast<MininumTimeDurationType>(dur)))
                 return false;
 
             read_block_.Wakeup();
@@ -356,7 +356,7 @@ private:
         bool TimedPop(nullptr_t ignore, Duration const& dur)
         {
             write_block_.Wakeup();
-            if (!read_block_.CoBlockWaitTimed(std::chrono::duration_cast<std::chrono::nanoseconds>(dur)))
+			if (!read_block_.CoBlockWaitTimed(std::chrono::duration_cast<MininumTimeDurationType>(dur)))
             {
                 if (write_block_.TryBlockWait())
                     return false;

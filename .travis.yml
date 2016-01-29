@@ -1,39 +1,34 @@
+sudo: required
+dist: trusty
 language: cpp
 
 compiler:
     - gcc
 
 before_install:
-    - sudo add-apt-repository -y ppa:andykimpe/cmake
-    - sudo add-apt-repository -y ppa:boost-latest/ppa
-    - sudo add-apt-repository -y ppa:ubuntu-toolchain-r/test
-    - sudo apt-get -qq update
+    - sudo add-apt-repository -y ppa:kojoley/boost
+    - sudo apt-get update -y
+    - lsb_release -a
 
 install:
-    - sudo apt-get install cmake 
-    - sudo apt-get install -qq boost1.55
-    - .travis_scripts/gcc.sh
+    - git clone https://github.com/yyzybb537/Boost-dev-bin.git /tmp/boost-dev-bin && sudo dpkg -i /tmp/boost-dev-bin/libboost1.59-all-dev.deb
+    - ls /usr/local/lib/libboost*
+    - sudo ldconfig
+    #- sudo apt-get install -y -qq libboost1.58-dev
+    #- sudo apt-get install -y -qq libboost-thread1.58-dev
+    #- sudo apt-get install -y -qq libboost-coroutine1.58-dev
+    #- sudo apt-get install -y -qq libboost-context1.58-dev
+    #- sudo apt-get install -y -qq libboost-system1.58-dev
+    #- sudo apt-get install -y -qq libboost-date-time1.58-dev
+    #- sudo apt-get install -y -qq libboost-chrono1.58-dev
+    #- sudo apt-get install -y -qq libboost-regex1.58-dev
+    - sudo apt-get install -y -qq cmake 
 
 script: 
     - mkdir build; pushd build;
-    - cmake ..
-    - make -j4
-    - sudo make install
-    - make test_small
-    - make samples
-    - make run_test
-      #    - sudo rm * -rf
-      #    - cmake .. -DENABLE_BOOST_COROUTINE=ON
-      #    - make -j4
-      #    - sudo make install
-      #    - make test_small
-      #    - make run_test
-      #    - sudo rm * -rf
-      #    - cmake .. -DENABLE_SHARED_STACK=ON
-      #    - make -j4
-      #    - sudo make install
-      #    - make test_small
-      #    - make run_test
+    - cmake .. && make -j4 && sudo make install && make test_small && make samples && make run_test
+    - sudo rm * -rf && cmake .. -DENABLE_BOOST_COROUTINE=ON && make -j4 && sudo make install && make test_small && make samples && make run_test
+    - sudo rm * -rf && cmake .. -DENABLE_SHARED_STACK=ON && make -j4 && sudo make install && make test_small && make samples && make run_test
     - popd;
 
 after_success:

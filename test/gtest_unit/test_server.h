@@ -65,7 +65,11 @@ struct TestServer
         is_work_ = false;
         error_code ignore_ec;
         accept_->close(ignore_ec);
+#ifdef _WIN32
         work_thread_.interrupt();
+#else
+        quick_exit(0);
+#endif
     }
 
     void Accept()

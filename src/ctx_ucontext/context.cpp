@@ -41,18 +41,33 @@ namespace co
         (*pfn)();
     }
 
-    Context::Context(std::size_t stack_size)
+    Context::Context(std::size_t stack_size, std::function<void()> const& fn)
         : impl_(new Context::impl_t), stack_size_(stack_size)
-    {}
-
-    bool Context::Init(std::function<void()> const& fn, char* shared_stack, uint32_t shared_stack_cap)
     {
+        impl_->fn_ = fn;
+
+#if !defined(ENABLE_SHARED_STACK)
+        if (-1 == getcontext(&impl_->ctx_)) {
+            ThrowError(eCoErrorCode::ec_makecontext_failed);
+            return ;
+        }
+
+        impl_->stack_size_ = this->stack_size_;
+        impl_->stack_ = (char*)valloc(impl_->stack_size_);
+
+        impl_->ctx_.uc_stack.ss_sp = impl_->stack_;
+        impl_->ctx_.uc_stack.ss_size = impl_->stack_size_;
+        impl_->ctx_.uc_link = NULL;
+        makecontext(&impl_->ctx_, (void(*)(void))&ucontext_func, 1, &impl_->fn_);
+#endif
+    }
+
+    bool Context::Init(char* shared_stack, uint32_t shared_stack_cap)
+    {
+#if defined(ENABLE_SHARED_STACK)
         if (-1 == getcontext(&impl_->ctx_))
             return false;
 
-        impl_->fn_ = fn;
-
-#if defined(ENABLE_SHARED_STACK)
         impl_->shared_stack_ = shared_stack;
         impl_->shared_stack_cap_ = shared_stack_cap;
 
@@ -67,14 +82,6 @@ namespace co
         impl_->stack_capacity_ = std::max<uint32_t>(16, g_Scheduler.GetOptions().init_commit_stack_size);
         impl_->stack_ = (char*)malloc(impl_->stack_capacity_);
         memcpy(impl_->stack_, shared_stack + shared_stack_cap - impl_->stack_size_, impl_->stack_size_);
-#else
-        impl_->stack_size_ = this->stack_size_;
-        impl_->stack_ = (char*)valloc(impl_->stack_size_);
-
-        impl_->ctx_.uc_stack.ss_sp = impl_->stack_;
-        impl_->ctx_.uc_stack.ss_size = impl_->stack_size_;
-        impl_->ctx_.uc_link = NULL;
-        makecontext(&impl_->ctx_, (void(*)(void))&ucontext_func, 1, &impl_->fn_);
 #endif
 
         return true;

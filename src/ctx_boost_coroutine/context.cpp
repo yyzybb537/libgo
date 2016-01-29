@@ -45,34 +45,48 @@ namespace co
         uint32_t stack_capacity_ = 0;
         char* shared_stack_;
         uint32_t shared_stack_cap_;
+        std::function<void()> fn_;
     };
 
-    Context::Context(std::size_t stack_size)
+    Context::Context(std::size_t stack_size, std::function<void()> const& fn)
         : impl_(new Context::impl_t), stack_size_(stack_size)
-    { }
-
-    bool Context::Init(std::function<void()> const& fn, char* shared_stack, uint32_t shared_stack_cap)
     {
-#if defined(ENABLE_SHARED_STACK)
-        impl_->shared_stack_ = shared_stack;
-        impl_->shared_stack_cap_ = shared_stack_cap;
-#endif
+        impl_->fn_ = fn;
 
+#if !defined(ENABLE_SHARED_STACK)
         decltype(impl_->ctx_) c(
             [=](::boost::coroutines::symmetric_coroutine<void>::yield_type& yield){
                 impl_->yield_ = &yield;
                 fn();
             }
-#if defined(ENABLE_SHARED_STACK)
-            , boost::coroutines::attributes(shared_stack_cap), shared_stack_allocator(shared_stack, shared_stack_cap)
-#else
             , boost::coroutines::attributes(std::max<std::size_t>(stack_size_, boost::coroutines::stack_traits::minimum_size()))
-#endif
             );
+
+        if (!c) {
+            ThrowError(eCoErrorCode::ec_makecontext_failed);
+            return ;
+        }
+
+        impl_->ctx_.swap(c);
+#endif
+    }
+
+    bool Context::Init(char* shared_stack, uint32_t shared_stack_cap)
+    {
+#if defined(ENABLE_SHARED_STACK)
+        impl_->shared_stack_ = shared_stack;
+        impl_->shared_stack_cap_ = shared_stack_cap;
+        decltype(impl_->ctx_) c(
+            [=](::boost::coroutines::symmetric_coroutine<void>::yield_type& yield){
+                impl_->yield_ = &yield;
+                fn();
+            }
+            , boost::coroutines::attributes(shared_stack_cap), shared_stack_allocator(shared_stack, shared_stack_cap)
+            );
+
         if (!c) return false;
         impl_->ctx_.swap(c);
 
-#if defined(ENABLE_SHARED_STACK)
         static const int default_base_size = 32;
         // save coroutine stack first 16 bytes.
         assert(!impl_->stack_);
@@ -81,7 +95,6 @@ namespace co
         impl_->stack_ = (char*)malloc(impl_->stack_capacity_);
         memcpy(impl_->stack_, shared_stack + shared_stack_cap - impl_->stack_size_, impl_->stack_size_);
 #endif
-
         return true;
     }
 

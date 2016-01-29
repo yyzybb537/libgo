@@ -459,7 +459,7 @@ TEST(Channel, capacity0Timed)
                 auto c = duration_cast<milliseconds>(e - s).count();
                 EXPECT_TRUE(ok);
                 EXPECT_EQ(i, v);
-                EXPECT_LT(c, 50);
+                EXPECT_LT(c, 100);
             };
 
         for (int i = 0; i < 1000; ++i)

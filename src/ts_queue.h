@@ -1,6 +1,7 @@
 #pragma once
 #include <mutex>
 #include <assert.h>
+#include <deque>
 #include "spinlock.h"
 
 namespace co
@@ -77,9 +78,11 @@ public:
     inline bool check(void *c) { return check_ == c; }
 };
 
+// 线程安全的队列(支持随机删除)
 template <typename T, bool ThreadSafe = true>
 class TSQueue
 {
+private:
     LFLock lck;
     typedef typename std::conditional<ThreadSafe,
             std::lock_guard<LFLock>,
@@ -204,6 +207,124 @@ public:
         hook->check_ = NULL;
         -- count_;
         return true;
+    }
+};
+
+// 线程安全的跳表队列(支持快速pop出n个元素)
+template <typename T,
+         bool ThreadSafe = true,
+         std::size_t SkipDistance = 64  // 必须是2的n次方
+         >
+class TSSkipQueue
+{
+private:
+    LFLock lck;
+    typedef typename std::conditional<ThreadSafe,
+            std::lock_guard<LFLock>,
+            fake_lock_guard>::type LockGuard;
+    TSQueueHook* head_;
+    TSQueueHook* tail_;
+    std::size_t count_;
+
+    struct SkipLayer
+    {
+        std::deque<TSQueueHook*> indexs_;
+        std::size_t head_offset_ = 0;  // begin距离head的距离
+        std::size_t tail_offset_ = 0;  // end距离tail的距离
+    };
+
+    SkipLayer skip_layer_;
+
+public:
+    TSSkipQueue()
+    {
+        head_ = tail_ = new TSQueueHook;
+        count_ = 0;
+    }
+
+    ~TSSkipQueue()
+    {
+        LockGuard lock(lck);
+        while (head_ != tail_) {
+            TSQueueHook *prev = tail_->prev;
+            delete (T*)tail_;
+            tail_ = prev;
+        }
+        delete head_;
+        head_ = tail_ = 0;
+    }
+
+    bool empty()
+    {
+        LockGuard lock(lck);
+        return head_ == tail_;
+    }
+
+    std::size_t size()
+    {
+        LockGuard lock(lck);
+        return count_;
+    }
+
+    void push(T* element)
+    {
+        LockGuard lock(lck);
+        // 插入到尾端
+        TSQueueHook *hook = static_cast<TSQueueHook*>(element);
+        tail_->next = hook;
+        hook->prev = tail_;
+        hook->next = NULL;
+        hook->check_ = this;
+        tail_ = hook;
+        ++ count_;
+
+        // 刷新跳表
+        if (++skip_layer_.tail_offset_ == SkipDistance) {
+            skip_layer_.tail_offset_ = 0;
+            skip_layer_.indexs_.push_back(tail_);
+        }
+    }
+
+    SList<T> pop(std::size_t n)
+    {
+        if (head_ == tail_ || !n) return SList<T>();
+        LockGuard lock(lck);
+        if (head_ == tail_) return SList<T>();
+        TSQueueHook* first = head_->next;
+        TSQueueHook* last = first;
+        n = std::min(n, count_);
+        std::size_t next_step = n - 1;
+
+        // 从跳表上查找
+        if ((SkipDistance - skip_layer_.head_offset_) > n) {
+            skip_layer_.head_offset_ += n;
+        } else if (skip_layer_.indexs_.empty()) {
+            skip_layer_.tail_offset_ = count_ - n;
+        } else {
+            // 往前找
+            std::size_t forward = (n + skip_layer_.head_offset_ - SkipDistance) / SkipDistance;
+            next_step = (n + skip_layer_.head_offset_ - SkipDistance) & (SkipDistance - 1);
+            auto it = skip_layer_.indexs_.begin();
+            std::advance(it, forward);
+            last = *it;
+            skip_layer_.indexs_.erase(skip_layer_.indexs_.begin(), ++it);
+            if (skip_layer_.indexs_.empty()) {
+                skip_layer_.tail_offset_ = count_ - n;
+                skip_layer_.head_offset_ = 0;
+            } else {
+                skip_layer_.head_offset_ = next_step;
+            }
+        }
+
+        for (std::size_t i = 0; i < next_step; ++i)
+            last = last->next;
+
+        if (last == tail_) tail_ = head_;
+        head_->next = last->next;
+        if (last->next) last->next->prev = head_;
+        first->prev = last->next = NULL;
+        count_ -= n;
+        return SList<T>(first, last, n, this);
     }
 };
 

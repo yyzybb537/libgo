@@ -8,6 +8,11 @@ do
     echo ''
     echo ------------ run $t -------------- | tee -a result
     ./$t | tee -a result
+    if [ "$?" != "0" ]
+    then
+        echo $t " was FAILED."
+        exit 2
+    fi
     echo ---------------------------------- | tee -a result
 done
 
@@ -23,4 +28,5 @@ then
     exit 0
 else
     echo "some test were FAIL"
+    exit 1
 fi

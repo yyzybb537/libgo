@@ -1,10 +1,11 @@
 #pragma once
-#include "context.h"
 #include <unordered_map>
 #include <list>
 #include <sys/epoll.h>
 #include <errno.h>
 #include <string.h>
+#include "config.h"
+#include "context.h"
 #include "task.h"
 #include "block_object.h"
 #include "co_mutex.h"
@@ -20,13 +21,6 @@
                     g_Scheduler.GetCurrentThreadID(), ##__VA_ARGS__); \
         } \
     } while(0)
-
-// VS2013不支持thread_local
-#if defined(_MSC_VER) && _MSC_VER < 1900
-#define co_thread_local __declspec(thread)
-#else 
-#define co_thread_local thread_local
-#endif
 
 namespace co
 {
@@ -105,7 +99,8 @@ class ThreadPool;
 class Scheduler
 {
     public:
-        typedef TSQueue<Task> TaskList;  // 线程安全的协程队列
+//        typedef TSQueue<Task> TaskList;  // 线程安全的协程队列
+        typedef TSSkipQueue<Task> TaskList;  // 线程安全的协程队列
         typedef TSQueue<Processer> ProcList;
         typedef std::pair<uint32_t, TSQueue<Task, false>> WaitPair;
         typedef std::unordered_map<uint64_t, WaitPair> WaitZone;

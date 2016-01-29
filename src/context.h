@@ -2,6 +2,7 @@
 
 #include <functional>
 #include <memory>
+#include "error.h"
 
 namespace co
 {
@@ -16,9 +17,9 @@ namespace co
         class impl_t;
 
     public:
-        explicit Context(std::size_t stack_size);
+        explicit Context(std::size_t stack_size, std::function<void()> const& fn);
 
-        bool Init(std::function<void()> const& fn, char* shared_stack, uint32_t shared_stack_cap);
+        bool Init(char* shared_stack, uint32_t shared_stack_cap);
         
         bool SwapIn();
 
