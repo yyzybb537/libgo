@@ -22,12 +22,12 @@ script:
     - make test_small
     - make samples
     - make run_test
-      #    - sudo rm * -rf
-      #    - cmake .. -DENABLE_BOOST_COROUTINE=ON
-      #    - make -j4
-      #    - sudo make install
-      #    - make test_small
-      #    - make run_test
+    - sudo rm * -rf
+    - cmake .. -DENABLE_BOOST_COROUTINE=ON
+    - make -j4
+    - sudo make install
+    - make test_small
+    - make run_test
       #    - sudo rm * -rf
       #    - cmake .. -DENABLE_SHARED_STACK=ON
       #    - make -j4
