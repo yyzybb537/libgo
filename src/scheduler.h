@@ -105,7 +105,8 @@ class ThreadPool;
 class Scheduler
 {
     public:
-        typedef TSQueue<Task> TaskList;  // 线程安全的协程队列
+//        typedef TSQueue<Task> TaskList;  // 线程安全的协程队列
+        typedef TSSkipQueue<Task> TaskList;  // 线程安全的协程队列
         typedef TSQueue<Processer> ProcList;
         typedef std::pair<uint32_t, TSQueue<Task, false>> WaitPair;
         typedef std::unordered_map<uint64_t, WaitPair> WaitZone;
