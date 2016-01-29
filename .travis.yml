@@ -5,35 +5,20 @@ compiler:
 
 before_install:
     - sudo add-apt-repository -y ppa:andykimpe/cmake
-    - sudo add-apt-repository -y ppa:boost-latest/ppa
+    - sudo add-apt-repository -y ppa:kojoley/boost
     - sudo add-apt-repository -y ppa:ubuntu-toolchain-r/test
     - sudo apt-get -qq update
 
 install:
     - sudo apt-get install cmake 
-    - sudo apt-get install -qq boost1.55
+    - sudo apt-get install -qq libboost1.58-dev
     - .travis_scripts/gcc.sh
 
 script: 
     - mkdir build; pushd build;
-    - cmake ..
-    - make -j4
-    - sudo make install
-    - make test_small
-    - make samples
-    - make run_test
-      #    - sudo rm * -rf
-      #    - cmake .. -DENABLE_BOOST_COROUTINE=ON
-      #    - make -j4
-      #    - sudo make install
-      #    - make test_small
-      #    - make run_test
-      #    - sudo rm * -rf
-      #    - cmake .. -DENABLE_SHARED_STACK=ON
-      #    - make -j4
-      #    - sudo make install
-      #    - make test_small
-      #    - make run_test
+    - cmake .. && make -j4 && sudo make install && make test_small && make samples && make run_test
+    - sudo rm * -rf && cmake .. -DENABLE_BOOST_COROUTINE=ON && make -j4 && sudo make install && make test_small && make samples && make run_test
+    - sudo rm * -rf && cmake .. -DENABLE_SHARED_STACK=ON && make -j4 && sudo make install && make test_small && make samples && make run_test
     - popd;
 
 after_success:
