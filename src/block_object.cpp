@@ -41,19 +41,19 @@ void BlockObject::CoBlockWait()
     Task* tk = g_Scheduler.GetLocalInfo().current_task;
     tk->block_ = this;
     tk->state_ = TaskState::sys_block;
-    tk->block_timeout_ = std::chrono::nanoseconds::zero();
+	tk->block_timeout_ = MininumTimeDurationType::zero();
     tk->is_block_timeout_ = false;
     ++ tk->block_sequence_;
     DebugPrint(dbg_syncblock, "wait to switch. task(%s)", tk->DebugInfo());
     g_Scheduler.CoYield();
 }
 
-bool BlockObject::CoBlockWaitTimed(std::chrono::nanoseconds timeo)
+bool BlockObject::CoBlockWaitTimed(MininumTimeDurationType timeo)
 {
     auto begin = std::chrono::high_resolution_clock::now();
     if (!g_Scheduler.IsCoroutine()) {
         while (!TryBlockWait() &&
-                std::chrono::duration_cast<std::chrono::nanoseconds>
+				std::chrono::duration_cast<MininumTimeDurationType>
                 (std::chrono::high_resolution_clock::now() - begin) < timeo)
             usleep(10 * 1000);
         return false;
@@ -154,7 +154,7 @@ bool BlockObject::AddWaitTask(Task* tk)
     wait_queue_.push(tk);
 
     // 带超时的, 增加定时器
-    if (std::chrono::nanoseconds::zero() != tk->block_timeout_) {
+	if (MininumTimeDurationType::zero() != tk->block_timeout_) {
         uint32_t seq = tk->block_sequence_;
         tk->IncrementRef();
         lock.unlock(); // sequence记录完成, task引用计数增加, 可以解锁了

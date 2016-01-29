@@ -161,11 +161,11 @@ void Task::DecrementRef()
         assert(!this->next);
         assert(!this->check_);
 
-        static co_thread_local DeleteListPtr delete_list;
+		static co_thread_local DeleteList* delete_list;
         if (!delete_list) {
-            delete_list.reset(new DeleteList);
+            delete_list = new DeleteList;
             std::unique_lock<LFLock> lock(s_delete_lists_lock);
-            s_delete_lists.push_back(delete_list);
+			s_delete_lists.push_back(DeleteListPtr(delete_list));
         }
         delete_list->push(this);
     }
