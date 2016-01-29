@@ -51,55 +51,75 @@ TEST_P(Times, testBm)
 {
 //    g_Scheduler.GetOptions().debug = dbg_scheduler;
 //    g_Scheduler.GetOptions().debug_output = fopen("log", "w");
+    g_Scheduler.GetOptions().stack_size = 4096;
 
+    // 1 thread test
     {
-        stdtimer st(tc_, "Create coroutine");
-        for (int i = 0; i < tc_; ++i) {
-            go []{};
-        }
-    }
-
-    {
-        stdtimer st(tc_, "Switch and Delete coroutine");
-        g_Scheduler.RunUntilNoTask();
-        g_Scheduler.RunUntilNoTask();
-    }
-
-//    {
-//        for (int i = 0; i < tc_; ++i) {
-//            go []{ co_yield; };
-//        }
-//
-//        stdtimer st(tc_, "Switch 2 times and Delete coroutine");
-//        g_Scheduler.RunUntilNoTask();
-//    }
-
-    {
-        for (int i = 0; i < tc_; ++i) {
+        stdtimer st(tc_, "Create coroutine half(1/2)");
+        for (int i = 0; i < tc_ / 2; ++i) {
             go []{ co_yield; co_yield; };
         }
+    }
+    {
+        stdtimer st(tc_, "Create coroutine half(2/2)");
+        for (int i = 0; i < tc_ / 2; ++i) {
+            go []{ co_yield; co_yield; };
+        }
+    }
+    {
+        stdtimer st(tc_, "Collect & Switch coroutine");
         g_Scheduler.Run();
-
+    }
+    {
         stdtimer st(tc_, "Switch coroutine");
         g_Scheduler.Run();
     }
 
     {
-        stdtimer st(tc_, "Switch and Delete coroutine");
+        stdtimer st(tc_, "Switch & Delete coroutine");
         g_Scheduler.RunUntilNoTask();
         g_Scheduler.RunUntilNoTask();
     }
+    g_Scheduler.RunUntilNoTask();
 
+
+    // 4 threads test
     {
+        stdtimer st(tc_, "Create coroutine - 2");
         for (int i = 0; i < tc_; ++i) {
-            go []{};
+            go []{ co_yield; };
         }
-        stdtimer st(tc_, "4 threads Switch and Delete coroutine");
+    }
+    {
+        g_Scheduler.Run();
+
+        stdtimer st(tc_, "4 threads Switch & Delete coroutine");
         boost::thread_group tg;
         for (int i = 0; i < 4; ++i)
             tg.create_thread( []{ g_Scheduler.RunUntilNoTask(); } );
         tg.join_all();
     }
+    g_Scheduler.RunUntilNoTask();
+
+    {
+        stdtimer st(tc_, "4 threads Create coroutine");
+        boost::thread_group tg;
+        for (int i = 0; i < 4; ++i)
+            tg.create_thread( [=]{
+                        for (int i = 0; i < tc_ / 4; ++i) {
+                            go []{};
+                        }
+                    } );
+        tg.join_all();
+    }
+    {
+        stdtimer st(tc_, "4 threads Collect & Switch & Delete coroutine");
+        boost::thread_group tg;
+        for (int i = 0; i < 4; ++i)
+            tg.create_thread( []{ g_Scheduler.RunUntilNoTask(); } );
+        tg.join_all();
+    }
+    g_Scheduler.RunUntilNoTask();
 
 //    co_chan<int> chan;
     co_chan<int> chan(tc_);
@@ -119,6 +139,7 @@ TEST_P(Times, testBm)
         stdtimer st(tc_, "Channel");
         g_Scheduler.RunUntilNoTask();
     }
+    g_Scheduler.RunUntilNoTask();
 
     {
         stdtimer st(tc_, "Create Timer");
@@ -165,5 +186,5 @@ INSTANTIATE_TEST_CASE_P(
 INSTANTIATE_TEST_CASE_P(
         BmTest,
         Times,
-        Values(10000, 100000));
+        Values(100000));
 #endif

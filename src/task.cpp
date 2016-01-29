@@ -60,7 +60,7 @@ static void C_func(Task* self)
 }
 
 Task::Task(TaskF const& fn, std::size_t stack_size)
-    : id_(++s_id), ctx_(stack_size), fn_(fn)
+    : id_(++s_id), ctx_(stack_size, [this]{C_func(this);}), fn_(fn)
 {
     ++s_task_count;
 }
@@ -78,7 +78,7 @@ void Task::AddIntoProcesser(Processer *proc, char* shared_stack, uint32_t shared
 {
     assert(!proc_);
     proc_ = proc;
-    if (!ctx_.Init([this]{C_func(this);}, shared_stack, shared_stack_cap)) {
+    if (!ctx_.Init(shared_stack, shared_stack_cap)) {
         state_ = TaskState::fatal;
         fprintf(stderr, "task(%s) init, getcontext error:%s\n",
                 DebugInfo(), strerror(errno));

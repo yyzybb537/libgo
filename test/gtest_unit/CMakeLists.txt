@@ -26,7 +26,7 @@ add_subdirectory(${PROJECT_SOURCE_DIR}/../../third_party/gtest ${PROJECT_BINARY_
 if (UNIX)
     #set(LINK_ARGS libgo dl gtest_main gtest pthread ${Boost_LIBRARIES} pthread)
     set(STATIC_LINK_ARG -static -static-libgcc -static-libstdc++)
-    set(LINK_ARGS libgo dl gtest_main gtest boost_coroutine boost_context boost_system boost_thread pthread)
+    set(LINK_ARGS libgo dl gtest_main gtest boost_coroutine boost_context boost_system boost_thread tcmalloc_minimal pthread)
 else ()
     set(LINK_ARGS libgo gtest_main gtest ${Boost_LIBRARIES} ws2_32)
 endif()
