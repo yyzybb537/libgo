@@ -11,7 +11,8 @@ namespace co
 uint64_t Task::s_id = 0;
 std::atomic<uint64_t> Task::s_task_count{0};
 
-Task::DeleteList Task::s_delete_list;
+std::list<Task::DeleteListPtr> Task::s_delete_lists;
+LFLock Task::s_delete_lists_lock;
 
 static void C_func(Task* self)
 {
@@ -123,14 +124,25 @@ uint64_t Task::GetTaskCount()
     return s_task_count;
 }
 
-void Task::PopDeleteList(SList<Task> &output)
+void Task::PopDeleteList(std::vector<SList<Task>> & output)
 {
-    output = s_delete_list.pop_all();
+    std::unique_lock<LFLock> lock(s_delete_lists_lock);
+    for (auto &sp : s_delete_lists)
+    {
+        SList<Task> s = sp->pop_all();
+        output.push_back(s);
+    }
 }
 
 std::size_t Task::GetDeletedTaskCount()
 {
-    return s_delete_list.size();
+    std::unique_lock<LFLock> lock(s_delete_lists_lock);
+    std::size_t n = 0;
+    for (auto &sp : s_delete_lists)
+    {
+        n += sp->size();
+    }
+    return n;
 }
 
 void Task::IncrementRef()
@@ -148,7 +160,14 @@ void Task::DecrementRef()
         assert(!this->prev);
         assert(!this->next);
         assert(!this->check_);
-        s_delete_list.push(this);
+
+        static co_thread_local DeleteListPtr delete_list;
+        if (!delete_list) {
+            delete_list.reset(new DeleteList);
+            std::unique_lock<LFLock> lock(s_delete_lists_lock);
+            s_delete_lists.push_back(delete_list);
+        }
+        delete_list->push(this);
     }
 }
 

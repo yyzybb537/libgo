@@ -104,9 +104,12 @@ struct Task
 
     // Task引用计数归0时不要立即释放, 以防epoll_wait取到残余数据时访问野指针.
     typedef TSQueue<Task> DeleteList;
-    static DeleteList s_delete_list;
+    typedef std::shared_ptr<DeleteList> DeleteListPtr;
 
-    static void PopDeleteList(SList<Task> &output);
+    static LFLock s_delete_lists_lock;
+    static std::list<DeleteListPtr> s_delete_lists;
+
+    static void PopDeleteList(std::vector<SList<Task>> & output);
     static std::size_t GetDeletedTaskCount();
 };
 

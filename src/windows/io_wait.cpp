@@ -20,13 +20,14 @@ void IoWait::SchedulerSwitch(Task* tk)
 
 int IoWait::WaitLoop()
 {
-    SList<Task> delete_list;
-    Task::PopDeleteList(delete_list);
-    for (auto it = delete_list.begin(); it != delete_list.end();)
-    {
-        Task* tk = &*it++;
-        delete tk;
-    }
+    std::vector<SList<Task>> delete_lists;
+    Task::PopDeleteList(delete_lists);
+    for (auto &delete_list : delete_lists)
+        for (auto it = delete_list.begin(); it != delete_list.end();)
+        {
+            Task* tk = &*it++;
+            delete tk;
+        }
     return 0;
 }
 

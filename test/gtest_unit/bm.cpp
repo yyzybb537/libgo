@@ -49,7 +49,8 @@ struct Times : public TestWithParam<int>
 
 TEST_P(Times, testBm)
 {
-//    g_Scheduler.GetOptions().debug = dbg_sleepblock;
+//    g_Scheduler.GetOptions().debug = dbg_scheduler;
+//    g_Scheduler.GetOptions().debug_output = fopen("log", "w");
 
     {
         stdtimer st(tc_, "Create coroutine");

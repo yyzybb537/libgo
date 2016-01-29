@@ -1,5 +1,6 @@
 #pragma once
 #include <atomic>
+#include <assert.h>
 
 namespace co
 {
@@ -15,7 +16,11 @@ struct LFLock
 
     inline void lock()
     {
-        while (std::atomic_flag_test_and_set_explicit(&lck, std::memory_order_acquire));
+        int c = 0;
+        while (std::atomic_flag_test_and_set_explicit(&lck, std::memory_order_acquire)) ++c;
+        if (c > 10) {
+//            assert(false);
+        }
     }
 
     inline bool try_lock()

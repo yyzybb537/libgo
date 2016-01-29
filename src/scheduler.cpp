@@ -137,11 +137,12 @@ uint32_t Scheduler::DoRunnable()
             if (popn) {
                 static int sc = 0;
                 SList<Task> s = run_tasks_.pop(popn);
-                for (auto &elem : s)
-                    proc->AddTaskRunnable(&elem);
+                auto it = s.begin();
+                while (it != s.end())
+                    proc->AddTaskRunnable(&*it++);
                 sc += s.size();
-                printf("popn = %d, get %d coroutines, sc=%d, remain=%d\n",
-                        (int)popn, (int)s.size(), (int)sc, (int)run_tasks_.size());
+//                printf("popn = %d, get %d coroutines, sc=%d, remain=%d\n",
+//                        (int)popn, (int)s.size(), (int)sc, (int)run_tasks_.size());
             }
 //            for (uint32_t ti = proc->GetTaskCount(); ti < average; ++ti) {
 //                Task *tk = run_tasks_.pop();
@@ -159,6 +160,7 @@ uint32_t Scheduler::DoRunnable()
             throw ;
         }
         task_count_ -= done_count;
+//        printf("run %d coroutines, remain=%d\n", (int)done_count, (int)task_count_);
 
         run_proc_list_.push(proc);
     }

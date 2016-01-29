@@ -101,7 +101,9 @@ void CoTimerMgr::__Cancel(CoTimerPtr co_timer_ptr)
 
 uint32_t CoTimerMgr::GetExpired(std::list<CoTimerPtr> &result, uint32_t n)
 {
-    std::unique_lock<LFLock> lock(lock_);
+    std::unique_lock<LFLock> lock(lock_, std::defer_lock);
+    if (!lock.try_lock()) return 0;
+
     TimePoint now = Now();
     auto it = deadlines_.begin();
     for (; it != deadlines_.end() && n > 0; --n, ++it)
