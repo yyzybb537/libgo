@@ -3,7 +3,7 @@ set -e
 
 ulimit -c 500000
 echo '' > result
-for t in `ls test/*.t`
+for t in `ls test/gtest_unit/*.t`
 do
     echo ''
     echo ------------ run $t -------------- | tee -a result
@@ -20,7 +20,7 @@ echo ------------ result --------------
 cat result | egrep \(PASSED\|FAIL\|^----------\)
 echo ----------------------------------
 
-runs=`ls test/*.t | wc -l`
+runs=`ls test/gtest_unit/*.t | wc -l`
 pass=`grep "^\[\s*PASSED" result | wc -l`
 if [ "${pass}" -eq "${runs}" ];
 then
