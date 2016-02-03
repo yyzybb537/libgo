@@ -119,8 +119,9 @@ else ()
     set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} /MTd")
     set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} /MT")
 endif()
-
-#message(FATAL_ERROR "${CMAKE_CXX_FLAGS}")
+message("------------ Cxx flags -------------")
+message("  CMAKE_CXX_FLAGS_${CMAKE_BUILD_TYPE}: ${CMAKE_CXX_FLAGS_${CMAKE_BUILD_TYPE}}")
+message("------------------------------------")
 
 include_directories(src)
 
@@ -164,6 +165,15 @@ if (UNIX)
         COMMAND ${CMAKE_COMMAND} --build ${CMAKE_BINARY_DIR} --target all
         WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
         COMMENT "Switch CMAKE_BUILD_TYPE to Release"
+    )
+
+    set(PROFILE_FLAGS "-g -pg ${CMAKE_CXX_FLAGS_RELEASE}")
+    #message("PROFILE_FLAGS: ${PROFILE_FLAGS}")
+    add_custom_target(profile
+        COMMAND ${CMAKE_COMMAND} -DCMAKE_BUILD_TYPE=PROFILE -DCMAKE_CXX_FLAGS_PROFILE=\\'${PROFILE_FLAGS}\\' ${CMAKE_SOURCE_DIR}
+        COMMAND ${CMAKE_COMMAND} --build ${CMAKE_BINARY_DIR} --target all
+        WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
+        COMMENT "Switch CMAKE_BUILD_TYPE to Release-Profile"
     )
 
     add_custom_target(uninstall
