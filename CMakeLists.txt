@@ -183,36 +183,59 @@ if (UNIX)
     )
 
     add_custom_target(test_all
-        COMMAND ${CMAKE_COMMAND} -DOPEN_SUBDIRECTORY_TEST_ALL=ON -DTEST_STATIC_LINK=ON -DTEST_LINK_FLAGS="${TEST_LINK_FLAGS}" ${CMAKE_SOURCE_DIR}
+        COMMAND ${CMAKE_COMMAND} -DOPEN_SUBDIRECTORY_TEST_ALL=ON -DOPEN_SUBDIRECTORY_TEST_DYNAMIC=OFF -DSMALL_TEST=OFF -DTEST_STATIC_LINK=ON -DTEST_LINK_FLAGS="${TEST_LINK_FLAGS}" ${CMAKE_SOURCE_DIR}
         COMMAND ${CMAKE_COMMAND} --build ${CMAKE_BINARY_DIR} --target all
         WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
-        COMMENT "Switch CMAKE_BUILD_TYPE to Release-Profile"
+        COMMENT "Add subdirectory test_all"
     )
-
     option(OPEN_SUBDIRECTORY_TEST_ALL "" OFF)
     if (OPEN_SUBDIRECTORY_TEST_ALL)
         add_subdirectory("${PROJECT_SOURCE_DIR}/test/gtest_unit")
     endif()
 
-    #add_custom_target(test
-    #   COMMAND mkdir -p test && cd test && ${CMAKE_COMMAND} -DCMAKE_BUILD_TYPE="${CMAKE_BUILD_TYPE}" -DCMAKE_CXX_FLAGS="\"${CMAKE_CXX_FLAGS}\"" -DTEST_LINK_FLAGS="${TEST_LINK_FLAGS}" -DTEST_STATIC_LINK=1 ${PROJECT_SOURCE_DIR}/test/gtest_unit && make -j4 -C gtest && make -j4
-    #)
-
     add_custom_target(test_dynamic
-        COMMAND mkdir -p test && cd test && ${CMAKE_COMMAND} -DCMAKE_BUILD_TYPE="${CMAKE_BUILD_TYPE}" -DCMAKE_CXX_FLAGS="\"${CMAKE_CXX_FLAGS}\"" -DTEST_LINK_FLAGS="${TEST_LINK_FLAGS}" ${PROJECT_SOURCE_DIR}/test/gtest_unit && make -j4 -C gtest && make -j4
+        COMMAND ${CMAKE_COMMAND} -DOPEN_SUBDIRECTORY_TEST_DYNAMIC=ON -DOPEN_SUBDIRECTORY_TEST_ALL=OFF -DSMALL_TEST=OFF -DTEST_STATIC_LINK=OFF -DTEST_LINK_FLAGS="${TEST_LINK_FLAGS}" ${CMAKE_SOURCE_DIR}
+        COMMAND ${CMAKE_COMMAND} --build ${CMAKE_BINARY_DIR} --target all
+        WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
+        COMMENT "Add subdirectory test_dynamic"
     )
+    option(OPEN_SUBDIRECTORY_TEST_DYNAMIC "" OFF)
+    if (OPEN_SUBDIRECTORY_TEST_DYNAMIC)
+        add_subdirectory("${PROJECT_SOURCE_DIR}/test/gtest_unit")
+    endif()
 
     add_custom_target(test_small
-        COMMAND mkdir -p test && cd test && ${CMAKE_COMMAND} -DCMAKE_BUILD_TYPE="${CMAKE_BUILD_TYPE}" -DCMAKE_CXX_FLAGS="\"${CMAKE_CXX_FLAGS}\"" -DTEST_LINK_FLAGS="${TEST_LINK_FLAGS}" -DSMALL_TEST=ON ${PROJECT_SOURCE_DIR}/test/gtest_unit && make -j4 -C gtest && make -j4
+        COMMAND ${CMAKE_COMMAND} -DOPEN_SUBDIRECTORY_TEST_DYNAMIC=OFF -DOPEN_SUBDIRECTORY_TEST_ALL=OFF -DSMALL_TEST=ON -DTEST_STATIC_LINK=OFF -DTEST_LINK_FLAGS="${TEST_LINK_FLAGS}" ${CMAKE_SOURCE_DIR}
+        COMMAND ${CMAKE_COMMAND} --build ${CMAKE_BINARY_DIR} --target all
+        WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
+        COMMENT "Add subdirectory test_small"
     )
+    option(SMALL_TEST "" OFF)
+    if (SMALL_TEST)
+        add_subdirectory("${PROJECT_SOURCE_DIR}/test/gtest_unit")
+    endif()
 
     add_custom_target(bm
-        COMMAND mkdir -p benchmark && cd benchmark && ${CMAKE_COMMAND} -DCMAKE_BUILD_TYPE="${CMAKE_BUILD_TYPE}" -DCMAKE_CXX_FLAGS="\"${CMAKE_CXX_FLAGS}\"" -DTEST_LINK_FLAGS="${TEST_LINK_FLAGS}" ${PROJECT_SOURCE_DIR}/test/benchmark && make -j4
+        COMMAND ${CMAKE_COMMAND} -DOPEN_SUBDIRECTORY_BENCHMARK=ON ${CMAKE_SOURCE_DIR}
+        COMMAND ${CMAKE_COMMAND} --build ${CMAKE_BINARY_DIR} --target all
+        WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
+        COMMENT "Add subdirectory benchmark"
     )
+    option(OPEN_SUBDIRECTORY_BENCHMARK "" OFF)
+    if (OPEN_SUBDIRECTORY_BENCHMARK)
+        add_subdirectory("${PROJECT_SOURCE_DIR}/test/benchmark")
+    endif()
 
     add_custom_target(samples
-        COMMAND mkdir -p samples && cd samples && ${CMAKE_COMMAND} -DCMAKE_BUILD_TYPE="${CMAKE_BUILD_TYPE}" -DCMAKE_CXX_FLAGS="\"${CMAKE_CXX_FLAGS}\"" -DTEST_LINK_FLAGS="${TEST_LINK_FLAGS}" ${PROJECT_SOURCE_DIR}/samples && make -j4
+        COMMAND ${CMAKE_COMMAND} -DOPEN_SUBDIRECTORY_SAMPLES=ON ${CMAKE_SOURCE_DIR}
+        COMMAND ${CMAKE_COMMAND} --build ${CMAKE_BINARY_DIR} --target all
+        WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
+        COMMENT "Add subdirectory samples"
     )
+    option(OPEN_SUBDIRECTORY_SAMPLES "" OFF)
+    if (OPEN_SUBDIRECTORY_SAMPLES)
+        add_subdirectory("${PROJECT_SOURCE_DIR}/samples")
+    endif()
 
     add_custom_target(run_test
         COMMAND cp ${PROJECT_SOURCE_DIR}/test/gtest_unit/run_test . && ./run_test
