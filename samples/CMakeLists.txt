@@ -6,6 +6,8 @@ project(samples)
 if (WIN32)
     set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} /MTd")
     set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} /MT")
+else ()
+    set(CMAKE_CXX_FLAGS "-std=c++11 -g -Wall")
 endif()
 
 include(${PROJECT_SOURCE_DIR}/../boost.cmake)
