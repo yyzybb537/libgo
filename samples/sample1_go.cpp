@@ -88,7 +88,7 @@ int main()
     //   2.RunLoop 无限循环执行Run, 不会返回
     //   3.RunUntilNoTask 循环执行Run, 直至协程数量为零.
     //
-    // 当仅使用一些线程进行协程调度时, 协程地执行会严格地遵循其创建顺序.
+    // 当仅使用一个线程进行协程调度时, 协程地执行会严格地遵循其创建顺序.
     co_sched.RunUntilNoTask();
     return 0;
 }
