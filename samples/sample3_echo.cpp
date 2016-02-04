@@ -57,7 +57,9 @@ retry_read:
     } else {
         // echo
         // 阻塞的write已被HOOK，等待期间切换执行其他协程。
-        write(sockfd, buf, n);
+        ssize_t wn = write(sockfd, buf, n);
+        (void)wn;
+
     }
 }
 
@@ -77,7 +79,8 @@ void client()
     char buf[12] = "1234";
     int len = strlen(buf) + 1;
     // 阻塞的write已被HOOK，等待期间切换执行其他协程。
-    write(sockfd, buf, len);
+    ssize_t wn = write(sockfd, buf, len);
+    (void)wn;
     printf("send [%d] %s\n", len, buf);
 
     char rcv_buf[12];
