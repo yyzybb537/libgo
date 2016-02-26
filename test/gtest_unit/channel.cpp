@@ -14,6 +14,8 @@ using namespace co;
 TEST(Channel, capacity0)
 {
     co_chan<int> ch;
+    EXPECT_TRUE(ch.empty());
+
     int i = 0;
     {
         go [&]{ ch << 1; EXPECT_YIELD(1);};
@@ -72,9 +74,10 @@ TEST(Channel, capacity1)
 {
     // nonblock
     co_chan<int> ch(1);
+    EXPECT_TRUE(ch.empty());
     int i = 0;
     {
-        go [&]{ ch << 1; EXPECT_YIELD(0);};
+        go [&]{ ch << 1; EXPECT_FALSE(ch.empty()); EXPECT_YIELD(0);};
         go [&]{ ch >> i; EXPECT_YIELD(0);};
         g_Scheduler.RunUntilNoTask();
         EXPECT_EQ(i, 1);

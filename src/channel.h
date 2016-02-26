@@ -84,6 +84,11 @@ public:
         return impl_.unique();
     }
 
+    bool empty() const
+    {
+        return impl_->empty();
+    }
+
 private:
     class ChannelImpl
     {
@@ -96,6 +101,11 @@ private:
         explicit ChannelImpl(std::size_t capacity)
             : write_block_(capacity)
         {}
+
+        bool empty()
+        {
+            return !read_block_.IsWakeup();
+        }
 
         // write
         template <typename U>
@@ -315,6 +325,11 @@ public:
         return impl_.unique();
     }
 
+    bool empty() const
+    {
+        return impl_->empty();
+    }
+
 private:
     class ChannelImpl
     {
@@ -325,6 +340,11 @@ private:
         explicit ChannelImpl(std::size_t capacity)
             : write_block_(capacity)
         {}
+
+        bool empty()
+        {
+            return !read_block_.IsWakeup();
+        }
 
         // write
         void operator<<(nullptr_t ignore)
