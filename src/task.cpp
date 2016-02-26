@@ -14,6 +14,9 @@ std::atomic<uint64_t> Task::s_task_count{0};
 std::list<Task::DeleteListPtr> Task::s_delete_lists;
 LFLock Task::s_delete_lists_lock;
 
+LFLock Task::s_stat_lock;
+std::set<Task*> Task::s_stat_set;
+
 static void C_func(Task* self)
 {
     if (g_Scheduler.GetOptions().exception_handle == eCoExHandle::immedaitely_throw) {
@@ -71,6 +74,15 @@ Task::~Task()
     if (io_wait_data_) {
         delete io_wait_data_;
         io_wait_data_ = nullptr;
+    }
+}
+
+void Task::InitLocation(const char* file, int lineno)
+{
+    this->location_.Init(file, lineno);
+    if (Scheduler::getInstance().GetOptions().enable_coro_stat) {
+        std::unique_lock<LFLock> lock(s_stat_lock);
+        s_stat_set.insert(this);
     }
 }
 
@@ -161,6 +173,11 @@ void Task::DecrementRef()
         assert(!this->next);
         assert(!this->check_);
 
+        if (Scheduler::getInstance().GetOptions().enable_coro_stat) {
+            std::unique_lock<LFLock> lock(s_stat_lock);
+            s_stat_set.erase(this);
+        }
+
 		static co_thread_local DeleteList* delete_list;
         if (!delete_list) {
             delete_list = new DeleteList;
@@ -169,6 +186,20 @@ void Task::DecrementRef()
         }
         delete_list->push(this);
     }
+}
+
+std::map<SourceLocation, uint32_t> Task::GetStatInfo()
+{
+    std::map<SourceLocation, uint32_t> result;
+    if (!Scheduler::getInstance().GetOptions().enable_coro_stat)
+        return result;
+
+    std::unique_lock<LFLock> lock(s_stat_lock);
+    for (auto tk : s_stat_set)
+    {
+        ++result[tk->location_];
+    }
+    return result;
 }
 
 } //namespace co

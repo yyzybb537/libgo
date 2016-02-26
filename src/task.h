@@ -4,10 +4,12 @@
 #include <exception>
 #include <vector>
 #include <list>
+#include <set>
 #include "config.h"
 #include "context.h"
 #include "ts_queue.h"
 #include "timer.h"
+#include <string.h>
 
 namespace co
 {
@@ -61,6 +63,41 @@ struct IoWaitData
     CoTimerPtr io_block_timer_;
 };
 
+// 创建协程的源码文件位置
+struct SourceLocation
+{
+    const char* file_ = nullptr;
+    int lineno_ = 0;
+
+    void Init(const char* file, int lineno)
+    {
+        file_ = file, lineno_ = lineno;
+    }
+
+    friend bool operator<(SourceLocation const& lhs, SourceLocation const& rhs)
+    {
+        if (!lhs.file_ && !rhs.file_) return false;
+        if (!lhs.file_) return false;
+        if (!rhs.file_) return true;
+
+        int cmp = strcmp(lhs.file_, rhs.file_);
+        if (cmp != 0) {
+            return cmp == -1 ? true : false;
+        }
+
+        return lhs.lineno_ < rhs.lineno_;
+    }
+
+    std::string to_string() const
+    {
+        std::string s("{file:");
+        if (file_) s += file_;
+        s += ", line:";
+        s += std::to_string(lineno_) + "}";
+        return s;
+    }
+};
+
 struct Task
     : public TSQueueHook
 {
@@ -71,6 +108,7 @@ struct Task
     Context ctx_;
     TaskF fn_;
     std::string debug_info_;
+    SourceLocation location_;
     std::exception_ptr eptr_;           // 保存exception的指针
     std::atomic<uint32_t> ref_count_{1};// 引用计数
 
@@ -86,6 +124,7 @@ struct Task
     explicit Task(TaskF const& fn, std::size_t stack_size);
     ~Task();
 
+    void InitLocation(const char* file, int lineno);
     void AddIntoProcesser(Processer *proc, char* shared_stack, uint32_t shared_stack_cap);
 
     bool SwapIn();
@@ -99,6 +138,7 @@ struct Task
     static uint64_t s_id;
     static std::atomic<uint64_t> s_task_count;
 
+    // 引用计数
     void IncrementRef();
     void DecrementRef();
     static uint64_t GetTaskCount();
@@ -109,6 +149,10 @@ struct Task
 
     static LFLock s_delete_lists_lock;
     static std::list<DeleteListPtr> s_delete_lists;
+
+    static LFLock s_stat_lock;
+    static std::set<Task*> s_stat_set;
+    static std::map<SourceLocation, uint32_t> GetStatInfo();
 
     static void PopDeleteList(std::vector<SList<Task>> & output);
     static std::size_t GetDeletedTaskCount();
