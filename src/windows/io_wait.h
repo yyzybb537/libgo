@@ -21,8 +21,13 @@ namespace co
 
         int WaitLoop();
 
+        void DelayEventWaitTime();
+        void ResetEventWaitTime();
+
     private:
         void Cancel(Task *tk, uint32_t id);
+
+        int epollwait_ms_;
     };
 
 

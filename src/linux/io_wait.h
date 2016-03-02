@@ -93,6 +93,9 @@ public:
 
     int WaitLoop();
 
+    void DelayEventWaitTime();
+    void ResetEventWaitTime();
+
 private:
     void Cancel(Task *tk, uint32_t id);
 
@@ -114,6 +117,7 @@ private:
     std::list<CoTimerPtr> timeout_list_;
     LFLock timeout_list_lock_;
     CoTimerMgr timer_mgr_;
+    int epollwait_ms_;
 
     typedef TSQueue<Task> TaskList;
     TaskList wait_tasks_;

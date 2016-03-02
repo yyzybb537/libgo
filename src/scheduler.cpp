@@ -102,9 +102,15 @@ uint32_t Scheduler::Run()
     uint32_t sl_count = DoSleep();
 
     if (!run_task_count && ep_count <= 0 && !tm_count && !sl_count) {
-        DebugPrint(dbg_scheduler_sleep, "sleep %d ms", (int)sleep_ms_);
-        sleep_ms_ = (std::min)(++sleep_ms_, GetOptions().max_sleep_ms);
-        usleep(sleep_ms_ * 1000);
+        if (ep_count == -1) {
+            // 此线程没有执行epoll_wait, 使用sleep降低空转时的cpu使用率
+            DebugPrint(dbg_scheduler_sleep, "sleep %d ms", (int)sleep_ms_);
+            sleep_ms_ = (std::min)(++sleep_ms_, GetOptions().max_sleep_ms);
+            usleep(sleep_ms_ * 1000);
+        } else {
+            // 此线程执行了epoll_wait, 增加epoll_wait超时时间降低空转时的cpu使用率
+            io_wait_.DelayEventWaitTime();
+        }
     } else {
         sleep_ms_ = 1;
     }

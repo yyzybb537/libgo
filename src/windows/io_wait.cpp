@@ -18,6 +18,17 @@ void IoWait::SchedulerSwitch(Task* tk)
 
 }
 
+void IoWait::DelayEventWaitTime()
+{
+    ++epollwait_ms_;
+    epollwait_ms_ = std::min<int>(epollwait_ms_, g_Scheduler.GetOptions().max_sleep_ms);
+}
+
+void IoWait::ResetEventWaitTime()
+{
+    epollwait_ms_ = 0;
+}
+
 int IoWait::WaitLoop()
 {
     std::vector<SList<Task>> delete_lists;
@@ -28,6 +39,7 @@ int IoWait::WaitLoop()
             Task* tk = &*it++;
             delete tk;
         }
+    usleep(epollwait_ms_);
     return 0;
 }
 
