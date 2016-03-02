@@ -41,9 +41,11 @@ CoroutineOptions& Scheduler::GetOptions()
     return options;
 }
 
-void Scheduler::CreateTask(TaskF const& fn, std::size_t stack_size)
+void Scheduler::CreateTask(TaskF const& fn, std::size_t stack_size,
+        const char* file, int lineno)
 {
     Task* tk = new Task(fn, stack_size ? stack_size : GetOptions().stack_size);
+    tk->InitLocation(file, lineno);
     ++task_count_;
     DebugPrint(dbg_task, "task(%s) created.", tk->DebugInfo());
     AddTaskRunnable(tk);

@@ -85,6 +85,9 @@ struct CoroutineOptions
 
     // 没有协程需要调度时, Run最多休眠的毫秒数(开发高实时性系统可以考虑调低这个值)
     uint8_t max_sleep_ms = 20;
+
+    // 开启当前协程统计功能(会有性能损耗, 默认不开启)
+    bool enable_coro_stat = false;
 };
 ///-------------------
 
@@ -112,7 +115,8 @@ class Scheduler
         CoroutineOptions& GetOptions();
 
         // 创建一个协程
-        void CreateTask(TaskF const& fn, std::size_t stack_size = 0);
+        void CreateTask(TaskF const& fn, std::size_t stack_size = 0,
+                const char* file = nullptr, int lineno = 0);
 
         // 当前是否处于协程中
         bool IsCoroutine();

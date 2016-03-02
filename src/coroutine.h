@@ -9,24 +9,22 @@ namespace co
 
 struct __go
 {
-    template <typename Arg>
-    inline void operator-(Arg const& arg)
-    {
-        Scheduler::getInstance().CreateTask(arg);
-    }
-};
-
-struct __go_stack
-{
-    explicit __go_stack(std::size_t stack_size) : stack_size_(stack_size) {}
+    __go() = default;
+    __go(const char* file, int lineno) : file_(file), lineno_(lineno) {}
+    __go(std::size_t stack_size) : stack_size_(stack_size) {}
 
     template <typename Arg>
     inline void operator-(Arg const& arg)
     {
-        Scheduler::getInstance().CreateTask(arg, stack_size_);
+        if (file_)
+            Scheduler::getInstance().CreateTask(arg, stack_size_, file_, lineno_);
+        else
+            Scheduler::getInstance().CreateTask(arg, stack_size_);
     }
 
-    std::size_t stack_size_;
+    const char* file_ = nullptr;
+    int lineno_ = 0;
+    std::size_t stack_size_ = 0;
 };
 
 // co_channel
@@ -85,8 +83,13 @@ struct __async_wait<void>
 
 } //namespace co
 
-#define go ::co::__go()-
-#define go_stack(size) ::co::__go_stack(size)-
+#if defined(__FILE__) && defined(__LINE__)
+# define go ::co::__go(__FILE__, __LINE__)-
+#else
+# define go ::co::__go()-
+#endif
+
+#define go_stack(size) ::co::__go(size)-
 #define co_yield do { g_Scheduler.CoYield(); } while (0)
 
 // coroutine sleep, never blocks current thread.
