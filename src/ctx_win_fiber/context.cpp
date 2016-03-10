@@ -48,7 +48,7 @@ namespace co
         impl_->fn_ = fn;
 		SIZE_T commit_size = g_Scheduler.GetOptions().init_commit_stack_size;
 		impl_->native_ = CreateFiberEx(commit_size,
-				(std::max)(stack_size_, commit_size), FIBER_FLAG_FLOAT_SWITCH,
+				std::max<std::size_t>(stack_size_, commit_size), FIBER_FLAG_FLOAT_SWITCH,
                 (LPFIBER_START_ROUTINE)FiberFunc, &impl_->fn_);
         if (!impl_->native_) {
             ThrowError(eCoErrorCode::ec_makecontext_failed);
