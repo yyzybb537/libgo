@@ -13,6 +13,7 @@ enum class EpollType
 
 IoWait::IoWait()
 {
+    epollwait_ms_ = 0;
     for (int i = 0; i < 2; ++i)
     {
         epoll_fds_[i] = epoll_create(1024);
@@ -22,6 +23,17 @@ IoWait::IoWait()
         fprintf(stderr, "CoroutineScheduler init failed. epoll create error:%s\n", strerror(errno));
         exit(1);
     }
+}
+
+void IoWait::DelayEventWaitTime()
+{
+    ++epollwait_ms_;
+    epollwait_ms_ = std::min<int>(epollwait_ms_, g_Scheduler.GetOptions().max_sleep_ms);
+}
+
+void IoWait::ResetEventWaitTime()
+{
+    epollwait_ms_ = 0;
 }
 
 void IoWait::CoSwitch(std::vector<FdStruct> && fdsts, int timeout_ms)
@@ -173,9 +185,12 @@ int IoWait::WaitLoop()
     for (int epoll_type = 0; epoll_type < 2; ++epoll_type)
     {
 retry:
-        int n = epoll_wait(epoll_fds_[epoll_type], evs, 1024, 0);
-        if (n == -1 && errno == EAGAIN)
+        int n = epoll_wait(epoll_fds_[epoll_type], evs, 1024,
+                (epoll_type == (int)EpollType::read) ? epollwait_ms_ : 0);
+        if (n == -1 && errno == EAGAIN) {
+            epollwait_ms_ = 0;
             goto retry;
+        }
 
         epoll_n += n;
         DebugPrint(dbg_scheduler, "do epoll(%d) event, n = %d", epoll_type, n);
