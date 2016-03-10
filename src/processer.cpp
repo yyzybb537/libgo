@@ -66,7 +66,7 @@ uint32_t Processer::Run(ThreadLocalInfo &info, uint32_t &done_count)
             runnable_list_.push(tk);
             ThrowError(eCoErrorCode::ec_swapcontext_failed);
         }
-        DebugPrint(dbg_switch, "leave task(%s) state=%d", tk->DebugInfo(), tk->state_);
+        DebugPrint(dbg_switch, "leave task(%s) state=%d", tk->DebugInfo(), (int)tk->state_);
         info.current_task = NULL;
 
         switch (tk->state_) {
