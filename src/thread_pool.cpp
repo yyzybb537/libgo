@@ -18,6 +18,7 @@ uint32_t ThreadPool::Run()
     TPElemBase *elem = NULL;
     while ((elem = elem_list_.pop())) {
         elem->Do();
+        ++c;
         delete elem;
     }
 
