@@ -11,7 +11,7 @@ endif()
 message("------------ Options -------------")
 message("  CMAKE_BUILD_TYPE: ${CMAKE_BUILD_TYPE}")
 
-aux_source_directory(src CO_SRC_LIST)
+aux_source_directory(libgo CO_SRC_LIST)
 
 if (ENABLE_BOOST_COROUTINE)
     include (${PROJECT_SOURCE_DIR}/boost.cmake)
@@ -44,11 +44,11 @@ message("----------------------------------")
 # 选项互斥检查
 if (UNIX)
     # unix like platforms
-    aux_source_directory(${PROJECT_SOURCE_DIR}/src/linux CO_SRC_LIST)
-    include_directories(${PROJECT_SOURCE_DIR}/src/linux)
+    aux_source_directory(${PROJECT_SOURCE_DIR}/libgo/linux CO_SRC_LIST)
+    include_directories(${PROJECT_SOURCE_DIR}/libgo/linux)
 
     if (ENABLE_BOOST_COROUTINE)
-        aux_source_directory(${PROJECT_SOURCE_DIR}/src/ctx_boost_coroutine CO_SRC_LIST)
+        aux_source_directory(${PROJECT_SOURCE_DIR}/libgo/ctx_boost_coroutine CO_SRC_LIST)
         set(LINK_LIBS "-lboost_coroutine -lboost_context -lboost_thread -lboost_system")
         if (ENABLE_SEGMENTED_STACK)
             set(CXX_FLAGS_POSTFIX "-fsplit-stack -DBOOST_USE_SEGMENTED_STACKS")
@@ -59,30 +59,30 @@ if (UNIX)
             message(FATAL_ERROR "ENABLE_SHARED_STACK cannot used with ENABLE_BOOST_COROUTINE")
         endif()
     else ()
-        aux_source_directory(${PROJECT_SOURCE_DIR}/src/ctx_ucontext CO_SRC_LIST)
+        aux_source_directory(${PROJECT_SOURCE_DIR}/libgo/ctx_ucontext CO_SRC_LIST)
         if (ENABLE_SEGMENTED_STACK)
             message(FATAL_ERROR "ENABLE_SEGMENTED_STACK depends ENABLE_BOOST_COROUTINE")
         endif()
     endif()
 
     if (DISABLE_HOOK)
-        list(REMOVE_ITEM CO_SRC_LIST ${PROJECT_SOURCE_DIR}/src/linux/linux_glibc_hook.cpp)
-        aux_source_directory(${PROJECT_SOURCE_DIR}/src/disable_hook CO_SRC_LIST)
+        list(REMOVE_ITEM CO_SRC_LIST ${PROJECT_SOURCE_DIR}/libgo/linux/linux_glibc_hook.cpp)
+        aux_source_directory(${PROJECT_SOURCE_DIR}/libgo/disable_hook CO_SRC_LIST)
     endif()
 
 elseif (WIN32)
     # windows platform
     add_definitions(-D_CRT_SECURE_NO_WARNINGS)
-    include_directories(${PROJECT_SOURCE_DIR}/src/windows)
-    aux_source_directory(${PROJECT_SOURCE_DIR}/src/windows CO_SRC_LIST)
-    aux_source_directory(${PROJECT_SOURCE_DIR}/src/windows/arpa CO_SRC_LIST)
-    aux_source_directory(${PROJECT_SOURCE_DIR}/src/windows/sys CO_SRC_LIST)
+    include_directories(${PROJECT_SOURCE_DIR}/libgo/windows)
+    aux_source_directory(${PROJECT_SOURCE_DIR}/libgo/windows CO_SRC_LIST)
+    aux_source_directory(${PROJECT_SOURCE_DIR}/libgo/windows/arpa CO_SRC_LIST)
+    aux_source_directory(${PROJECT_SOURCE_DIR}/libgo/windows/sys CO_SRC_LIST)
 
     if (ENABLE_BOOST_COROUTINE)
-        aux_source_directory(${PROJECT_SOURCE_DIR}/src/ctx_boost_coroutine CO_SRC_LIST)
+        aux_source_directory(${PROJECT_SOURCE_DIR}/libgo/ctx_boost_coroutine CO_SRC_LIST)
         message(WARNING "boost.coroutine was unstable in windows platform")
     else()
-        aux_source_directory(${PROJECT_SOURCE_DIR}/src/ctx_win_fiber CO_SRC_LIST)
+        aux_source_directory(${PROJECT_SOURCE_DIR}/libgo/ctx_win_fiber CO_SRC_LIST)
     endif()
 
     if (ENABLE_SHARED_STACK)
@@ -94,8 +94,8 @@ elseif (WIN32)
     endif()
 
     if (DISABLE_HOOK)
-        list(REMOVE_ITEM CO_SRC_LIST ${PROJECT_SOURCE_DIR}/src/windows/win_vc_hook.cpp)
-        aux_source_directory(${PROJECT_SOURCE_DIR}/src/disable_hook CO_SRC_LIST)
+        list(REMOVE_ITEM CO_SRC_LIST ${PROJECT_SOURCE_DIR}/libgo/windows/win_vc_hook.cpp)
+        aux_source_directory(${PROJECT_SOURCE_DIR}/libgo/disable_hook CO_SRC_LIST)
     else ()
         #aux_source_directory(${PROJECT_SOURCE_DIR}/third_party/mhook/mhook-lib CO_SRC_LIST)
         #include_directories(${PROJECT_SOURCE_DIR}/third_party/mhook/mhook-lib)
@@ -123,7 +123,7 @@ message("------------ Cxx flags -------------")
 message("  CMAKE_CXX_FLAGS_${CMAKE_BUILD_TYPE}: ${CMAKE_CXX_FLAGS_${CMAKE_BUILD_TYPE}}")
 message("------------------------------------")
 
-include_directories(src)
+include_directories(libgo)
 
 set(TARGET "libgo")
 set(STATIC_T "libgo_static")
@@ -138,11 +138,11 @@ if (UNIX)
     set_target_properties("${SHARED_T}" PROPERTIES OUTPUT_NAME "${TARGET}")
     target_link_libraries("${SHARED_T}" ${LINK_LIBS} -ldl)
 
-    add_subdirectory(${PROJECT_SOURCE_DIR}/src/main)
+    add_subdirectory(${PROJECT_SOURCE_DIR}/libgo/main)
 
     set(CMAKE_INSTALL_PREFIX "/usr/local")
     install(TARGETS ${STATIC_T} ${SHARED_T} LIBRARY DESTINATION "lib" ARCHIVE DESTINATION "lib")
-    install(DIRECTORY ${PROJECT_SOURCE_DIR}/src/ DESTINATION "include/libgo"
+    install(DIRECTORY ${PROJECT_SOURCE_DIR}/libgo/ DESTINATION "include/libgo"
         FILES_MATCHING
         PATTERN "linux" EXCLUDE
         PATTERN "main" EXCLUDE
@@ -150,7 +150,7 @@ if (UNIX)
         PATTERN "ctx_boost_coroutine" EXCLUDE
         PATTERN "ctx_ucontext" EXCLUDE
         PATTERN "*.h")
-    install(DIRECTORY ${PROJECT_SOURCE_DIR}/src/linux/ DESTINATION "include/libgo" FILES_MATCHING PATTERN "*.h")
+    install(DIRECTORY ${PROJECT_SOURCE_DIR}/libgo/linux/ DESTINATION "include/libgo" FILES_MATCHING PATTERN "*.h")
     install(FILES ${PROJECT_SOURCE_DIR}/tools/libgo.conf DESTINATION "/etc/ld.so.conf.d")
 
     add_custom_target(debug
@@ -242,7 +242,7 @@ if (UNIX)
     )
 
 else ()
-    add_subdirectory(${PROJECT_SOURCE_DIR}/src/main)
+    add_subdirectory(${PROJECT_SOURCE_DIR}/libgo/main)
     set_target_properties("${STATIC_T}" PROPERTIES COMPILE_FLAGS "/wd4819 /wd4267")
 
     if (BOOST_ROOT)
