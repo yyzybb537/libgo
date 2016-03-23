@@ -435,7 +435,7 @@ TEST(Channel, capacity0Timed)
                 auto c = duration_cast<milliseconds>(e - s).count();
                 EXPECT_FALSE(ok);
                 EXPECT_GT(c, 499);
-                EXPECT_LT(c, 833);
+                EXPECT_LT(c, 533);
             };
         g_Scheduler.RunUntilNoTask();
     }
@@ -451,7 +451,7 @@ TEST(Channel, capacity0Timed)
                 auto c = duration_cast<milliseconds>(e - s).count();
                 EXPECT_FALSE(ok);
                 EXPECT_GT(c, 499);
-                EXPECT_LT(c, 833);
+                EXPECT_LT(c, 533);
             };
         g_Scheduler.RunUntilNoTask();
     }

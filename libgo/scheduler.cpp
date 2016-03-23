@@ -92,14 +92,15 @@ uint32_t Scheduler::Run()
 
     uint32_t run_task_count = DoRunnable();
 
-    // epoll
-    int ep_count = DoEpoll();
-
     // timer
     uint32_t tm_count = DoTimer();
 
     // sleep wait.
     uint32_t sl_count = DoSleep();
+
+    // epoll
+    bool enable_block = !run_task_count && !tm_count && !sl_count;
+    int ep_count = DoEpoll(enable_block);
 
     if (!run_task_count && ep_count <= 0 && !tm_count && !sl_count) {
         if (ep_count == -1) {
@@ -113,6 +114,7 @@ uint32_t Scheduler::Run()
         }
     } else {
         sleep_ms_ = 1;
+        io_wait_.ResetEventWaitTime();
     }
 
     return run_task_count;
@@ -177,9 +179,9 @@ uint32_t Scheduler::DoRunnable()
 }
 
 // Run函数的一部分, 处理epoll相关
-int Scheduler::DoEpoll()
+int Scheduler::DoEpoll(bool enable_block)
 {
-    return io_wait_.WaitLoop();
+    return io_wait_.WaitLoop(enable_block);
 }
 
 uint32_t Scheduler::DoSleep()

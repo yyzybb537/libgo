@@ -29,7 +29,7 @@ void IoWait::ResetEventWaitTime()
     epollwait_ms_ = 0;
 }
 
-int IoWait::WaitLoop()
+int IoWait::WaitLoop(bool enable_block)
 {
     std::vector<SList<Task>> delete_lists;
     Task::PopDeleteList(delete_lists);
@@ -39,7 +39,8 @@ int IoWait::WaitLoop()
             Task* tk = &*it++;
             delete tk;
         }
-    usleep(epollwait_ms_);
+    if (enable_block)
+        usleep(epollwait_ms_);
     return 0;
 }
 
