@@ -19,7 +19,7 @@ namespace co
         // 在调度器中调用的switch, 如果成功则进入等待队列，如果失败则重新加回runnable队列
         void SchedulerSwitch(Task* tk);
 
-        int WaitLoop();
+        int WaitLoop(bool enable_block);
 
         void DelayEventWaitTime();
         void ResetEventWaitTime();

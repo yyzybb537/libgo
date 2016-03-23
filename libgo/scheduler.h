@@ -203,7 +203,7 @@ class Scheduler
         uint32_t DoRunnable();
 
         // Run函数的一部分, 处理epoll相关
-        int DoEpoll();
+        int DoEpoll(bool enable_block);
 
         // Run函数的一部分, 处理sleep相关
         uint32_t DoSleep();

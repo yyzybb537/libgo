@@ -161,7 +161,7 @@ void IoWait::Cancel(Task *tk, uint32_t id)
     }
 }
 
-int IoWait::WaitLoop()
+int IoWait::WaitLoop(bool enable_block)
 {
     int c = 0;
     for (;;) {
@@ -185,11 +185,13 @@ int IoWait::WaitLoop()
     for (int epoll_type = 0; epoll_type < 2; ++epoll_type)
     {
 retry:
-        int n = epoll_wait(epoll_fds_[epoll_type], evs, 1024,
-                (epoll_type == (int)EpollType::read) ? epollwait_ms_ : 0);
-        if (n == -1 && errno == EAGAIN) {
-            epollwait_ms_ = 0;
-            goto retry;
+        int timeout = (enable_block && epoll_type == (int)EpollType::read && !c) ? epollwait_ms_ : 0;
+        int n = epoll_wait(epoll_fds_[epoll_type], evs, 1024, timeout);
+        if (n == -1) {
+            if (errno == EINTR) {
+                goto retry;
+            }
+            continue;
         }
 
         epoll_n += n;

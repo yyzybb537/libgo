@@ -145,10 +145,15 @@ TEST_P(Times, testBm)
         stdtimer st(tc_, "Create Timer");
         for (int i = 0; i < tc_; ++i)
 #ifndef _WIN32
-            co_timer_add(std::chrono::nanoseconds(i), []{});
+            co_timer_add(std::chrono::nanoseconds(i),
 #else
-			co_timer_add(std::chrono::microseconds(i / 1000), []{});
+			co_timer_add(std::chrono::microseconds(i / 1000),
 #endif
+                [=]{
+                    if ((i + 1) % 10000 == 0) {
+                        //printf("run %d\n", i);
+                    }
+                });
     }
 
     {
