@@ -18,16 +18,19 @@ TEST(Channel, capacity0)
 
     int i = 0;
     {
+        EXPECT_EQ(ch.size(), 0);
         go [&]{ ch << 1; EXPECT_YIELD(1);};
         go [&]{ ch >> i; EXPECT_YIELD(1);};
         g_Scheduler.RunUntilNoTask();
         EXPECT_EQ(i, 1);
 
+        EXPECT_EQ(ch.size(), 0);
         go [=]{ ch << 2; EXPECT_YIELD(1);};
         go [=, &i]{ ch >> i; EXPECT_YIELD(1);};
         g_Scheduler.RunUntilNoTask();
         EXPECT_EQ(i, 2);
 
+        EXPECT_EQ(ch.size(), 0);
         std::atomic<int> step{0};
         int before_push = 0, after_push = 0, before_pop = 0, after_pop = 0;
         go [&]{ before_push = ++step; ch << 3; after_push = ++step; EXPECT_YIELD(1);};
@@ -38,6 +41,7 @@ TEST(Channel, capacity0)
         EXPECT_EQ(before_pop, 2);
         EXPECT_EQ(after_push, 3);
         EXPECT_EQ(after_pop, 4);
+        EXPECT_EQ(ch.size(), 0);
     }
 
     // ignore
@@ -77,9 +81,11 @@ TEST(Channel, capacity1)
     EXPECT_TRUE(ch.empty());
     int i = 0;
     {
-        go [&]{ ch << 1; EXPECT_FALSE(ch.empty()); EXPECT_YIELD(0);};
+        EXPECT_EQ(ch.size(), 0);
+        go [&]{ ch << 1; EXPECT_FALSE(ch.empty()); EXPECT_EQ(ch.size(), 1); EXPECT_YIELD(0);};
         go [&]{ ch >> i; EXPECT_YIELD(0);};
         g_Scheduler.RunUntilNoTask();
+        EXPECT_EQ(ch.size(), 0);
         EXPECT_EQ(i, 1);
 
         go [=]{ ch << 2; EXPECT_YIELD(0);};
