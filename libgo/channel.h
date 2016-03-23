@@ -89,6 +89,11 @@ public:
         return impl_->empty();
     }
 
+    std::size_t size() const
+    {
+        return impl_->size();
+    }
+
 private:
     class ChannelImpl
     {
@@ -105,6 +110,11 @@ private:
         bool empty()
         {
             return !read_block_.IsWakeup();
+        }
+
+        std::size_t size()
+        {
+            return queue_.size();
         }
 
         // write
@@ -328,6 +338,11 @@ public:
     bool empty() const
     {
         return impl_->empty();
+    }
+
+    std::size_t size() const
+    {
+        return 0;
     }
 
 private:
