@@ -5,6 +5,7 @@
 #include <sys/socket.h>
 #include <sys/stat.h>
 #include <assert.h>
+#include <chrono>
 #include "scheduler.h"
 using namespace co;
 
@@ -50,7 +51,9 @@ static ssize_t read_write_mode(int fd, OriginF fn, const char* hook_fn_name, uin
                         g_Scheduler.GetCurrentTaskDebugInfo(), hook_fn_name, timeout_ms, fd);
             }
         }
+        auto start_time = std::chrono::system_clock::now();
 
+retry:
         // add into epoll, and switch other context.
         g_Scheduler.IOBlockSwitch(fd, event, timeout_ms);
         bool is_timeout = false;
@@ -75,6 +78,18 @@ static ssize_t read_write_mode(int fd, OriginF fn, const char* hook_fn_name, uin
 
         DebugPrint(dbg_hook, "continue task(%s) %s. fd=%d", g_Scheduler.GetCurrentTaskDebugInfo(), hook_fn_name, fd);
         n = fn(fd, std::forward<Args>(args)...);
+        if (n == -1 && (errno == EAGAIN || errno == EWOULDBLOCK)) {
+            /// epoll误唤醒
+            if (timeout_ms == -1)   // 不超时, 继续重试
+                goto retry;
+
+            int delay_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
+                    std::chrono::system_clock::now() - start_time).count();
+            if (delay_ms < timeout_ms) {    // 还有剩余的超时时间, 重试一次
+                timeout_ms -= delay_ms;
+                goto retry;
+            }
+        }
     } else {
         DebugPrint(dbg_hook, "task(%s) syscall(%s) completed immediately. fd=%d",
                 g_Scheduler.GetCurrentTaskDebugInfo(), hook_fn_name, fd);
