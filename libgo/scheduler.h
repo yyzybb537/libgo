@@ -86,6 +86,9 @@ struct CoroutineOptions
     // 没有协程需要调度时, Run最多休眠的毫秒数(开发高实时性系统可以考虑调低这个值)
     uint8_t max_sleep_ms = 20;
 
+    // 每个定时器每帧处理的任务数量(为0表示不限, 每帧处理当前所有可以处理的任务)
+    uint32_t timer_handle_every_cycle = 0;
+
     // 开启当前协程统计功能(会有性能损耗, 默认不开启)
     bool enable_coro_stat = false;
 };

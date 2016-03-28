@@ -192,16 +192,22 @@ uint32_t Scheduler::DoSleep()
 // Run函数的一部分, 处理定时器
 uint32_t Scheduler::DoTimer()
 {
-    std::list<CoTimerPtr> timers;
-    timer_mgr_.GetExpired(timers, 128);
-    for (auto &sp_timer : timers)
+    uint32_t c = 0;
+    while (!GetOptions().timer_handle_every_cycle || c < GetOptions().timer_handle_every_cycle)
     {
-        DebugPrint(dbg_timer, "enter timer callback %llu", (long long unsigned)sp_timer->GetId());
-        (*sp_timer)();
-        DebugPrint(dbg_timer, "leave timer callback %llu", (long long unsigned)sp_timer->GetId());
+        std::list<CoTimerPtr> timers;
+        timer_mgr_.GetExpired(timers, 128);
+        for (auto &sp_timer : timers)
+        {
+            DebugPrint(dbg_timer, "enter timer callback %llu", (long long unsigned)sp_timer->GetId());
+            (*sp_timer)();
+            DebugPrint(dbg_timer, "leave timer callback %llu", (long long unsigned)sp_timer->GetId());
+        }
+        c += timers.size();
+        if (timers.empty()) break;
     }
 
-    return timers.size();
+    return c;
 }
 
 void Scheduler::RunLoop()
