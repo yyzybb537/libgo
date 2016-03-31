@@ -8,6 +8,11 @@
 #define co_thread_local thread_local
 #endif
 
+#ifndef _WIN32
+#include <unistd.h>
+#include <sys/types.h>
+#endif
+
 namespace co
 {
 

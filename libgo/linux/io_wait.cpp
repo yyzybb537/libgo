@@ -11,8 +11,19 @@ enum class EpollType
     write,
 };
 
+const char* EpollTypeName(int type)
+{
+    if (type == (int)EpollType::read)
+        return "read";
+    else if (type == (int)EpollType::write)
+        return "write";
+    else
+        return "unkown";
+}
+
 IoWait::IoWait()
 {
+    loop_index_ = 0;
     epollwait_ms_ = 0;
     for (int i = 0; i < 2; ++i)
     {
@@ -74,22 +85,20 @@ void IoWait::SchedulerSwitch(Task* tk)
     for (auto &fdst : tk->GetIoWaitData().wait_fds_)
     {
         epoll_event ev = {fdst.event, {(void*)&fdst.epoll_ptr}};
-        int epoll_fd_ = ChooseEpoll(fdst.event);
+        int epoll_fd = ChooseEpoll(fdst.event);
         tk->IncrementRef();     // 先将引用计数加一, 以防另一个线程立刻epoll_wait成功被执行完线程.
-        if (-1 == epoll_ctl(epoll_fd_, EPOLL_CTL_ADD, fdst.fd, &ev)) {
+        if (-1 == epoll_ctl(epoll_fd, EPOLL_CTL_ADD, fdst.fd, &ev)) {
             tk->DecrementRef(); // 添加失败时, 回退刚刚增加的引用计数.
             if (errno == EEXIST) {
-                fprintf(stderr, "task(%s) add fd(%d) into epoll error %d:%s\n",
-                        tk->DebugInfo(), fdst.fd, errno, strerror(errno));
-                DebugPrint(dbg_ioblock, "task(%s) add fd(%d) into epoll error %d:%s\n",
-                        tk->DebugInfo(), fdst.fd, errno, strerror(errno));
+                DebugPrint(dbg_ioblock, "task(%s) add fd(%d) into epoll(%s) error %d:%s",
+                        tk->DebugInfo(), fdst.fd, EpollTypeName(GetEpollType(epoll_fd)), errno, strerror(errno));
                 // 某个fd添加失败, 回滚
                 for (auto fd_pair : rollback_list)
                 {
-                    int epoll_fd_ = ChooseEpoll(fd_pair.second);
-                    if (0 == epoll_ctl(epoll_fd_, EPOLL_CTL_DEL, fd_pair.first, NULL)) {
-                        DebugPrint(dbg_ioblock, "task(%s) rollback io_block. fd=%d",
-                                tk->DebugInfo(), fd_pair.first);
+                    int epoll_fd = ChooseEpoll(fd_pair.second);
+                    if (0 == epoll_ctl(epoll_fd, EPOLL_CTL_DEL, fd_pair.first, NULL)) {
+                        DebugPrint(dbg_ioblock, "task(%s) rollback io_block. fd=%d from epoll(%s)",
+                                tk->DebugInfo(), fd_pair.first, EpollTypeName(GetEpollType(epoll_fd)));
                         // 减引用计数的条件：谁成功从epoll中删除了一个fd，谁才能减引用计数。
                         tk->DecrementRef();
                     }
@@ -97,10 +106,13 @@ void IoWait::SchedulerSwitch(Task* tk)
                 ok = false;
                 break;
             }
-
             // 其他原因添加失败, 忽略即可.(模拟poll逻辑)
             continue;
+        } else {
+            DebugPrint(dbg_ioblock, "task(%s) add fd(%d) into epoll(%s) success",
+                    tk->DebugInfo(), fdst.fd, EpollTypeName(GetEpollType(epoll_fd)));
         }
+
 
         ok = true;
         rollback_list.push_back(std::make_pair(fdst.fd, fdst.event));
@@ -149,9 +161,10 @@ void IoWait::Cancel(Task *tk, uint32_t id)
         // 清理所有fd
         for (auto &fdst: tk->GetIoWaitData().wait_fds_)
         {
-            int epoll_fd_ = ChooseEpoll(fdst.event);
-            if (0 == epoll_ctl(epoll_fd_, EPOLL_CTL_DEL, fdst.fd, NULL)) {   // sync 1
-                DebugPrint(dbg_ioblock, "task(%s) io_block clear fd=%d", tk->DebugInfo(), fdst.fd);
+            int epoll_fd = ChooseEpoll(fdst.event);
+            if (0 == epoll_ctl(epoll_fd, EPOLL_CTL_DEL, fdst.fd, NULL)) {   // sync 1
+                DebugPrint(dbg_ioblock, "task(%s) io_block clear fd=%d from epoll(%s)",
+                        tk->DebugInfo(), fdst.fd, EpollTypeName(GetEpollType(epoll_fd)));
                 // 减引用计数的条件：谁成功从epoll中删除了一个fd，谁才能减引用计数。
                 tk->DecrementRef(); // epoll use ref.
             }
@@ -180,6 +193,7 @@ int IoWait::WaitLoop(bool enable_block)
     if (!lock.try_lock())
         return c ? c : -1;
 
+    ++loop_index_;
     static epoll_event evs[1024];
     int epoll_n = 0;
     for (int epoll_type = 0; epoll_type < 2; ++epoll_type)
@@ -205,7 +219,10 @@ retry:
             // 将tk暂存, 最后再执行Cancel, 是为了poll和select可以得到正确的计数。
             // 以防Task被加入runnable列表后，被其他线程执行
             epollwait_tasks_.insert(EpollWaitSt{tk, ep->io_block_id});
-            DebugPrint(dbg_ioblock, "task(%s) epoll trigger io_block_id(%u)", tk->DebugInfo(), ep->io_block_id);
+            DebugPrint(dbg_ioblock,
+                    "task(%s) epoll(%s) trigger fd=%d io_block_id(%u) ep(%p) loop_index(%llu)",
+                    tk->DebugInfo(), EpollTypeName(epoll_type),
+                    ep->fdst->fd, ep->io_block_id, ep, (unsigned long long)loop_index_);
         }
     }
 
@@ -236,6 +253,16 @@ retry:
         }
 
     return epoll_n + c;
+}
+
+int IoWait::GetEpollType(int epoll_fd)
+{
+    if (epoll_fd == epoll_fds_[(int)EpollType::read])
+        return (int)EpollType::read;
+    else if (epoll_fd == epoll_fds_[(int)EpollType::write])
+        return (int)EpollType::write;
+    else
+        return -1;
 }
 
 int IoWait::ChooseEpoll(uint32_t event)

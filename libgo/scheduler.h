@@ -17,8 +17,8 @@
 #define DebugPrint(type, fmt, ...) \
     do { \
         if (g_Scheduler.GetOptions().debug & type) { \
-            fprintf(g_Scheduler.GetOptions().debug_output, "co_dbg[%04d] " fmt "\n", \
-                    g_Scheduler.GetCurrentThreadID(), ##__VA_ARGS__); \
+            fprintf(g_Scheduler.GetOptions().debug_output, "co_dbg[%08u][%04u] " fmt "\n", \
+                    g_Scheduler.GetCurrentProcessID(), g_Scheduler.GetCurrentThreadID(), ##__VA_ARGS__); \
         } \
     } while(0)
 
@@ -40,6 +40,7 @@ static const uint64_t dbg_syncblock         = 0x1 << 8;
 static const uint64_t dbg_timer             = 0x1 << 9;
 static const uint64_t dbg_scheduler_sleep   = 0x1 << 10;
 static const uint64_t dbg_sleepblock        = 0x1 << 11;
+static const uint64_t dbg_debugger          = 0x1 << 12;
 static const uint64_t dbg_sys_max           = dbg_sleepblock;
 ///-------------------
 
@@ -156,6 +157,9 @@ class Scheduler
 
         // 获取当前线程ID.(按执行调度器调度的顺序计)
         uint32_t GetCurrentThreadID();
+
+        // 获取当前进程ID.
+        uint32_t GetCurrentProcessID();
 
     public:
         /// sleep switch

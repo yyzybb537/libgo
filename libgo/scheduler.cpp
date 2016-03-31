@@ -259,6 +259,15 @@ uint32_t Scheduler::GetCurrentThreadID()
     return GetLocalInfo().thread_id;
 }
 
+uint32_t Scheduler::GetCurrentProcessID()
+{
+#ifndef _WIN32
+    return getpid();
+#else
+    return 0;
+#endif 
+}
+
 Task* Scheduler::GetCurrentTask()
 {
     return GetLocalInfo().current_task;

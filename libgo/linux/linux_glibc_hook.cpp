@@ -366,7 +366,23 @@ int poll(struct pollfd *fds, nfds_t nfds, int timeout)
         if (fds[i].revents) ++n;
     }
 
-    assert(n == (int)tk->GetIoWaitData().wait_successful_);
+//    /// 在一次epoll_wait调用中, 同一个fd可能会被触发多次, 此处不必做严格校验
+//    if (n != (int)tk->GetIoWaitData().wait_successful_)
+//    {
+//        DebugPrint(dbg_debugger, "task(%s) poll assert. n=%d, "
+//                "wait_successful=%d, fds_size=%d",
+//                tk->DebugInfo(),
+//                n, (int)tk->GetIoWaitData().wait_successful_,
+//                (int)tk->GetIoWaitData().wait_fds_.size());
+//
+//        for (int i = 0; i < (int)tk->GetIoWaitData().wait_fds_.size(); ++i)
+//        {
+//            fds[i].revents = EpollEvent2Poll(tk->GetIoWaitData().wait_fds_[i].epoll_ptr.revent);
+//            DebugPrint(dbg_debugger, "[%d] epoll_event=%d, poll_event=%d",
+//                    i, tk->GetIoWaitData().wait_fds_[i].epoll_ptr.revent, fds[i].revents);
+//        }
+//    }
+//    assert(n == (int)tk->GetIoWaitData().wait_successful_);
 
     return n;
 }

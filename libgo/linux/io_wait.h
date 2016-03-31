@@ -99,6 +99,7 @@ public:
 private:
     void Cancel(Task *tk, uint32_t id);
 
+    int GetEpollType(int epoll_fd);
     int ChooseEpoll(uint32_t event);
 
     struct EpollWaitSt
@@ -118,6 +119,7 @@ private:
     LFLock timeout_list_lock_;
     CoTimerMgr timer_mgr_;
     int epollwait_ms_;
+    uint64_t loop_index_;
 
     typedef TSQueue<Task> TaskList;
     TaskList wait_tasks_;
