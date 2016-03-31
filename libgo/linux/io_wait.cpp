@@ -84,7 +84,7 @@ void IoWait::SchedulerSwitch(Task* tk)
     std::vector<std::pair<int, uint32_t>> rollback_list;
     for (auto &fdst : tk->GetIoWaitData().wait_fds_)
     {
-        epoll_event ev = {fdst.event, {(void*)&fdst.epoll_ptr}};
+        epoll_event ev = {fdst.event | EPOLLONESHOT, {(void*)&fdst.epoll_ptr}};
         int epoll_fd = ChooseEpoll(fdst.event);
         tk->IncrementRef();     // 先将引用计数加一, 以防另一个线程立刻epoll_wait成功被执行完线程.
         if (-1 == epoll_ctl(epoll_fd, EPOLL_CTL_ADD, fdst.fd, &ev)) {
