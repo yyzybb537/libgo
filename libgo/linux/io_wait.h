@@ -96,11 +96,15 @@ public:
     void DelayEventWaitTime();
     void ResetEventWaitTime();
 
+    bool IsEpollCreated() const;
+
 private:
     void Cancel(Task *tk, uint32_t id);
 
+    void CreateEpoll();
     int GetEpollType(int epoll_fd);
     int ChooseEpoll(uint32_t event);
+    int GetEpoll(int type);
 
     struct EpollWaitSt
     {
@@ -113,6 +117,10 @@ private:
     };
 
     int epoll_fds_[2];
+    LFLock epoll_create_lock_;
+    int epoll_event_size_;
+    pid_t epoll_owner_pid_;
+
     LFLock epoll_lock_;
     std::set<EpollWaitSt> epollwait_tasks_;
     std::list<CoTimerPtr> timeout_list_;

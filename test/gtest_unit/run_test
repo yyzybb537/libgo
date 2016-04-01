@@ -21,6 +21,7 @@ cat result | egrep \(PASSED\|FAIL\|^----------\)
 echo ----------------------------------
 
 runs=`ls test/gtest_unit/*.t | wc -l`
+runs=`expr $runs + 1`
 pass=`grep "^\[\s*PASSED" result | wc -l`
 if [ "${pass}" -eq "${runs}" ];
 then

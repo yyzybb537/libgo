@@ -25,15 +25,9 @@ IoWait::IoWait()
 {
     loop_index_ = 0;
     epollwait_ms_ = 0;
-    for (int i = 0; i < 2; ++i)
-    {
-        epoll_fds_[i] = epoll_create(1024);
-        if (epoll_fds_[i] != -1)
-            continue;
-
-        fprintf(stderr, "CoroutineScheduler init failed. epoll create error:%s\n", strerror(errno));
-        exit(1);
-    }
+    epoll_fds_[0] = epoll_fds_[1] = -1;
+    epoll_event_size_ = 1024;
+    epoll_owner_pid_ = 0;
 }
 
 void IoWait::DelayEventWaitTime()
@@ -194,41 +188,44 @@ int IoWait::WaitLoop(bool enable_block)
         return c ? c : -1;
 
     ++loop_index_;
-    static epoll_event evs[1024];
     int epoll_n = 0;
-    for (int epoll_type = 0; epoll_type < 2; ++epoll_type)
+    if (IsEpollCreated())
     {
-retry:
-        int timeout = (enable_block && epoll_type == (int)EpollType::read && !c) ? epollwait_ms_ : 0;
-        int n = epoll_wait(epoll_fds_[epoll_type], evs, 1024, timeout);
-        if (n == -1) {
-            if (errno == EINTR) {
-                goto retry;
-            }
-            continue;
-        }
-
-        epoll_n += n;
-        DebugPrint(dbg_scheduler, "do epoll(%d) event, n = %d", epoll_type, n);
-        for (int i = 0; i < n; ++i)
+        static epoll_event *evs = new epoll_event[epoll_event_size_];
+        for (int epoll_type = 0; epoll_type < 2; ++epoll_type)
         {
-            EpollPtr* ep = (EpollPtr*)evs[i].data.ptr;
-            ep->revent = evs[i].events;
-            Task* tk = ep->tk;
-            ++tk->GetIoWaitData().wait_successful_;
-            // 将tk暂存, 最后再执行Cancel, 是为了poll和select可以得到正确的计数。
-            // 以防Task被加入runnable列表后，被其他线程执行
-            epollwait_tasks_.insert(EpollWaitSt{tk, ep->io_block_id});
-            DebugPrint(dbg_ioblock,
-                    "task(%s) epoll(%s) trigger fd=%d io_block_id(%u) ep(%p) loop_index(%llu)",
-                    tk->DebugInfo(), EpollTypeName(epoll_type),
-                    ep->fdst->fd, ep->io_block_id, ep, (unsigned long long)loop_index_);
-        }
-    }
+retry:
+            int timeout = (enable_block && epoll_type == (int)EpollType::read && !c) ? epollwait_ms_ : 0;
+            int n = epoll_wait(GetEpoll(epoll_type), evs, epoll_event_size_, timeout);
+            if (n == -1) {
+                if (errno == EINTR) {
+                    goto retry;
+                }
+                continue;
+            }
 
-    for (auto &st : epollwait_tasks_)
-        Cancel(st.tk, st.id);
-    epollwait_tasks_.clear();
+            epoll_n += n;
+            DebugPrint(dbg_scheduler, "do epoll(%d) event, n = %d", epoll_type, n);
+            for (int i = 0; i < n; ++i)
+            {
+                EpollPtr* ep = (EpollPtr*)evs[i].data.ptr;
+                ep->revent = evs[i].events;
+                Task* tk = ep->tk;
+                ++tk->GetIoWaitData().wait_successful_;
+                // 将tk暂存, 最后再执行Cancel, 是为了poll和select可以得到正确的计数。
+                // 以防Task被加入runnable列表后，被其他线程执行
+                epollwait_tasks_.insert(EpollWaitSt{tk, ep->io_block_id});
+                DebugPrint(dbg_ioblock,
+                        "task(%s) epoll(%s) trigger fd=%d io_block_id(%u) ep(%p) loop_index(%llu)",
+                        tk->DebugInfo(), EpollTypeName(epoll_type),
+                        ep->fdst->fd, ep->io_block_id, ep, (unsigned long long)loop_index_);
+            }
+        }
+
+        for (auto &st : epollwait_tasks_)
+            Cancel(st.tk, st.id);
+        epollwait_tasks_.clear();
+    }
 
     std::list<CoTimerPtr> timeout_list;
     {
@@ -265,9 +262,46 @@ int IoWait::GetEpollType(int epoll_fd)
         return -1;
 }
 
+int IoWait::GetEpoll(int type)
+{
+    CreateEpoll();
+    return epoll_fds_[type];
+}
+
 int IoWait::ChooseEpoll(uint32_t event)
 {
+    CreateEpoll();
     return (event & EPOLLIN) ? epoll_fds_[(int)EpollType::read] : epoll_fds_[(int)EpollType::write];
+}
+
+void IoWait::CreateEpoll()
+{
+    pid_t pid = getpid();
+    if (epoll_owner_pid_ == pid) return ;
+    std::unique_lock<LFLock> lock(epoll_create_lock_);
+    if (epoll_owner_pid_ == pid) return ;
+
+    epoll_owner_pid_ = pid;
+
+    epoll_event_size_ = g_Scheduler.GetOptions().epoll_event_size;
+    for (int i = 0; i < 2; ++i)
+    {
+        close(epoll_fds_[i]);
+        epoll_fds_[i] = epoll_create(epoll_event_size_);
+        if (epoll_fds_[i] != -1) {
+            DebugPrint(dbg_ioblock, "create epoll success. epollfd=%d", epoll_fds_[i]);
+            continue;
+        }
+
+        fprintf(stderr, "CoroutineScheduler init failed. epoll create error:%s\n", strerror(errno));
+        exit(1);
+    }
+
+}
+
+bool IoWait::IsEpollCreated() const
+{
+    return epoll_owner_pid_ == getpid();
 }
 
 } //namespace co

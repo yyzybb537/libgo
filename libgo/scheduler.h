@@ -90,6 +90,9 @@ struct CoroutineOptions
     // 每个定时器每帧处理的任务数量(为0表示不限, 每帧处理当前所有可以处理的任务)
     uint32_t timer_handle_every_cycle = 0;
 
+    // epoll每次触发的event数量(Windows下无效)
+    uint32_t epoll_event_size = 1024;
+
     // 开启当前协程统计功能(会有性能损耗, 默认不开启)
     bool enable_coro_stat = false;
 };
