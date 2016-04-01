@@ -1,6 +1,6 @@
 CC=g++
 CFLAGS=-std=c++11 -g -Wall
-INCLUDE=-I../src -I../src/linux
+INCLUDE=-I../libgo -I../libgo/linux
 LINK=-L.. -llibgo_main -llibgo -ldl -lboost_thread -lboost_system -lpthread
 STATIC=-static -static-libgcc -static-libstdc++
 TARGET=$(patsubst %.cpp, %.t, $(wildcard *.cpp))
@@ -12,9 +12,13 @@ all : $(TARGET)
 #	@echo "LD $@"
 #	@$(CC) $(CFLAGS) $^ -o $@ $(INCLUDE) $(LINK) $(STATIC)
 
-sample9.t: sample9.o
+sample9_curl.t: sample9_curl.o
 	@echo "LD $@"
 	@$(CC) $(CFLAGS) $^ -o $@ $(INCLUDE) $(LINK) -lcurl
+
+sample12_hiredis.t: sample12_hiredis.o
+	@echo "LD $@"
+	@$(CC) $(CFLAGS) $^ -o $@ $(INCLUDE) $(LINK) -lhiredis
 
 %.t: %.o
 	@echo "LD $@"
