@@ -51,6 +51,7 @@ else()
     endif()
     target_link_libraries(sample9_curl.t ${LINK_ARGS} rt -lcurl)
 endif()
+list(REMOVE_ITEM SRC_LIST ${PROJECT_SOURCE_DIR}/sample12_hiredis.cpp)
 
 foreach(var ${SRC_LIST})
     string(REGEX REPLACE ".*/" "" var ${var})
