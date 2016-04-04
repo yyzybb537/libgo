@@ -1,5 +1,7 @@
 #include "io_wait.h"
 #include "error.h"
+#include <algorithm>
+#include "scheduler.h"
 
 namespace co {
 
@@ -40,7 +42,7 @@ int IoWait::WaitLoop(bool enable_block)
             delete tk;
         }
     if (enable_block)
-        usleep(epollwait_ms_);
+        usleep(epollwait_ms_ * 1000);
     return 0;
 }
 
