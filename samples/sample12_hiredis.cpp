@@ -1,212 +1,319 @@
-#include <hiredis/async.h>
-#include "coroutine.h"
-#include <vector>
-#include <string>
-#include <poll.h>
+#include "sample12_hiredis.h"
 #include <sys/socket.h>
 
-class AsyncRedisContext
+std::error_code MakeRedisErrorCode(int code)
 {
-public:
-    AsyncRedisContext();
-    ~AsyncRedisContext();
-
-    // returns: error info.
-    bool Connect(std::string host, int16_t port, int timeout = 10000);
-
-    std::vector<std::string> CallCommand(std::vector<std::string> const& args);
-
-private:
-    static void OnConnectG(redisAsyncContext const* ac, int status);
-    void OnConnect(int status);
-    static void OnDisconnectG(redisAsyncContext const* ac, int status);
-    void OnDisconnect(int status);
-    static void RedisCallbackG(struct redisAsyncContext* ac, void* reply, void* privdata);
-    void RedisCallback(void* reply, void* privdata);
-
-private:
-    redisAsyncContext *ac_ = nullptr;
-    int connect_status_;
-    co_chan<void> exit_w_;
-    co_chan<void> exit_r_;
-};
-
-static void FakeFreeReplyObject(void*) {}
-
-AsyncRedisContext::AsyncRedisContext()
-{
+    static redis_error_category category;
+    return std::error_code(code, category);
 }
 
-AsyncRedisContext::~AsyncRedisContext()
+RedisPipeline::~RedisPipeline()
 {
-    if (ac_)
-        ::shutdown(ac_->c.fd, SHUT_RDWR);
-    printf("destruct begin\n");
-    exit_w_ << nullptr;
-    printf("destruct begin 2\n");
-    exit_r_ << nullptr;
-    printf("destruct end\n");
+    if (establish_) {
+        establish_ = false;
+        shutdown_c_ << nullptr << nullptr;
+        ::shutdown(ctx_->fd, SHUT_RDWR);
+        write_condition_.TryPush(nullptr);
+        exit_c_ >> nullptr >> nullptr;
+        redisFree(ctx_);
+        ctx_ = nullptr;
+    }
+
+    std::pair<reply_t, std::error_code> rt_pair;
+    rt_pair.second = MakeRedisErrorCode(err_redis_eof);
+    for (auto &c : pipeline_)
+        c << rt_pair;
+
+//    printf("RedisPipeline destruct\n");
 }
-
-bool AsyncRedisContext::Connect(std::string host, int16_t port, int timeout)
+bool RedisPipeline::Connect(const std::string & host, int16_t port, int timeout_ms)
 {
-    co_chan<bool> result;
+    if (establish_) return false;
+    timeval tv{timeout_ms / 1000, (timeout_ms % 1000) * 1000};
+    ctx_ = redisConnectWithTimeout(host.c_str(), port, tv);
+    if (!ctx_) return false;
 
-    go [=] {
-        ac_ = redisAsyncConnect(host.c_str(), port);
-        if (ac_->err) {
-            redisAsyncFree(ac_);
-            ac_ = nullptr;
-            result << false;
-            return ;
-        }
-
-        redisAsyncSetConnectCallback(ac_, &AsyncRedisContext::OnConnectG);
-        redisAsyncSetDisconnectCallback(ac_, &AsyncRedisContext::OnDisconnectG);
-        ac_->data = this;
-
-        pollfd fds;
-        fds.fd = ac_->c.fd;
-        fds.events = POLLOUT | POLLERR | POLLHUP;
-        int n = poll(&fds, 1, timeout);
-        if (n <= 0) {
-            redisAsyncFree(ac_);
-            ac_ = nullptr;
-            result << false;
-            return ;
-        }
-
-        connect_status_ = REDIS_ERR;
-        redisAsyncHandleWrite(ac_);
-        result << (connect_status_ == REDIS_OK);
-        return ;
+    go [this] {
+        this->ReadLoop();
+//        printf("ReadLoop end\n");
+        exit_c_ << nullptr;
     };
 
-    bool ret;
-    result >> ret;
-    printf("connect ok\n");
-    if (ret) {
-        ac_->c.reader->fn->freeObject = &FakeFreeReplyObject;
-
-        // write loop
-        go [this]{
-            while (!exit_w_.TryPop(nullptr)) {
-                pollfd fds;
-                fds.fd = ac_->c.fd;
-                fds.events = POLLOUT | POLLERR | POLLHUP;
-                int n = poll(&fds, 1, -1);
-                if (n <= 0)
-                    continue;
-
-                redisAsyncHandleWrite(ac_);
-            }
-
-            printf("exit write loop\n");
-        };
-
-        // recv loop
-        go [this]{
-            printf("recv 1\n");
-            while (!exit_r_.TryPop(nullptr)) {
-                printf("recv 2\n");
-                pollfd fds;
-                fds.fd = ac_->c.fd;
-                fds.events = POLLIN | POLLERR | POLLHUP;
-                int n = poll(&fds, 1, -1);
-                if (n <= 0)
-                    continue;
-
-                printf("recv 3\n");
-                redisAsyncHandleRead(ac_);
-                printf("recv 4\n");
-            }
-
-            printf("exit recv loop\n");
-        };
+    go [this] {
+        this->WriteLoop();
+//        printf("WriteLoop end\n");
+        exit_c_ << nullptr;
+    };
+    establish_ = true;
+    return true;
+}
+RedisPipeline::reply_t RedisPipeline::Call(std::string const& command, std::error_code * ec)
+{
+    if (!establish_) {
+        if (ec) *ec = MakeRedisErrorCode(err_redis_not_estab);
+        return reply_t();
     }
 
-    return ret;
-}
-
-void AsyncRedisContext::OnConnectG(redisAsyncContext const* ac, int status)
-{
-    AsyncRedisContext* self = (AsyncRedisContext*)ac->data;
-    self->OnConnect(status);
-}
-
-void AsyncRedisContext::OnConnect(int status)
-{
-    connect_status_ = status;
-}
-
-void AsyncRedisContext::OnDisconnectG(redisAsyncContext const* ac, int status)
-{
-    AsyncRedisContext* self = (AsyncRedisContext*)ac->data;
-    self->OnDisconnect(status);
-}
-
-void AsyncRedisContext::OnDisconnect(int status)
-{
-    printf("disconnected!\n");
-    //exit_channel_ << nullptr << nullptr;
-}
-
-std::vector<std::string> AsyncRedisContext::CallCommand(const std::vector<std::string> & args)
-{
-    std::vector<std::string> result;
-    if (!ac_) return result;
-
-    std::vector<const char*> c_args;
-    for (auto &arg : args)
-        c_args.push_back(arg.c_str());
-
-    co_chan<redisReply*> c;
-    size_t size = c_args.size();
-    printf("call redisAsyncCommandArgv\n");
-    if (-1 == redisAsyncCommandArgv(ac_, &AsyncRedisContext::RedisCallbackG, &c,
-                size, c_args.data(), &size)) {
-        return result;
+    if (command.empty()) {
+        if (ec) *ec = MakeRedisErrorCode(err_redis_invalid_request);
+        return reply_t();
     }
 
-    printf("wait reply\n");
-    redisReply *reply = nullptr;
-    c >> reply;
-    if (!reply)
-        return result;
-
-    // parse
-    printf("receive reply:%p\n", reply);
-
-    freeReplyObject(reply);
-    return result;
+    co_chan<std::pair<reply_t, std::error_code>> c(1);
+    std::unique_lock<co_mutex> lock(pipeline_mutex_);
+    pipeline_.push_back(c);
+    if (REDIS_ERR == redisAppendCommand(ctx_, command.c_str())) {
+        if (ec) *ec = MakeRedisErrorCode(ctx_->err);
+        pipeline_.pop_back();
+        return reply_t();
+    }
+    lock.unlock();
+    if (!writing_)
+        write_condition_.TryPush(nullptr);
+    std::pair<reply_t, std::error_code> reply_pair;
+    c >> reply_pair;
+    if (reply_pair.second && ec)
+        *ec = reply_pair.second;
+    return reply_pair.first;
 }
-void AsyncRedisContext::RedisCallbackG(struct redisAsyncContext* ac, void* reply, void* privdata)
+RedisPipeline::reply_t RedisPipeline::Call(request_t const& request, std::error_code * ec)
 {
-    AsyncRedisContext* self = (AsyncRedisContext*)ac->data;
-    self->RedisCallback(reply, privdata);
+    if (!establish_) {
+        if (ec) *ec = MakeRedisErrorCode(err_redis_not_estab);
+        return reply_t();
+    }
+
+    if (request.empty()) {
+        if (ec) *ec = MakeRedisErrorCode(err_redis_invalid_request);
+        return reply_t();
+    }
+
+    std::string command;
+    for (auto &elem : request)
+        command += elem, command += " ";
+    command.pop_back();
+    return Call(command, ec);
 }
-void AsyncRedisContext::RedisCallback(void* reply, void* privdata)
+bool RedisPipeline::Convert(reply_t & rt, redisReply *reply)
 {
-    co_chan<redisReply*> &c = *(co_chan<redisReply*> *)privdata;
-    c << (redisReply*)reply;
+    switch (reply->type) {
+        case REDIS_REPLY_ARRAY: 
+            {
+                for (size_t i = 0; i < reply->elements; ++i)
+                    if (!Convert(rt, reply->element[i]))
+                        return false;
+            } 
+            break;
+        case REDIS_REPLY_STRING:
+            {
+                rt.push_back(std::string(reply->str, reply->len));
+            } 
+            break;
+        case REDIS_REPLY_NIL:
+            {
+                rt.push_back("");
+            } 
+            break;
+        case REDIS_REPLY_INTEGER:
+        case REDIS_REPLY_STATUS:
+            {
+                rt.push_back(std::to_string(reply->integer));
+            }
+            break;
+        case REDIS_REPLY_ERROR:
+            {
+                rt.push_back(std::string(reply->str, reply->len));
+                return false;
+            }
+            break;
+        default:
+            return false;
+    }
+
+    return true;
+}
+void RedisPipeline::ReadLoop()
+{
+    while (!shutdown_c_.TryPop(nullptr)) {
+        int res = redisBufferRead(ctx_);
+        if (REDIS_ERR == res) {
+            printf("redisBufferRead eof: %s\n", ctx_->errstr);
+            return ;
+        }
+
+        for (;;) {
+            void *r = nullptr;
+            res = redisReaderGetReply(ctx_->reader, &r);
+            if (REDIS_ERR == res) {
+                printf("parse reply error\n");
+                return ;
+            }
+
+            if (!r) break;
+
+//            printf("------- recv reply -------\n");
+            co_chan<std::pair<reply_t, std::error_code>> c = pipeline_.front();
+            pipeline_.pop_front();
+            std::pair<reply_t, std::error_code> rt_pair;
+
+            if (!Convert(rt_pair.first, (redisReply*)r)) {
+                rt_pair.second = MakeRedisErrorCode(err_redis_command_error);
+            }
+            c << std::move(rt_pair);
+        }
+    }
+}
+void RedisPipeline::WriteLoop()
+{
+    while (!shutdown_c_.TryPop(nullptr)) {
+        int done;
+        if (REDIS_ERR == redisBufferWrite(ctx_, &done)) {
+            printf("redisBufferWrite error\n");
+            return ;
+        }
+
+        if (done) {
+            writing_ = false;
+            write_condition_ >> nullptr;
+            writing_ = true;
+        }
+    }
 }
 
 void call_redis()
 {
-    AsyncRedisContext stack_c;
-    AsyncRedisContext *c = &stack_c;
-    if (!c->Connect("127.0.0.1", 6379)) {
-        printf("connect error");
+    redisContext* ctx = redisConnect("127.0.0.1", 6379);
+    if (!ctx) {
+        printf("connect error\n");
+        return ;
     }
 
-//    std::vector<std::string> cmd{"dbsize"};
-//    c->CallCommand(cmd);
-//    printf("done\n");
+    for (int i = 0; i < 2; ++i)
+        if (REDIS_ERR == redisAppendCommand(ctx, "hgetall ahash")) {
+            printf("append command error\n");
+            return ;
+        }
+
+    int done;
+    for (;;) {
+        if (REDIS_ERR == redisBufferWrite(ctx, &done)) {
+            printf("redisBufferWrite error\n");
+            return ;
+        }
+
+        if (done) break;
+    }
+
+    for (;;) {
+        int res = redisBufferRead(ctx);
+        if (REDIS_ERR == res) {
+            printf("redisBufferRead error\n");
+            return ;
+        }
+
+        for (;;) {
+            void *r = nullptr;
+            res = redisReaderGetReply(ctx->reader, &r);
+            if (REDIS_ERR == res) {
+                printf("parse reply error\n");
+                return ;
+            }
+
+            if (!r) break;
+
+            printf("------- recv reply -------\n");
+
+            redisReply *reply = (redisReply *)r;
+            printf("reply type: %d\n", reply->type);
+            if (reply->type == REDIS_REPLY_INTEGER) {
+                printf("reply integer: %lld\n", reply->integer);
+            } else if (reply->type == REDIS_REPLY_ARRAY) {
+                for (size_t i = 0; i < reply->elements; ++i) {
+                    redisReply *child = reply->element[i];
+                    printf("reply[%d]: %.*s\n", (int)i, child->len, child->str);
+                }
+            }
+        }
+    }
+}
+
+void test_call(RedisPipeline &r, std::string cmd, bool output = true)
+{
+    if (output)
+        printf("call %s\n", cmd.c_str());
+    std::error_code ec;
+    RedisPipeline::reply_t reply = r.Call(cmd, &ec);
+    if (ec) {
+        printf("error: %d:%s:%s\n", ec.value(), ec.message().c_str(), reply[0].c_str());
+        return ;
+    }
+
+    if (output)
+        for (size_t i = 0; i < reply.size(); ++i) {
+            printf("reply[%d]: %s\n", (int)i, reply[i].c_str());
+        }
+}
+
+void call_redis2()
+{
+    RedisPipeline r;
+    if (!r.Connect("127.0.0.1", 6379)) {
+        printf("connect error\n");
+        return ;
+    }
+
+//    co_chan<void> exit_c;
+//    go [=, &r] { test_call(r, "hgetall ahash"); exit_c << nullptr; };
+    test_call(r, "hgetall hash");
+    test_call(r, "hget ahash");
+    test_call(r, "dbsize");
+//    exit_c >> nullptr;
+}
+
+void call_redis3()
+{
+    RedisPipeline r;
+    if (!r.Connect("127.0.0.1", 6379)) {
+        printf("connect error\n");
+        return ;
+    }
+
+    const int count = 10000;
+    const int test_seconds = 3;
+    co_chan<void> exit_c(count);
+    bool stop = false;
+    long long int total = 0;
+    for (int i = 0; i < count; ++i) {
+        go [&, exit_c] {
+            while (!stop) {
+                test_call(r, "hgetall ahash", false);
+                ++total;
+            }
+            exit_c << nullptr;
+        };
+    }
+
+    go [&] {
+        ::sleep(test_seconds);
+        stop = true;
+    };
+
+    for (int i = 0; i < count; ++i)
+        exit_c >> nullptr;
+
+    printf("%d seconds call redis %lld times.\n", test_seconds, total);
+    printf("QPS: %lld.\n", total / test_seconds);
 }
 
 co_main()
 {
-    co_sched.GetOptions().debug = co::dbg_syncblock | co::dbg_hook | co::dbg_switch;
-    go call_redis;
+//    co_sched.GetOptions().debug = co::dbg_syncblock | co::dbg_hook | co::dbg_switch;
+    printf("--------------- correct test ---------------\n");
+    go call_redis2;
+    printf("--------------------------------------------\n");
+
+    printf("--------------- benchmark test ---------------\n");
+    go call_redis3;
+    printf("--------------------------------------------\n");
     return 0;
 }
