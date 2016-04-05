@@ -105,6 +105,7 @@ bool RedisPipeline::Convert(reply_t & rt, redisReply *reply)
             } 
             break;
         case REDIS_REPLY_STRING:
+        case REDIS_REPLY_STATUS:
             {
                 rt.push_back(std::string(reply->str, reply->len));
             } 
@@ -115,7 +116,6 @@ bool RedisPipeline::Convert(reply_t & rt, redisReply *reply)
             } 
             break;
         case REDIS_REPLY_INTEGER:
-        case REDIS_REPLY_STATUS:
             {
                 rt.push_back(std::to_string(reply->integer));
             }
