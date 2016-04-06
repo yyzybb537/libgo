@@ -61,22 +61,22 @@ public:
         return impl_->TryPop(ignore);
     }
 
-    template <typename U, typename Duration>
-    bool TimedPush(U && t, Duration const& timeout) const
+    template <typename U, typename DurationOrDeadline>
+    bool TimedPush(U && t, DurationOrDeadline const& dd) const
     {
-        return impl_->TimedPush(std::forward<U>(t), timeout);
+        return impl_->TimedPush(std::forward<U>(t), dd);
     }
 
-    template <typename U, typename Duration>
-    bool TimedPop(U & t, Duration const& timeout) const
+    template <typename U, typename DurationOrDeadline>
+    bool TimedPop(U & t, DurationOrDeadline const& dd) const
     {
-        return impl_->TimedPop(t, timeout);
+        return impl_->TimedPop(t, dd);
     }
 
-    template <typename Duration>
-    bool TimedPop(nullptr_t ignore, Duration const& timeout) const
+    template <typename DurationOrDeadline>
+    bool TimedPop(nullptr_t ignore, DurationOrDeadline const& dd) const
     {
-        return impl_->TimedPop(ignore, timeout);
+        return impl_->TimedPop(ignore, dd);
     }
 
     bool Unique() const
@@ -158,10 +158,10 @@ private:
         }
 
         // write
-        template <typename U, typename Duration>
-        bool TimedPush(U && t, Duration const& dur)
+        template <typename U, typename DurationOrDeadline>
+        bool TimedPush(U && t, DurationOrDeadline const& dd)
         {
-			if (!write_block_.CoBlockWaitTimed(std::chrono::duration_cast<MininumTimeDurationType>(dur)))
+			if (!write_block_.CoBlockWaitTimed(dd))
                 return false;
 
             {
@@ -174,11 +174,11 @@ private:
         }
 
         // read
-        template <typename U, typename Duration>
-        bool TimedPop(U & t, Duration const& dur)
+        template <typename U, typename DurationOrDeadline>
+        bool TimedPop(U & t, DurationOrDeadline const& dd)
         {
             write_block_.Wakeup();
-			if (!read_block_.CoBlockWaitTimed(std::chrono::duration_cast<MininumTimeDurationType>(dur)))
+			if (!read_block_.CoBlockWaitTimed(dd))
             {
                 if (write_block_.TryBlockWait())
                     return false;
@@ -199,11 +199,11 @@ private:
         }
 
         // read and ignore
-        template <typename Duration>
-        bool TimedPop(nullptr_t ignore, Duration const& dur)
+        template <typename DurationOrDeadline>
+        bool TimedPop(nullptr_t ignore, DurationOrDeadline const& dd)
         {
             write_block_.Wakeup();
-            if (!read_block_.CoBlockWaitTimed(std::chrono::duration_cast<MininumTimeDurationType>(dur)))
+            if (!read_block_.CoBlockWaitTimed(dd))
             {
                 if (write_block_.TryBlockWait())
                     return false;
@@ -318,16 +318,16 @@ public:
         return impl_->TryPop(ignore);
     }
 
-    template <typename Duration>
-    bool TimedPush(nullptr_t ignore, Duration const& timeout) const
+    template <typename DurationOrDeadline>
+    bool TimedPush(nullptr_t ignore, DurationOrDeadline const& dd) const
     {
-        return impl_->TimedPush(ignore, timeout);
+        return impl_->TimedPush(ignore, dd);
     }
 
-    template <typename Duration>
-    bool TimedPop(nullptr_t ignore, Duration const& timeout) const
+    template <typename DurationOrDeadline>
+    bool TimedPop(nullptr_t ignore, DurationOrDeadline const& dd) const
     {
-        return impl_->TimedPop(ignore, timeout);
+        return impl_->TimedPop(ignore, dd);
     }
 
     bool Unique() const
@@ -376,10 +376,10 @@ private:
         }
 
         // write
-        template <typename Duration>
-        bool TimedPush(nullptr_t ignore, Duration const& dur)
+        template <typename DurationOrDeadline>
+        bool TimedPush(nullptr_t ignore, DurationOrDeadline const& dd)
         {
-			if (!write_block_.CoBlockWaitTimed(std::chrono::duration_cast<MininumTimeDurationType>(dur)))
+			if (!write_block_.CoBlockWaitTimed(dd))
                 return false;
 
             read_block_.Wakeup();
@@ -387,11 +387,11 @@ private:
         }
 
         // read
-        template <typename Duration>
-        bool TimedPop(nullptr_t ignore, Duration const& dur)
+        template <typename DurationOrDeadline>
+        bool TimedPop(nullptr_t ignore, DurationOrDeadline const& dd)
         {
             write_block_.Wakeup();
-			if (!read_block_.CoBlockWaitTimed(std::chrono::duration_cast<MininumTimeDurationType>(dur)))
+			if (!read_block_.CoBlockWaitTimed(dd))
             {
                 if (write_block_.TryBlockWait())
                     return false;

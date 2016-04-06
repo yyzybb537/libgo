@@ -27,6 +27,23 @@ public:
     // @returns: 是否成功等到信号
 	bool CoBlockWaitTimed(MininumTimeDurationType timeo);
 
+    template <typename R, typename P>
+    bool CoBlockWaitTimed(std::chrono::duration<R, P> duration)
+    {
+        return CoBlockWaitTimed(std::chrono::duration_cast<MininumTimeDurationType>(duration));
+    }
+
+    template <typename DeadlineType>
+    bool CoBlockWaitTimed(DeadlineType deadline)
+    {
+        auto now = std::chrono::system_clock::now();
+        if (deadline < now)
+            return CoBlockWaitTimed(MininumTimeDurationType(0));
+
+        return CoBlockWaitTimed(std::chrono::duration_cast<MininumTimeDurationType>
+                (deadline - std::chrono::system_clock::now()));
+    }
+
     bool TryBlockWait();
 
     bool Wakeup();
