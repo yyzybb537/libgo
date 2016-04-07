@@ -345,6 +345,58 @@ TEST(Channel, capacity1Try)
     }
 }
 
+TEST(Channel, capacity0TimedTypes)
+{
+    {
+        co_chan<int> ch;
+
+        // block try
+        go [=] {
+            auto s = system_clock::now();
+            bool ok = ch.TimedPush(1, seconds(1));
+            auto e = system_clock::now();
+            auto c = duration_cast<milliseconds>(e - s).count();
+            EXPECT_FALSE(ok);
+            EXPECT_GT(c, 999);
+            EXPECT_LT(c, 1064);
+        };
+        g_Scheduler.RunUntilNoTask();
+    }
+
+    {
+        co_chan<int> ch;
+
+        // block try
+        auto deadline = std::chrono::system_clock::now() + milliseconds(32);
+        go [=] {
+            auto s = system_clock::now();
+            bool ok = ch.TimedPush(1, deadline);
+            auto e = system_clock::now();
+            auto c = duration_cast<milliseconds>(e - s).count();
+            EXPECT_FALSE(ok);
+            EXPECT_GT(c, 30);
+            EXPECT_LT(c, 64);
+        };
+        g_Scheduler.RunUntilNoTask();
+    }
+
+    {
+        co_chan<int> ch;
+
+        // block try
+        go [=] {
+            auto s = system_clock::now();
+            bool ok = ch.TimedPush(1, std::chrono::duration_cast<MininumTimeDurationType>(milliseconds(32)));
+            auto e = system_clock::now();
+            auto c = duration_cast<milliseconds>(e - s).count();
+            EXPECT_FALSE(ok);
+            EXPECT_GT(c, 31);
+            EXPECT_LT(c, 64);
+        };
+        g_Scheduler.RunUntilNoTask();
+    }
+}
+
 TEST(Channel, capacity0Timed)
 {
     {
