@@ -125,8 +125,11 @@ IoWaitData& Task::GetIoWaitData()
 
 const char* Task::DebugInfo()
 {
-    if (debug_info_.empty())
+    if (debug_info_.empty()) {
         debug_info_ = std::to_string(id_);
+        if (location_.file_)
+            debug_info_ += " :" + location_.to_string();
+    }
 
     return debug_info_.c_str();
 }

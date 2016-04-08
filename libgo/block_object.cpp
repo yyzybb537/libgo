@@ -10,7 +10,9 @@ namespace co
 
 BlockObject::BlockObject(std::size_t init_wakeup, std::size_t max_wakeup)
     : wakeup_(init_wakeup), max_wakeup_(max_wakeup)
-{}
+{
+    DebugPrint(dbg_syncblock, "BlockObject::BlockObject this=%p", this);
+}
 
 BlockObject::~BlockObject()
 {
@@ -21,6 +23,8 @@ BlockObject::~BlockObject()
     if (!wait_queue_.empty()) {
         ThrowError(eCoErrorCode::ec_block_object_waiting);
     }
+
+    DebugPrint(dbg_syncblock, "BlockObject::~BlockObject this=%p", this);
 }
 
 void BlockObject::CoBlockWait()
@@ -107,11 +111,15 @@ bool BlockObject::Wakeup()
     lock.unlock();
 
     tk->block_ = nullptr;
+    if (tk->block_timer_) { // block cancel timer必须在lock之外, 因为里面会lock
+        g_Scheduler.BlockCancelTimer(tk->block_timer_);
+        tk->block_timer_.reset();
+    }
     DebugPrint(dbg_syncblock, "wakeup task(%s).", tk->DebugInfo());
     g_Scheduler.AddTaskRunnable(tk);
     return true;
 }
-void BlockObject::CancelWait(Task* tk, uint32_t block_sequence)
+void BlockObject::CancelWait(Task* tk, uint32_t block_sequence, bool in_timer)
 {
     std::unique_lock<LFLock> lock(lock_);
     if (tk->block_ != this) {
@@ -132,6 +140,10 @@ void BlockObject::CancelWait(Task* tk, uint32_t block_sequence)
     lock.unlock();
 
     tk->block_ = nullptr;
+    if (!in_timer && tk->block_timer_) { // block cancel timer必须在lock之外, 因为里面会lock
+        g_Scheduler.BlockCancelTimer(tk->block_timer_);
+        tk->block_timer_.reset();
+    }
     tk->is_block_timeout_ = true;
     DebugPrint(dbg_syncblock, "cancelwait task(%s).", tk->DebugInfo());
     g_Scheduler.AddTaskRunnable(tk);
@@ -152,17 +164,24 @@ bool BlockObject::AddWaitTask(Task* tk)
     }
 
     wait_queue_.push(tk);
+    DebugPrint(dbg_syncblock, "add wait task(%s). timeout=%ld", tk->DebugInfo(),
+            (long int)std::chrono::duration_cast<std::chrono::milliseconds>(tk->block_timeout_).count());
 
     // 带超时的, 增加定时器
 	if (MininumTimeDurationType::zero() != tk->block_timeout_) {
         uint32_t seq = tk->block_sequence_;
         tk->IncrementRef();
-        lock.unlock(); // sequence记录完成, task引用计数增加, 可以解锁了
-
-        g_Scheduler.ExpireAt(tk->block_timeout_, [=]{
-                if (tk->block_sequence_ == seq)
-                    this->CancelWait(tk, seq);
-                tk->DecrementRef();
+        tk->block_timer_ = g_Scheduler.ExpireAt(tk->block_timeout_, [=]{
+                    // 此定时器超过block_object生命期时会crash或死锁,
+                    // 所以wakeup或cancelwait时一定要kill此定时器
+                    if (tk->block_sequence_ == seq) {
+                        DebugPrint(dbg_syncblock,
+                            "wait timeout, will cancelwait task(%s). this=%p, tk->block_=%p, seq=%u, timeout=%ld",
+                            tk->DebugInfo(), this, tk->block_, seq,
+                            (long int)std::chrono::duration_cast<std::chrono::milliseconds>(tk->block_timeout_).count());
+                        this->CancelWait(tk, seq, true);
+                    }
+                    tk->DecrementRef();
                 });
     }
 

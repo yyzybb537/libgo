@@ -323,4 +323,21 @@ ThreadPool& Scheduler::GetThreadPool()
     return *thread_pool_;
 }
 
+uint64_t codebug_GetDebugOptions()
+{
+    return g_Scheduler.GetOptions().debug;
+}
+FILE* codebug_GetDebugOutput()
+{
+    return g_Scheduler.GetOptions().debug_output;
+}
+uint32_t codebug_GetCurrentProcessID()
+{
+    return g_Scheduler.GetCurrentProcessID();
+}
+uint32_t codebug_GetCurrentThreadID()
+{
+    return g_Scheduler.GetCurrentThreadID();
+}
+
 } //namespace co

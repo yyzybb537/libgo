@@ -116,6 +116,7 @@ struct Task
 
     BlockObject* block_ = nullptr;      // sys_block等待的block对象
     uint32_t block_sequence_ = 0;       // sys_block等待序号(用于做超时校验)
+    CoTimerPtr block_timer_;         // sys_block带超时等待所用的timer
 	MininumTimeDurationType block_timeout_{ 0 }; // sys_block超时时间
     bool is_block_timeout_ = false;     // sys_block的等待是否超时
 
