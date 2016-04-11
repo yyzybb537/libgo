@@ -1,9 +1,13 @@
 TODO:
-重新尝试boost.context\boost.coroutine
-增加编译选项：ENABLE_BOOST_COROUTINE  DISABLE_HOOK  ENABLE_SEGMENTED_STACK
-增加适用于协程版的shared_ptr.(使用shared_ptr指向的对象时, 协程切换, 其他协程可能删除此对象)
+支持多个线程poll同一个fd
+HOOK close接口, 正确模拟阻塞式read/write中被close时的行为
+改进定时器, 从双红黑树改为单红黑树, 提升性能
+支持同时等待多个Channel
+优化性能, HOOK的syscall中减少syscall的调用, 使用缓存数据, 避免频繁切换内核态
+协程亲缘性
+打造类似TLS的CLS(协程局部对象)
 Work Stealing...
-HOOK select poll时, 正确处理文件句柄
+HOOK select poll时, 正确处理文件等非socket句柄
 
 DONE:
 支持exception
@@ -29,4 +33,6 @@ select中对exceptfds正确检测!
         Hook List: accept connect select WSARecv WSASend
     2.ucontext->windows.fiber
 WIN HOOK: send recv WSARecv** WSASend**
+重新尝试boost.context\boost.coroutine
+增加编译选项：ENABLE_BOOST_COROUTINE  DISABLE_HOOK  ENABLE_SEGMENTED_STACK
 
