@@ -1,6 +1,6 @@
 TODO:
 支持多个线程poll同一个fd
-HOOK close接口, 正确模拟阻塞式read/write中被close时的行为
+HOOK close接口, 正确模拟阻塞式read/write中被close时的行为(对fd引用计数,归0时close?)
 改进定时器, 从双红黑树改为单红黑树, 提升性能
 支持同时等待多个Channel
 优化性能, HOOK的syscall中减少syscall的调用, 使用缓存数据, 避免频繁切换内核态
