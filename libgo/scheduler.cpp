@@ -82,7 +82,7 @@ uint32_t Scheduler::Run()
         if (lock.try_lock() && proc_count < op.processer_count) {
             uint32_t i = proc_count;
             for (; i < op.processer_count; ++i) {
-                Processer *proc = new Processer(op.stack_size);
+                Processer* proc = new Processer(op.stack_size);
                 run_proc_list_.push(proc);
             }
 
@@ -146,7 +146,7 @@ uint32_t Scheduler::DoRunnable()
             uint32_t popn = average > ti ? (average - ti) : 0;
             if (popn) {
                 static int sc = 0;
-                SList<Task> s = run_tasks_.pop(popn);
+                SList<Task> s(run_tasks_.pop(popn));
                 auto it = s.begin();
                 while (it != s.end())
                     proc->AddTaskRunnable(&*it++);
@@ -273,17 +273,9 @@ Task* Scheduler::GetCurrentTask()
     return GetLocalInfo().current_task;
 }
 
-void Scheduler::IOBlockSwitch(int fd, uint32_t event, int timeout_ms)
+void Scheduler::IOBlockSwitch()
 {
-    std::vector<FdStruct> fdst(1);
-    fdst[0].fd = fd;
-    fdst[0].event = event;
-    IOBlockSwitch(std::move(fdst), timeout_ms);
-}
-
-void Scheduler::IOBlockSwitch(std::vector<FdStruct> && fdsts, int timeout_ms)
-{
-    io_wait_.CoSwitch(std::move(fdsts), timeout_ms);
+    io_wait_.CoSwitch();
 }
 
 void Scheduler::SleepSwitch(int timeout_ms)

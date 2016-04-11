@@ -7,6 +7,7 @@
 #include <assert.h>
 #include <chrono>
 #include "scheduler.h"
+#include "fd_context.h"
 using namespace co;
 
 namespace co {
@@ -15,6 +16,59 @@ namespace co {
 
 template <typename OriginF, typename ... Args>
 static ssize_t read_write_mode(int fd, OriginF fn, const char* hook_fn_name, uint32_t event, int timeout_so, Args && ... args)
+{
+    Task* tk = g_Scheduler.GetCurrentTask();
+    DebugPrint(dbg_hook, "task(%s) hook %s. %s coroutine.",
+            tk ? tk->DebugInfo() : "nil", hook_fn_name, g_Scheduler.IsCoroutine() ? "In" : "Not in");
+
+    FdCtxPtr fd_ctx = FdManager::getInstance().get_fd_ctx(fd);
+    if (!fd_ctx) {
+        errno = EBADF;
+        return -1;
+    }
+
+    timeval tv;
+    fd_ctx->get_time_o(timeout_so, &tv);
+    int timeout_ms = tv.tv_sec * 1000 + tv.tv_usec / 1000;
+    auto start = std::chrono::system_clock::now();
+
+retry:
+    ssize_t n = fn(fd, std::forward<Args>(args)...);
+    if (n == -1 && (errno == EAGAIN || errno == EWOULDBLOCK)) {
+        int poll_timeout = 0;
+        if (!timeout_ms)
+            poll_timeout = -1;
+        else {
+            int expired = std::chrono::duration_cast<std::chrono::milliseconds>(
+                    std::chrono::system_clock::now() - start).count();
+            if (expired > timeout_ms) {
+                errno = EAGAIN;
+                return -1;  // 已超时
+            }
+
+            // 剩余的等待时间
+            poll_timeout = timeout_ms - expired;
+        }
+
+        pollfd pfd;
+        pfd.fd = fd;
+        pfd.events = event | POLLERR | POLLHUP;
+        int triggers = poll(&pfd, 1, poll_timeout);
+        if (-1 == triggers) {
+            return -1;
+        } else if (0 == triggers) {  // poll等待超时
+            errno = EAGAIN;
+            return -1;
+        }
+
+        goto retry;     // 事件触发 OR epoll惊群效应
+    }
+
+    return n;
+}
+
+template <typename OriginF, typename ... Args>
+static ssize_t OLD_READ_WRITE_MODE(int fd, OriginF fn, const char* hook_fn_name, uint32_t event, int timeout_so, Args && ... args)
 {
     Task* tk = g_Scheduler.GetCurrentTask();
     DebugPrint(dbg_hook, "task(%s) hook %s. %s coroutine.",
@@ -219,91 +273,71 @@ int connect(int fd, const struct sockaddr *addr, socklen_t addrlen)
 int accept(int sockfd, struct sockaddr *addr, socklen_t *addrlen)
 {
     if (!accept_f) coroutine_hook_init();
-    return read_write_mode(sockfd, accept_f, "accept", EPOLLIN, SO_RCVTIMEO, addr, addrlen);
+    return read_write_mode(sockfd, accept_f, "accept", POLLIN, SO_RCVTIMEO, addr, addrlen);
 }
 
 ssize_t read(int fd, void *buf, size_t count)
 {
     if (!read_f) coroutine_hook_init();
-    return read_write_mode(fd, read_f, "read", EPOLLIN, SO_RCVTIMEO, buf, count);
+    return read_write_mode(fd, read_f, "read", POLLIN, SO_RCVTIMEO, buf, count);
 }
 
 ssize_t readv(int fd, const struct iovec *iov, int iovcnt)
 {
     if (!readv_f) coroutine_hook_init();
-    return read_write_mode(fd, readv_f, "readv", EPOLLIN, SO_RCVTIMEO, iov, iovcnt);
+    return read_write_mode(fd, readv_f, "readv", POLLIN, SO_RCVTIMEO, iov, iovcnt);
 }
 
 ssize_t recv(int sockfd, void *buf, size_t len, int flags)
 {
     if (!recv_f) coroutine_hook_init();
-    return read_write_mode(sockfd, recv_f, "recv", EPOLLIN, SO_RCVTIMEO, buf, len, flags);
+    return read_write_mode(sockfd, recv_f, "recv", POLLIN, SO_RCVTIMEO, buf, len, flags);
 }
 
 ssize_t recvfrom(int sockfd, void *buf, size_t len, int flags,
         struct sockaddr *src_addr, socklen_t *addrlen)
 {
     if (!recvfrom_f) coroutine_hook_init();
-    return read_write_mode(sockfd, recvfrom_f, "recvfrom", EPOLLIN, SO_RCVTIMEO, buf, len, flags,
+    return read_write_mode(sockfd, recvfrom_f, "recvfrom", POLLIN, SO_RCVTIMEO, buf, len, flags,
             src_addr, addrlen);
 }
 
 ssize_t recvmsg(int sockfd, struct msghdr *msg, int flags)
 {
     if (!recvmsg_f) coroutine_hook_init();
-    return read_write_mode(sockfd, recvmsg_f, "recvmsg", EPOLLIN, SO_RCVTIMEO, msg, flags);
+    return read_write_mode(sockfd, recvmsg_f, "recvmsg", POLLIN, SO_RCVTIMEO, msg, flags);
 }
 
 ssize_t write(int fd, const void *buf, size_t count)
 {
     if (!write_f) coroutine_hook_init();
-    return read_write_mode(fd, write_f, "write", EPOLLOUT, SO_SNDTIMEO, buf, count);
+    return read_write_mode(fd, write_f, "write", POLLOUT, SO_SNDTIMEO, buf, count);
 }
 
 ssize_t writev(int fd, const struct iovec *iov, int iovcnt)
 {
     if (!writev_f) coroutine_hook_init();
-    return read_write_mode(fd, writev_f, "writev", EPOLLOUT, SO_SNDTIMEO, iov, iovcnt);
+    return read_write_mode(fd, writev_f, "writev", POLLOUT, SO_SNDTIMEO, iov, iovcnt);
 }
 
 ssize_t send(int sockfd, const void *buf, size_t len, int flags)
 {
     if (!send_f) coroutine_hook_init();
-    return read_write_mode(sockfd, send_f, "send", EPOLLOUT, SO_SNDTIMEO, buf, len, flags);
+    return read_write_mode(sockfd, send_f, "send", POLLOUT, SO_SNDTIMEO, buf, len, flags);
 }
 
 ssize_t sendto(int sockfd, const void *buf, size_t len, int flags,
         const struct sockaddr *dest_addr, socklen_t addrlen)
 {
     if (!sendto_f) coroutine_hook_init();
-    return read_write_mode(sockfd, sendto_f, "sendto", EPOLLOUT, SO_SNDTIMEO, buf, len, flags,
+    return read_write_mode(sockfd, sendto_f, "sendto", POLLOUT, SO_SNDTIMEO, buf, len, flags,
             dest_addr, addrlen);
 }
 
 ssize_t sendmsg(int sockfd, const struct msghdr *msg, int flags)
 {
     if (!sendmsg_f) coroutine_hook_init();
-    return read_write_mode(sockfd, sendmsg_f, "sendmsg", EPOLLOUT, SO_SNDTIMEO, msg, flags);
-}
-
-static uint32_t PollEvent2Epoll(short events)
-{
-    uint32_t e = 0;
-    if (events & POLLIN)   e |= EPOLLIN;
-    if (events & POLLOUT)  e |= EPOLLOUT;
-    if (events & POLLHUP)  e |= EPOLLHUP;
-    if (events & POLLERR)  e |= EPOLLERR;
-    return e;
-}
-
-static short EpollEvent2Poll(uint32_t events)
-{
-    short e = 0;
-    if (events & EPOLLIN)  e |= POLLIN;
-    if (events & EPOLLOUT) e |= POLLOUT;
-    if (events & EPOLLHUP) e |= POLLHUP;
-    if (events & EPOLLERR) e |= POLLERR;
-    return e;
+    return read_write_mode(sockfd, sendmsg_f, "sendmsg", POLLOUT, SO_SNDTIMEO, msg, flags);
 }
 
 int poll(struct pollfd *fds, nfds_t nfds, int timeout)
@@ -316,7 +350,7 @@ int poll(struct pollfd *fds, nfds_t nfds, int timeout)
             (int)nfds, timeout,
             g_Scheduler.IsCoroutine() ? "In" : "Not in");
 
-    if (!g_Scheduler.IsCoroutine())
+    if (!tk)
         return poll_f(fds, nfds, timeout);
 
     if (timeout == 0)
@@ -328,150 +362,170 @@ int poll(struct pollfd *fds, nfds_t nfds, int timeout)
         return 0;
     }
 
-    std::vector<FdStruct> fdsts;
+    // test nonblock poll
+    int res = poll_f(fds, nfds, 0);
+    if (res != 0)
+        return res;
+
+    // create io-sentry
+    IoSentryPtr io_sentry = MakeShared<IoSentry>(tk, fds, nfds);
+
+    // add file descriptor into epoll or poll.
+    bool added = false;
     for (nfds_t i = 0; i < nfds; ++i) {
-        fdsts.emplace_back();
-        fdsts.back().fd = fds[i].fd;
-        fdsts.back().event = PollEvent2Epoll(fds[i].events);
-        DebugPrint(dbg_hook, "hook poll task(%s), fd[%d]=%d.",
-                tk->DebugInfo(), (int)i, fds[i].fd);
+        fds[i].revents = 0;     // clear revents
+        pollfd & pfd = io_sentry->watch_fds_[i];
+        FdCtxPtr fd_ctx = FdManager::getInstance().get_fd_ctx(pfd.fd);
+        if (!fd_ctx || fd_ctx->closing()) {
+            // bad file descriptor
+            pfd.revents = POLLNVAL;
+            continue;
+        }
+        if (!fd_ctx->add_into_reactor(pfd.events, io_sentry)) {
+            pfd.revents = POLLNVAL;
+            continue;
+        }
+
+        added = true;
     }
 
-    // add into epoll, and switch other context.
-    g_Scheduler.IOBlockSwitch(std::move(fdsts), timeout);
-    bool is_timeout = false; // 是否超时
-    if (tk->GetIoWaitData().io_block_timer_) {
-        is_timeout = true;
-        if (g_Scheduler.BlockCancelTimer(tk->GetIoWaitData().io_block_timer_)) {
-            tk->DecrementRef(); // timer use ref.
-            is_timeout = false;
-        }
+    if (!added) {
+        errno = 0;
+        return nfds;
     }
 
-    if (tk->GetIoWaitData().wait_successful_ == 0) {
-        if (is_timeout) {
-            errno = 0;
-            return 0;
-        } else {
-            // 加入epoll失败
-            if (timeout > 0)
-                g_Scheduler.SleepSwitch(timeout);
-            return poll_f(fds, nfds, 0);
-        }
+    // set timer
+    if (timeout > 0)
+        io_sentry->timer_ = g_Scheduler.ExpireAt(
+                std::chrono::milliseconds(timeout),
+                [io_sentry]{
+                    g_Scheduler.IOBlockTriggered(io_sentry);
+                });
+
+    // save io-sentry
+    tk->io_sentry_ = io_sentry;
+
+    // yield
+    g_Scheduler.IOBlockSwitch();
+
+    // clear task->io_sentry_ reference count
+    tk->io_sentry_.reset();
+
+    if (io_sentry->timer_) {
+        g_Scheduler.CancelTimer(io_sentry->timer_);
+        io_sentry->timer_.reset();
     }
 
     int n = 0;
-    for (int i = 0; i < (int)tk->GetIoWaitData().wait_fds_.size(); ++i)
-    {
-        fds[i].revents = EpollEvent2Poll(tk->GetIoWaitData().wait_fds_[i].epoll_ptr.revent);
+    for (nfds_t i = 0; i < nfds; ++i) {
+        fds[i].revents = io_sentry->watch_fds_[i].revents;
         if (fds[i].revents) ++n;
     }
-
-    assert(n == (int)tk->GetIoWaitData().wait_successful_);
+    errno = 0;
     return n;
 }
 
 int select(int nfds, fd_set *readfds, fd_set *writefds,
         fd_set *exceptfds, struct timeval *timeout)
 {
-    if (!select_f) coroutine_hook_init();
-
-    int timeout_ms = -1;
-    if (timeout)
-        timeout_ms = timeout->tv_sec * 1000 + timeout->tv_usec / 1000;
-
-    Task* tk = g_Scheduler.GetCurrentTask();
-    DebugPrint(dbg_hook, "task(%s) hook select(nfds=%d, rd_set=%p, wr_set=%p, er_set=%p, timeout=%d ms).",
-            tk ? tk->DebugInfo() : "nil",
-            (int)nfds, readfds, writefds, exceptfds, timeout_ms);
-
-    if (!tk)
-        return select_f(nfds, readfds, writefds, exceptfds, timeout);
-
-    if (timeout_ms == 0)
-        return select_f(nfds, readfds, writefds, exceptfds, timeout);
-
-    if (!nfds && !readfds && !writefds && !exceptfds && timeout) {
-        g_Scheduler.SleepSwitch(timeout_ms);
-        return 0;
-    }
-
-    nfds = std::min<int>(nfds, FD_SETSIZE);
-    std::pair<fd_set*, uint32_t> sets[3] =
-    {
-        {readfds, EPOLLIN | EPOLLERR | EPOLLHUP},
-        {writefds, EPOLLOUT},
-        {exceptfds, EPOLLERR | EPOLLHUP}
-    };
-
-    static const char* set_names[] = {"readfds", "writefds", "exceptfds"};
-    std::vector<FdStruct> fdsts;
-    for (int i = 0; i < nfds; ++i) {
-        FdStruct *fdst = NULL;
-        for (int si = 0; si < 3; ++si) {
-            if (!sets[si].first)
-                continue;
-
-            if (!FD_ISSET(i, sets[si].first))
-                continue;
-
-            if (!fdst) {
-                fdsts.emplace_back();
-                fdst = &fdsts.back();
-                fdst->fd = i;
-            }
-
-            fdsts.back().event |= sets[si].second;
-            DebugPrint(dbg_hook, "task(%s) hook select %s(%d)",
-                    tk->DebugInfo(), set_names[si], (int)i);
-        }
-    }
-
-    g_Scheduler.IOBlockSwitch(std::move(fdsts), timeout_ms);
-    bool is_timeout = false;
-    if (tk->GetIoWaitData().io_block_timer_) {
-        is_timeout = true;
-        if (g_Scheduler.BlockCancelTimer(tk->GetIoWaitData().io_block_timer_)) {
-            is_timeout = false;
-            tk->DecrementRef(); // timer use ref.
-        }
-    }
-
-    if (tk->GetIoWaitData().wait_successful_ == 0) {
-        if (is_timeout) {
-            if (readfds) FD_ZERO(readfds);
-            if (writefds) FD_ZERO(writefds);
-            if (exceptfds) FD_ZERO(exceptfds);
-            errno = 0;
-            return 0;
-        } else {
-            if (timeout_ms > 0)
-                g_Scheduler.SleepSwitch(timeout_ms);
-            timeval immedaitely = {0, 0};
-            return select_f(nfds, readfds, writefds, exceptfds, &immedaitely);
-        }
-    }
-
-    int n = 0;
-    for (auto &fdst : tk->GetIoWaitData().wait_fds_) {
-        int fd = fdst.fd;
-        for (int si = 0; si < 3; ++si) {
-            if (!sets[si].first)
-                continue;
-
-            if (!FD_ISSET(fd, sets[si].first))
-                continue;
-
-            if (sets[si].second & fdst.epoll_ptr.revent) {
-                ++n;
-                continue;
-            }
-
-            FD_CLR(fd, sets[si].first);
-        }
-    }
-
-    return n;
+//    if (!select_f) coroutine_hook_init();
+//
+//    int timeout_ms = -1;
+//    if (timeout)
+//        timeout_ms = timeout->tv_sec * 1000 + timeout->tv_usec / 1000;
+//
+//    Task* tk = g_Scheduler.GetCurrentTask();
+//    DebugPrint(dbg_hook, "task(%s) hook select(nfds=%d, rd_set=%p, wr_set=%p, er_set=%p, timeout=%d ms).",
+//            tk ? tk->DebugInfo() : "nil",
+//            (int)nfds, readfds, writefds, exceptfds, timeout_ms);
+//
+//    if (!tk)
+//        return select_f(nfds, readfds, writefds, exceptfds, timeout);
+//
+//    if (timeout_ms == 0)
+//        return select_f(nfds, readfds, writefds, exceptfds, timeout);
+//
+//    if (!nfds && !readfds && !writefds && !exceptfds && timeout) {
+//        g_Scheduler.SleepSwitch(timeout_ms);
+//        return 0;
+//    }
+//
+//    nfds = std::min<int>(nfds, FD_SETSIZE);
+//    std::pair<fd_set*, uint32_t> sets[3] =
+//    {
+//        {readfds, EPOLLIN | EPOLLERR | EPOLLHUP},
+//        {writefds, EPOLLOUT},
+//        {exceptfds, EPOLLERR | EPOLLHUP}
+//    };
+//
+//    static const char* set_names[] = {"readfds", "writefds", "exceptfds"};
+//    std::vector<FdStruct> fdsts;
+//    for (int i = 0; i < nfds; ++i) {
+//        FdStruct *fdst = NULL;
+//        for (int si = 0; si < 3; ++si) {
+//            if (!sets[si].first)
+//                continue;
+//
+//            if (!FD_ISSET(i, sets[si].first))
+//                continue;
+//
+//            if (!fdst) {
+//                fdsts.emplace_back();
+//                fdst = &fdsts.back();
+//                fdst->fd = i;
+//            }
+//
+//            fdsts.back().event |= sets[si].second;
+//            DebugPrint(dbg_hook, "task(%s) hook select %s(%d)",
+//                    tk->DebugInfo(), set_names[si], (int)i);
+//        }
+//    }
+//
+//    g_Scheduler.IOBlockSwitch(std::move(fdsts), timeout_ms);
+//    bool is_timeout = false;
+//    if (tk->GetIoWaitData().io_block_timer_) {
+//        is_timeout = true;
+//        if (g_Scheduler.BlockCancelTimer(tk->GetIoWaitData().io_block_timer_)) {
+//            is_timeout = false;
+//            tk->DecrementRef(); // timer use ref.
+//        }
+//    }
+//
+//    if (tk->GetIoWaitData().wait_successful_ == 0) {
+//        if (is_timeout) {
+//            if (readfds) FD_ZERO(readfds);
+//            if (writefds) FD_ZERO(writefds);
+//            if (exceptfds) FD_ZERO(exceptfds);
+//            errno = 0;
+//            return 0;
+//        } else {
+//            if (timeout_ms > 0)
+//                g_Scheduler.SleepSwitch(timeout_ms);
+//            timeval immedaitely = {0, 0};
+//            return select_f(nfds, readfds, writefds, exceptfds, &immedaitely);
+//        }
+//    }
+//
+//    int n = 0;
+//    for (auto &fdst : tk->GetIoWaitData().wait_fds_) {
+//        int fd = fdst.fd;
+//        for (int si = 0; si < 3; ++si) {
+//            if (!sets[si].first)
+//                continue;
+//
+//            if (!FD_ISSET(fd, sets[si].first))
+//                continue;
+//
+//            if (sets[si].second & fdst.epoll_ptr.revent) {
+//                ++n;
+//                continue;
+//            }
+//
+//            FD_CLR(fd, sets[si].first);
+//        }
+//    }
+//
+//    return n;
 }
 
 unsigned int sleep(unsigned int seconds)

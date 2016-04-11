@@ -11,9 +11,6 @@ namespace co
 uint64_t Task::s_id = 0;
 std::atomic<uint64_t> Task::s_task_count{0};
 
-std::list<Task::DeleteListPtr> Task::s_delete_lists;
-LFLock Task::s_delete_lists_lock;
-
 LFLock Task::s_stat_lock;
 std::set<Task*> Task::s_stat_set;
 
@@ -70,11 +67,16 @@ Task::Task(TaskF const& fn, std::size_t stack_size)
 
 Task::~Task()
 {
-    --s_task_count;
-    if (io_wait_data_) {
-        delete io_wait_data_;
-        io_wait_data_ = nullptr;
+    assert(!this->prev);
+    assert(!this->next);
+    assert(!this->check_);
+
+    if (Scheduler::getInstance().GetOptions().enable_coro_stat) {
+        std::unique_lock<LFLock> lock(s_stat_lock);
+        s_stat_set.erase(this);
     }
+
+    --s_task_count;
 }
 
 void Task::InitLocation(const char* file, int lineno)
@@ -114,15 +116,6 @@ void Task::SetDebugInfo(std::string const& info)
     debug_info_ = info + "(" + std::to_string(id_) + ")";
 }
 
-IoWaitData& Task::GetIoWaitData()
-{
-    // 首次进入不会并行, 所以无需加锁
-    if (!io_wait_data_)
-        io_wait_data_ = new IoWaitData;
-
-    return *io_wait_data_;
-}
-
 const char* Task::DebugInfo()
 {
     if (debug_info_.empty()) {
@@ -137,58 +130,6 @@ const char* Task::DebugInfo()
 uint64_t Task::GetTaskCount()
 {
     return s_task_count;
-}
-
-void Task::PopDeleteList(std::vector<SList<Task>> & output)
-{
-    std::unique_lock<LFLock> lock(s_delete_lists_lock);
-    for (auto &sp : s_delete_lists)
-    {
-        SList<Task> s = sp->pop_all();
-        output.push_back(s);
-    }
-}
-
-std::size_t Task::GetDeletedTaskCount()
-{
-    std::unique_lock<LFLock> lock(s_delete_lists_lock);
-    std::size_t n = 0;
-    for (auto &sp : s_delete_lists)
-    {
-        n += sp->size();
-    }
-    return n;
-}
-
-void Task::IncrementRef()
-{
-    DebugPrint(dbg_task, "task(%s) IncrementRef ref=%d",
-            DebugInfo(), (int)ref_count_);
-    ++ref_count_;
-}
-
-void Task::DecrementRef()
-{
-    DebugPrint(dbg_task, "task(%s) DecrementRef ref=%d",
-            DebugInfo(), (int)ref_count_);
-    if (--ref_count_ == 0) {
-        assert(!this->prev);
-        assert(!this->next);
-        assert(!this->check_);
-
-        if (Scheduler::getInstance().GetOptions().enable_coro_stat) {
-            std::unique_lock<LFLock> lock(s_stat_lock);
-            s_stat_set.erase(this);
-        }
-
-		static co_thread_local DeleteList* delete_list;
-        if (!delete_list) {
-            delete_list = new DeleteList;
-            std::unique_lock<LFLock> lock(s_delete_lists_lock);
-			s_delete_lists.push_back(DeleteListPtr(delete_list));
-        }
-        delete_list->push(this);
-    }
 }
 
 std::map<SourceLocation, uint32_t> Task::GetStatInfo()
