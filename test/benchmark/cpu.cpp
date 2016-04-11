@@ -113,10 +113,21 @@ int main()
     for (int i = 0; i < 10240; ++i)
         umap[i] = i;
     {
-        timer t("syscall unordered_map::find() 10,000,000 times");
+        timer t("unordered_map::find() 10,000,000 times");
         for (int i = 0; i < 10 * 1000 * 1000; ++i)
         {
             umap.find(i);
+        }
+    }
+
+    {
+        volatile std::atomic_flag f{0};
+        timer t("spinlock unordered_map::find() 10,000,000 times");
+        for (int i = 0; i < 10 * 1000 * 1000; ++i)
+        {
+            while (std::atomic_flag_test_and_set_explicit(&f, std::memory_order_acquire));
+            umap.find(i);
+            std::atomic_flag_clear_explicit(&f, std::memory_order_release);
         }
     }
 
@@ -252,6 +263,30 @@ int main()
                     umap.find(i);
                     sleep(0);
                     std::atomic_flag_clear_explicit(&f, std::memory_order_release);
+                }
+            });
+            threads[i].swap(th);
+        }
+        for (int i = 0; i < thread_c; ++i)
+        {
+            threads[i].join();
+        }
+    }
+
+    {
+        volatile std::atomic_flag f[1024];
+        for (int i = 0; i < 1024; ++i)
+            f[i].clear();
+        timer t("multiple-thread atomic_flag::lock-unlock(switch find) 1,000,000 times");
+        boost::thread *threads = new boost::thread[thread_c];
+        for (int i = 0; i < thread_c; ++i)
+        {
+            boost::thread th([&]{
+                for (int i = 0; i < 1 * 1000 * 1000; ++i)
+                {
+                    while (std::atomic_flag_test_and_set_explicit(&f[i & 1024], std::memory_order_acquire));
+                    umap.find(i);
+                    std::atomic_flag_clear_explicit(&f[i & 1024], std::memory_order_release);
                 }
             });
             threads[i].swap(th);
