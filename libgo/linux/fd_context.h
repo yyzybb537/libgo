@@ -60,7 +60,8 @@ public:
 
     bool is_initialize();
     bool is_socket();
-    bool closing();
+    bool closed();
+    int close(bool call_syscall);
 
     void set_user_nonblock(bool b);
     bool user_nonblock();
@@ -94,7 +95,7 @@ private:
     bool is_socket_;
     bool sys_nonblock_;
     bool user_nonblock_;
-    bool closing_;
+    bool closed_;
     int fd_;
     int pending_events_;
     timeval recv_o_;
@@ -113,7 +114,12 @@ public:
 
     FdCtxPtr get_fd_ctx(int fd);
 
+    bool dup(int src, int dst);
+
+    int close(int fd, bool call_syscall = true);
+
 private:
+    LFLock lock_;
     FdList fd_list_;
 };
 

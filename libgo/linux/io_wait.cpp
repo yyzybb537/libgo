@@ -142,7 +142,7 @@ retry:
     // 触发事件, 唤醒等待中的协程.
     // 过时的唤醒由于已不在wait列表中, 
     // 会被IOBlockTriggered中的原子操作switch_state_to_triggered根据返回值过滤掉.
-    for (IoSentryPtr & sentry : triggers)
+    for (auto & sentry : triggers)
         IOBlockTriggered(sentry);
 
     return n;

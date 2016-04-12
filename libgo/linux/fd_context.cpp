@@ -5,15 +5,7 @@
 #include "fd_context.h"
 #include "task.h"
 #include "scheduler.h"
-
-extern "C" {
-    typedef int(*close_t)(int);
-    extern close_t close_f = nullptr;
-
-    typedef int(*fcntl_t)(int __fd, int __cmd, ...);
-    extern fcntl_t fcntl_f = nullptr;
-    //TODO: dup dup2
-}
+#include "linux_glibc_hook.h"
 
 namespace co {
 
@@ -37,7 +29,7 @@ IoSentry::~IoSentry()
 bool IoSentry::switch_state_to_triggered()
 {
     long expected = pending;
-    return std::atomic_compare_exchange_strong(&io_state_, &expected, waiting);
+    return std::atomic_compare_exchange_strong(&io_state_, &expected, triggered);
 }
 
 FileDescriptorCtx::FileDescriptorCtx(int fd)
@@ -62,7 +54,7 @@ FileDescriptorCtx::FileDescriptorCtx(int fd)
         sys_nonblock_ = false;
 
     user_nonblock_ = false;
-    closing_ = false;
+    closed_ = false;
     pending_events_ = 0;
     recv_o_ = send_o_ = timeval{0, 0};
 }
@@ -72,20 +64,42 @@ FileDescriptorCtx::~FileDescriptorCtx()
     assert(o_tasks_.empty());
     assert(io_tasks_.empty());
     assert(pending_events_ == 0);
-    assert(closing_);
-    if (close_f)
-        close_f(fd_);
-    else
-        ::close(fd_);
+    assert(closed_);
 }
 
 bool FileDescriptorCtx::is_socket()
 {
     return is_socket_;
 }
-bool FileDescriptorCtx::closing()
+bool FileDescriptorCtx::closed()
 {
-    return closing_;
+    return closed_;
+}
+int FileDescriptorCtx::close(bool call_syscall)
+{
+    if (closed()) return ;
+    std::unique_lock<std::mutex> lock(lock_);
+    if (closed()) return ;
+    closed_ = true;
+    int ret = 0;
+    if (call_syscall)
+        ret = close_f(fd_);
+
+    TaskWSet *tasks_arr[3] = {&i_tasks_, &o_tasks_, &io_tasks_};
+    for (int i = 0; i < 3; ++i)
+    {
+        TaskWSet & tasks = *tasks_arr[i];
+        auto it = tasks.begin();
+        while (it != tasks.end()) {
+            IoSentryWeakPtr &wptr = it->second;
+            IoSentryPtr sptr = wptr.lock();
+            if (!sptr) continue;
+            g_Scheduler.GetIoWait().IOBlockTriggered(sptr);
+        }
+        tasks.clear();
+    }
+
+    return ret;
 }
 void FileDescriptorCtx::set_user_nonblock(bool b)
 {
@@ -122,6 +136,7 @@ void FileDescriptorCtx::get_time_o(int type, timeval *tv)
 bool FileDescriptorCtx::add_into_reactor(int poll_events, IoSentryPtr sentry)
 {
     std::unique_lock<std::mutex> lock(lock_);
+    if (closed()) return false;
 
     TaskWSet &tk_set = ChooseSet(poll_events);
 
@@ -160,6 +175,7 @@ bool FileDescriptorCtx::add_into_reactor(int poll_events, IoSentryPtr sentry)
 void FileDescriptorCtx::del_from_reactor(int poll_events, Task* tk)
 {
     std::unique_lock<std::mutex> lock(lock_);
+    if (closed()) return;
 
     if (!pending_events_) return;
 
@@ -212,6 +228,10 @@ void FileDescriptorCtx::del_events(int poll_events)
     }
 
     pending_events_ = pending_event;
+
+    // 所有引用都结束, 可以close了.
+    if (closed() && !pending_events_)
+        FdManager::getInstance().__close(fd_);
 }
 
 void FileDescriptorCtx::clear_expired_sentry()
@@ -233,6 +253,7 @@ void FileDescriptorCtx::clear_expired_sentry()
 void FileDescriptorCtx::reactor_trigger(int poll_events, TriggerSet & output)
 {
     std::unique_lock<std::mutex> lock(lock_);
+    if (closed()) return;
 
     if (events & (EPOLLERR | EPOLLHUP)) {
         trigger_task_list(i_tasks_, events, output);
@@ -280,5 +301,66 @@ FileDescriptorCtx::TaskWSet& FileDescriptorCtx::ChooseSet(int events)
         return io_tasks_;
     }
 }
+
+FdManager & FdManager::getInstance()
+{
+    static FdManager obj;
+    return obj;
+}
+FdCtxPtr FdManager::get_fd_ctx(int fd)
+{
+    std::unique_lock<LFLock> lock(lock_);
+
+    if (fd_list_.size() <= fd)
+        fd_list_.resize(fd);
+
+    FdCtxPtr* & pptr = fd_list_[fd];
+    if (!pptr) {
+        pptr =  new FdCtxPtr(new FileDescriptorCtx(fd));
+    }
+
+    return *pptr;
+}
+int FdManager::close(int fd, bool call_syscall)
+{
+    std::unique_lock<LFLock> lock(lock_);
+
+    if (fd_list_.size() <= fd) {
+        if (call_syscall)
+            return close_f(fd);
+        return 0;
+    }
+
+    FdCtxPtr* & pptr = fd_list_[fd];
+    if (!pptr) {
+        if (call_syscall)
+            return close_f(fd);
+        return 0;
+    }
+
+    int ret = (*pptr)->close(call_syscall);
+    delete pptr;
+    pptr = nullptr;
+    return ret;
+}
+bool FdManager::dup(int src, int dst)
+{
+    std::unique_lock<LFLock> lock(lock_);
+
+    int max_fd = (std::max)(src, dst);
+    if (fd_list_.size() <= max_fd)
+        fd_list_.resize(max_fd);
+
+    FdCtxPtr* & src_ptr = fd_list_[src];
+    if (!src_ptr)
+        src_ptr = new FdCtxPtr(new FileDescriptorCtx(fd));
+
+    FdCtxPtr* & dst_ptr = fd_list_[src];
+    if (dst_ptr) return false;
+
+    dst_ptr = new FdCtxPtr(*src_ptr);
+    return true;
+}
+
 
 } //namespace co
