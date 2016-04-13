@@ -48,12 +48,19 @@ void echo_server()
                 int noyield_for_c = 0;
                 for (;;++noyield_for_c) {
                     auto n = s->read_some(buffer(buf, buflen), ec);
-                    if (ec) break;
+                    if (ec) {
+                        printf("read_some(%d) error %d:%s", s->native_handle(), ec.value(), ec.message().c_str());
+                        break;
+                    }
 
                     size_t begin = 0;
 goon_write:
                     size_t rn = s->write_some(buffer(buf + begin, std::min<int>(n, qdata)), ec);
-                    if (ec) break;
+                    if (ec) {
+                        printf("write_some(%d) error %d:%s", s->native_handle(), ec.value(), ec.message().c_str());
+                        break;
+                    }
+
                     n -= rn;
                     begin += rn;
                     if ((noyield_for_c & 0xff) == 0)

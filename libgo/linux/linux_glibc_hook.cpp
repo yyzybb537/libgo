@@ -61,8 +61,10 @@ retry:
         pollfd pfd;
         pfd.fd = fd;
         pfd.events = event;
+eintr:
         int triggers = poll(&pfd, 1, poll_timeout);
         if (-1 == triggers) {
+            if (errno == EINTR) goto eintr;
             return -1;
         } else if (0 == triggers) {  // poll等待超时
             errno = EAGAIN;
