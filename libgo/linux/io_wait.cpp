@@ -55,13 +55,25 @@ static std::string EpollEvent2Str(uint32_t events)
     return e;
 }
 
+static const char* EpollMod2Str(int mod)
+{
+    if (mod == EPOLL_CTL_ADD)
+        return "EPOLL_CTL_ADD";
+    else if (mod == EPOLL_CTL_DEL)
+        return "EPOLL_CTL_DEL";
+    else if (mod == EPOLL_CTL_MOD)
+        return "EPOLL_CTL_MOD";
+    else
+        return "UNKOWN";
+}
+
 void IoWait::CoSwitch()
 {
     Task* tk = g_Scheduler.GetCurrentTask();
     if (!tk) return ;
 
     tk->state_ = TaskState::io_block;
-    DebugPrint(dbg_ioblock, "task(%s) CoSwitch", tk->DebugInfo());
+    DebugPrint(dbg_ioblock, "task(%s) enter io_block", tk->DebugInfo());
     g_Scheduler.CoYield();
 }
 
@@ -81,8 +93,11 @@ void IoWait::IOBlockTriggered(IoSentryPtr io_sentry)
 void IoWait::__IOBlockTriggered(IoSentryPtr io_sentry)
 {
     assert(io_sentry->io_state_ == IoSentry::triggered);
-    if (wait_io_sentries_.erase(io_sentry.get())) // A
+    if (wait_io_sentries_.erase(io_sentry.get())) { // A
+        DebugPrint(dbg_ioblock, "task(%s) exit io_block",
+                io_sentry->task_ptr_->DebugInfo());
         g_Scheduler.AddTaskRunnable(io_sentry->task_ptr_.get());
+    }
 }
 
 int IoWait::reactor_ctl(int epoll_ctl_mod, int fd, uint32_t poll_events, bool is_socket)
@@ -91,7 +106,11 @@ int IoWait::reactor_ctl(int epoll_ctl_mod, int fd, uint32_t poll_events, bool is
         epoll_event ev;
         ev.events = PollEvent2Epoll(poll_events);
         ev.data.fd = fd;
-        return epoll_ctl(GetEpollFd(), epoll_ctl_mod, fd, &ev);
+        int res = epoll_ctl(GetEpollFd(), epoll_ctl_mod, fd, &ev);
+        DebugPrint(dbg_ioblock, "epoll_ctl(fd:%d, MOD:%s, events:%s) returns %d",
+                fd, EpollMod2Str(epoll_ctl_mod),
+                EpollEvent2Str(ev.events).c_str(), res);
+        return res;
     }
 
     // TODO: poll模拟

@@ -1,6 +1,7 @@
 #include <context.h>
 #include <ucontext.h>
 #include <scheduler.h>
+#include "config.h"
 
 namespace co
 {
@@ -24,6 +25,7 @@ namespace co
         ~impl_t()
         {
             if (stack_) {
+                DebugPrint(dbg_task, "free stack. ptr=%p", stack_);
                 free(stack_);
                 stack_ = NULL;
             }
@@ -54,6 +56,8 @@ namespace co
 
         impl_->stack_size_ = this->stack_size_;
         impl_->stack_ = (char*)valloc(impl_->stack_size_);
+        DebugPrint(dbg_task, "valloc stack. size=%u ptr=%p",
+                impl_->stack_size_, impl_->stack_);
 
         impl_->ctx_.uc_stack.ss_sp = impl_->stack_;
         impl_->ctx_.uc_stack.ss_size = impl_->stack_size_;

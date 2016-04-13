@@ -162,12 +162,11 @@ class Scheduler
         // }@
         /// ------------------------------------------------------------------------
 
+        // iowait对象
+        IoWait& GetIoWait() { return io_wait_; }
+
     public:
         Task* GetCurrentTask();
-
-        /// 调用阻塞式网络IO时, 将当前协程加入等待队列中, socket加入epoll中.
-        void IOBlockSwitch();
-        void IOBlockTriggered(IoSentryPtr io_sentry);
 
     private:
         Scheduler();
@@ -195,9 +194,6 @@ class Scheduler
 
         // 获取线程局部信息
         ThreadLocalInfo& GetLocalInfo();
-
-        // iowait对象
-        IoWait& GetIoWait() { return io_wait_; }
 
         // List of Processer
         LFLock proc_init_lock_;

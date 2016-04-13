@@ -63,13 +63,21 @@ extern fcntl_t fcntl_f;
 typedef int(*ioctl_t)(int fd, unsigned long int request, ...);
 extern ioctl_t ioctl_f;
 
+typedef int (*getsockopt_t)(int sockfd, int level, int optname,
+        void *optval, socklen_t *optlen);
+extern getsockopt_t getsockopt_f;
+
+typedef int (*setsockopt_t)(int sockfd, int level, int optname,
+        const void *optval, socklen_t optlen);
+extern setsockopt_t setsockopt_f;
+
 typedef int(*dup_t)(int);
 extern dup_t dup_f;
 
 typedef int(*dup2_t)(int, int);
 extern dup2_t dup2_f;
 
-typedef int(*dup3_t)(int, int);
+typedef int(*dup3_t)(int, int, int);
 extern dup3_t dup3_f;
 
 extern void set_connect_timeout(int milliseconds);

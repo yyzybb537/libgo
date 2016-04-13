@@ -148,8 +148,11 @@ uint32_t Scheduler::DoRunnable()
                 static int sc = 0;
                 SList<Task> s(run_tasks_.pop(popn));
                 auto it = s.begin();
-                while (it != s.end())
-                    proc->AddTaskRunnable(&*it++);
+                while (it != s.end()) {
+                    Task* tk = &*it;
+                    it = s.erase(it);
+                    proc->AddTaskRunnable(tk);
+                }
                 sc += s.size();
 //                printf("popn = %d, get %d coroutines, sc=%d, remain=%d\n",
 //                        (int)popn, (int)s.size(), (int)sc, (int)run_tasks_.size());
@@ -271,11 +274,6 @@ uint32_t Scheduler::GetCurrentProcessID()
 Task* Scheduler::GetCurrentTask()
 {
     return GetLocalInfo().current_task;
-}
-
-void Scheduler::IOBlockSwitch()
-{
-    io_wait_.CoSwitch();
 }
 
 void Scheduler::SleepSwitch(int timeout_ms)

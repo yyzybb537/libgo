@@ -1,11 +1,12 @@
-#include "test_server.h"
 #include <iostream>
 #include <unistd.h>
 #include <gtest/gtest.h>
 #include <poll.h>
 #include <chrono>
+#include <boost/thread.hpp>
 #include "coroutine.h"
 using namespace std;
+using namespace std::chrono;
 using namespace co;
 
 ///poll test points:
@@ -20,100 +21,218 @@ using namespace co;
 // 9.timeout return.
 // 10.multi threads.
 
-void CreatePollfds(pollfd* fds, int num)
+static int fill_send_buffer(int fd)
 {
-    for (int i = 0; i < num; ++i) {
-        int socketfd = socket(AF_INET, SOCK_STREAM, 0);
-        EXPECT_FALSE(-1 == socketfd);
-        fds[i].fd = socketfd;
-        fds[i].events = POLLIN | POLLOUT | POLLERR;
-        fds[i].revents = 0;
+    static char* buf = new char[10240];
+    int c = 0;
+    for (;;) {
+        pollfd pfd;
+        pfd.fd = fd;
+        pfd.events = POLLOUT;
+        if (poll(&pfd, 1, 0) <= 0)
+            break;
+        c += write(fd, buf, 10240);
     }
-}
-
-template <int N>
-void CreatePollfds(pollfd (&fds)[N])
-{
-    CreatePollfds(fds, N);
-}
-
-void FreePollfds(pollfd* fds, int num)
-{
-    for (int i = 0; i < num; ++i) {
-        close(fds[i].fd);
-        fds[i].fd = -1;
-    }
-}
-
-template <int N>
-void FreePollfds(pollfd (&fds)[N])
-{
-    FreePollfds(fds, N);
-}
-
-
-void connect_me(int fd)
-{
-    sockaddr_in addr;
-    addr.sin_family = AF_INET;
-    addr.sin_port = htons(43222);
-    addr.sin_addr.s_addr = inet_addr("127.0.0.1");
-    int r = connect(fd, (sockaddr*)&addr, sizeof(addr));
-    EXPECT_EQ(r, 0);
-
-//    int flags = fcntl(fd, F_GETFL);
-//    flags |= O_NONBLOCK;
-//    int n = fcntl(fd, F_SETFL, flags);
-//    EXPECT_FALSE(n == -1);
-//
-//    char buf[1024];
-//    n = read(fd, buf, sizeof(buf));
-//    EXPECT_EQ(errno, EAGAIN);
-//    EXPECT_EQ(n, -1);
-//
-//    n = fcntl(fd, F_SETFL, flags & ~O_NONBLOCK);
-//    EXPECT_FALSE(n == -1);
+    return c;
 }
 
 TEST(Poll, TimeoutIs0)
 {
-//    g_Scheduler.GetOptions().debug = dbg_all;
     go [] {
-        pollfd fds[2];
-        CreatePollfds(fds);
-        int n = poll(fds, 2, 0);
-        EXPECT_EQ(n, 2);
+        int fds[2];
+        int res = socketpair(AF_LOCAL, SOCK_STREAM, 0, fds);
+        EXPECT_EQ(res, 0);
+
+        {
+            pollfd pfds[1] = {{fds[0], POLLIN, 0}};
+            int n = poll(pfds, 1, 0);
+            EXPECT_EQ(n, 0);
+            EXPECT_EQ(pfds[0].revents, 0);
+        }
+
+        {
+            pollfd pfds[1] = {{fds[0], POLLOUT, 0}};
+            int n = poll(pfds, 1, 0);
+            EXPECT_EQ(n, 1);
+            EXPECT_EQ(pfds[0].revents, POLLOUT);
+        }
+
+        {
+            pollfd pfds[2] = {{fds[0], POLLIN, 0}, {fds[1], POLLIN, 0}};
+            int n = poll(pfds, 2, 0);
+            EXPECT_EQ(n, 0);
+            EXPECT_EQ(pfds[0].revents, 0);
+            EXPECT_EQ(pfds[1].revents, 0);
+        }
+
+        {
+            pollfd pfds[2] = {{fds[0], POLLOUT, 0}, {fds[1], POLLOUT, 0}};
+            int n = poll(pfds, 2, 0);
+            EXPECT_EQ(n, 2);
+            EXPECT_EQ(pfds[0].revents, POLLOUT);
+            EXPECT_EQ(pfds[1].revents, POLLOUT);
+        }
+
+        {
+            pollfd pfds[2] = {{fds[0], POLLIN, 0}, {fds[1], POLLOUT, 0}};
+            int n = poll(pfds, 2, 0);
+            EXPECT_EQ(n, 1);
+            EXPECT_EQ(pfds[0].revents, 0);
+            EXPECT_EQ(pfds[1].revents, POLLOUT);
+        }
+
+        {
+            pollfd pfds[2] = {{fds[0], POLLOUT, 0}, {fds[1], POLLIN, 0}};
+            int n = poll(pfds, 2, 0);
+            EXPECT_EQ(n, 1);
+            EXPECT_EQ(pfds[0].revents, POLLOUT);
+            EXPECT_EQ(pfds[1].revents, 0);
+        }
+
+        shutdown(fds[0], SHUT_RDWR);
+
+        {
+            pollfd pfds[2] = {{fds[0], POLLOUT, 0}, {fds[1], POLLOUT, 0}};
+            int n = poll(pfds, 2, 0);
+            EXPECT_EQ(n, 2);
+            EXPECT_EQ(pfds[0].revents, POLLOUT|POLLHUP);
+            EXPECT_EQ(pfds[1].revents, POLLOUT|POLLHUP);
+        }
+
+        EXPECT_EQ(close(fds[0]), 0);
+
+        {
+            pollfd pfds[2] = {{fds[0], POLLOUT, 0}, {fds[1], POLLIN|POLLOUT, 0}};
+            int n = poll(pfds, 2, 0);
+            EXPECT_EQ(n, 2);
+            EXPECT_EQ(pfds[0].revents, POLLNVAL);
+            EXPECT_EQ(pfds[1].revents, POLLIN|POLLOUT|POLLHUP);
+        }
+
         EXPECT_EQ(g_Scheduler.GetCurrentTaskYieldCount(), 0);
-        FreePollfds(fds, 1);
-        n = poll(fds, 2, 0);
-        EXPECT_EQ(n, 1);
+
+        fds[0] = -1;
+
+        {
+            pollfd pfds[1] = {{fds[0], POLLOUT, 0}};
+            int n = poll(pfds, 1, 0);
+            EXPECT_EQ(n, 0);
+            EXPECT_EQ(pfds[0].revents, 0);
+        }
+
+        {
+            pollfd pfds[2] = {{fds[0], POLLOUT, 0}, {fds[1], POLLIN|POLLOUT, 0}};
+            int n = poll(pfds, 2, 0);
+            EXPECT_EQ(n, 1);
+            EXPECT_EQ(pfds[0].revents, 0);
+            EXPECT_EQ(pfds[1].revents, POLLIN|POLLOUT|POLLHUP);
+        }
+
         EXPECT_EQ(g_Scheduler.GetCurrentTaskYieldCount(), 0);
-        FreePollfds(fds);
-        n = poll(fds, 2, 0);
-        EXPECT_EQ(n, 0);
-        EXPECT_EQ(g_Scheduler.GetCurrentTaskYieldCount(), 0);
+        EXPECT_EQ(close(fds[1]), 0);
     };
     g_Scheduler.RunUntilNoTask();
     EXPECT_EQ(Task::GetTaskCount(), 0);
 }
 
-TEST(Poll, TimeoutIsF1)
+TEST(Poll, TimeoutIsNegative1)
 {
+//    g_Scheduler.GetOptions().debug = dbg_all;
     go [] {
-        pollfd fds[2];
-        CreatePollfds(fds);
-        EXPECT_EQ(g_Scheduler.GetCurrentTaskYieldCount(), 0);
-        int n = poll(fds, 2, -1);
-        EXPECT_EQ(n, 2);
-        EXPECT_EQ(g_Scheduler.GetCurrentTaskYieldCount(), 1);
-        FreePollfds(fds, 1);
-        n = poll(fds, 2, -1);
-        EXPECT_EQ(n, 1);
-        EXPECT_EQ(g_Scheduler.GetCurrentTaskYieldCount(), 2);
-        FreePollfds(fds);
-        n = poll(fds, 2, -1);
-        EXPECT_EQ(n, 0);
-        EXPECT_EQ(g_Scheduler.GetCurrentTaskYieldCount(), 3);
+        int fds[2];
+        int res = socketpair(AF_LOCAL, SOCK_STREAM, 0, fds);
+        EXPECT_EQ(res, 0);
+
+        // poll无限时等待数据到达
+        {
+            go [=]{
+                sleep(1);
+                write(fds[1], "a", 1);
+            };
+            auto start = system_clock::now();
+            pollfd pfds[2] = {{fds[0], POLLIN, 0}, {fds[1], POLLIN, 0}};
+            int n = poll(pfds, 2, -1);
+            EXPECT_EQ(n, 1);
+            EXPECT_EQ(pfds[0].revents, POLLIN);
+            EXPECT_EQ(pfds[1].revents, 0);
+            auto elapse = duration_cast<milliseconds>(system_clock::now() - start).count();
+            EXPECT_GT(elapse, 999);
+            EXPECT_LT(elapse, 1050);
+            char buf;
+            EXPECT_EQ(read(fds[0], &buf, 1), 1);
+            EXPECT_EQ(buf, 'a');
+        }
+
+        {
+            pollfd pfds[1] = {{fds[0], POLLOUT, 0}};
+            int n = poll(pfds, 1, -1);
+            EXPECT_EQ(n, 1);
+            EXPECT_EQ(pfds[0].revents, POLLOUT);
+        }
+
+        {
+            pollfd pfds[2] = {{fds[0], POLLOUT, 0}, {fds[1], POLLOUT, 0}};
+            int n = poll(pfds, 2, -1);
+            EXPECT_EQ(n, 2);
+            EXPECT_EQ(pfds[0].revents, POLLOUT);
+            EXPECT_EQ(pfds[1].revents, POLLOUT);
+        }
+
+        {
+            pollfd pfds[2] = {{fds[0], POLLIN, 0}, {fds[1], POLLOUT, 0}};
+            int n = poll(pfds, 2, -1);
+            EXPECT_EQ(n, 1);
+            EXPECT_EQ(pfds[0].revents, 0);
+            EXPECT_EQ(pfds[1].revents, POLLOUT);
+        }
+
+        {
+            pollfd pfds[2] = {{fds[0], POLLOUT, 0}, {fds[1], POLLIN, 0}};
+            int n = poll(pfds, 2, -1);
+            EXPECT_EQ(n, 1);
+            EXPECT_EQ(pfds[0].revents, POLLOUT);
+            EXPECT_EQ(pfds[1].revents, 0);
+        }
+
+        shutdown(fds[0], SHUT_RDWR);
+
+        {
+            pollfd pfds[2] = {{fds[0], POLLOUT, 0}, {fds[1], POLLOUT, 0}};
+            int n = poll(pfds, 2, -1);
+            EXPECT_EQ(n, 2);
+            EXPECT_EQ(pfds[0].revents, POLLOUT|POLLHUP);
+            EXPECT_EQ(pfds[1].revents, POLLOUT|POLLHUP);
+        }
+
+        close(fds[0]);
+
+        {
+            pollfd pfds[2] = {{fds[0], POLLOUT, 0}, {fds[1], POLLIN|POLLOUT, 0}};
+            int n = poll(pfds, 2, -1);
+            EXPECT_EQ(n, 2);
+            EXPECT_EQ(pfds[0].revents, POLLNVAL);
+            EXPECT_EQ(pfds[1].revents, POLLIN|POLLOUT|POLLHUP);
+        }
+
+        fds[0] = -1;
+
+        {
+            // poll invalid fds with negative timeout, as co_yield.
+            pollfd pfds[1] = {{fds[0], POLLOUT, 0}};
+            auto yc = g_Scheduler.GetCurrentTaskYieldCount();
+            int n = poll(pfds, 1, -1);
+            EXPECT_EQ(g_Scheduler.GetCurrentTaskYieldCount(), yc + 1);
+            EXPECT_EQ(n, 0);
+            EXPECT_EQ(pfds[0].revents, 0);
+        }
+
+        {
+            pollfd pfds[2] = {{fds[0], POLLOUT, 0}, {fds[1], POLLIN|POLLOUT, 0}};
+            int n = poll(pfds, 2, -1);
+            EXPECT_EQ(n, 1);
+            EXPECT_EQ(pfds[0].revents, 0);
+            EXPECT_EQ(pfds[1].revents, POLLIN|POLLOUT|POLLHUP);
+        }
     };
     g_Scheduler.RunUntilNoTask();
     EXPECT_EQ(Task::GetTaskCount(), 0);
@@ -121,66 +240,353 @@ TEST(Poll, TimeoutIsF1)
 
 TEST(Poll, TimeoutIs1)
 {
+//    g_Scheduler.GetOptions().debug = dbg_all;
     go [] {
-        pollfd fds[2];
-        CreatePollfds(fds);
-        EXPECT_EQ(g_Scheduler.GetCurrentTaskYieldCount(), 0);
-        int n = poll(fds, 2, 1000);
-        EXPECT_EQ(n, 2);
-        EXPECT_EQ(g_Scheduler.GetCurrentTaskYieldCount(), 1);
-        FreePollfds(fds, 1);
-        n = poll(fds, 2, 1000);
-        EXPECT_EQ(n, 1);
-        EXPECT_EQ(g_Scheduler.GetCurrentTaskYieldCount(), 2);
-        FreePollfds(fds);
-        n = poll(fds, 2, 1000);
-        EXPECT_EQ(n, 0);
-        // two times switch: io_wait and sleep.
-        EXPECT_EQ(g_Scheduler.GetCurrentTaskYieldCount(), 4);
-    };
-    g_Scheduler.RunUntilNoTask();
-    EXPECT_EQ(Task::GetTaskCount(), 0);
+        int fds[2];
+        int res = socketpair(AF_LOCAL, SOCK_STREAM, 0, fds);
+        EXPECT_EQ(res, 0);
 
-    go [] {
-        pollfd fds[1];
-        CreatePollfds(fds);
-        connect_me(fds[0].fd);
-        uint64_t yield_count = g_Scheduler.GetCurrentTaskYieldCount();
-        fds[0].events = POLLIN;
-        auto start = std::chrono::high_resolution_clock::now();
-        int n = poll(fds, 1, 1000);
-        auto end = std::chrono::high_resolution_clock::now();
-        auto c = std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count();
-        EXPECT_EQ(fds[0].revents, 0);
-        EXPECT_LT(c, 1050);
-        EXPECT_GT(c, 950);
-        EXPECT_EQ(n, 0);
-        EXPECT_EQ(g_Scheduler.GetCurrentTaskYieldCount(), yield_count + 1);
-        FreePollfds(fds);
+        // poll无限时等待数据到达
+        {
+            go [=]{
+                co_sleep(200);
+                write(fds[1], "a", 1);
+            };
+            auto start = system_clock::now();
+            pollfd pfds[2] = {{fds[0], POLLIN, 0}, {fds[1], POLLIN, 0}};
+            int n = poll(pfds, 2, 2000);
+            EXPECT_EQ(n, 1);
+            EXPECT_EQ(pfds[0].revents, POLLIN);
+            EXPECT_EQ(pfds[1].revents, 0);
+            auto elapse = duration_cast<milliseconds>(system_clock::now() - start).count();
+            EXPECT_GT(elapse, 199);
+            EXPECT_LT(elapse, 250);
+
+            char buf;
+            EXPECT_EQ(read(fds[0], &buf, 1), 1);
+            EXPECT_EQ(buf, 'a');
+        }
+
+        {
+            go [=]{
+                co_sleep(500);
+                write(fds[1], "a", 1);
+            };
+            auto start = system_clock::now();
+            pollfd pfds[2] = {{fds[0], POLLIN, 0}, {fds[1], POLLIN, 0}};
+            int n = poll(pfds, 2, 200);
+            EXPECT_EQ(n, 0);
+            EXPECT_EQ(pfds[0].revents, 0);
+            EXPECT_EQ(pfds[1].revents, 0);
+            auto elapse = duration_cast<milliseconds>(system_clock::now() - start).count();
+            EXPECT_GT(elapse, 199);
+            EXPECT_LT(elapse, 250);
+
+            start = system_clock::now();
+            n = poll(pfds, 2, 1000);
+            EXPECT_EQ(n, 1);
+            EXPECT_EQ(pfds[0].revents, POLLIN);
+            EXPECT_EQ(pfds[1].revents, 0);
+            elapse = duration_cast<milliseconds>(system_clock::now() - start).count();
+            EXPECT_GT(elapse, 250);
+            EXPECT_LT(elapse, 350);
+
+            char buf;
+            EXPECT_EQ(read(fds[0], &buf, 1), 1);
+            EXPECT_EQ(buf, 'a');
+        }
+
+        {
+            pollfd pfds[1] = {{fds[0], POLLOUT, 0}};
+            int n = poll(pfds, 1, 1000);
+            EXPECT_EQ(n, 1);
+            EXPECT_EQ(pfds[0].revents, POLLOUT);
+        }
+
+        {
+            pollfd pfds[2] = {{fds[0], POLLOUT, 0}, {fds[1], POLLOUT, 0}};
+            int n = poll(pfds, 2, 1000);
+            EXPECT_EQ(n, 2);
+            EXPECT_EQ(pfds[0].revents, POLLOUT);
+            EXPECT_EQ(pfds[1].revents, POLLOUT);
+        }
+
+        {
+            pollfd pfds[2] = {{fds[0], POLLIN, 0}, {fds[1], POLLOUT, 0}};
+            int n = poll(pfds, 2, 1000);
+            EXPECT_EQ(n, 1);
+            EXPECT_EQ(pfds[0].revents, 0);
+            EXPECT_EQ(pfds[1].revents, POLLOUT);
+        }
+
+        {
+            pollfd pfds[2] = {{fds[0], POLLOUT, 0}, {fds[1], POLLIN, 0}};
+            int n = poll(pfds, 2, 1000);
+            EXPECT_EQ(n, 1);
+            EXPECT_EQ(pfds[0].revents, POLLOUT);
+            EXPECT_EQ(pfds[1].revents, 0);
+        }
+
+        shutdown(fds[0], SHUT_RDWR);
+
+        {
+            pollfd pfds[2] = {{fds[0], POLLOUT, 0}, {fds[1], POLLOUT, 0}};
+            int n = poll(pfds, 2, 1000);
+            EXPECT_EQ(n, 2);
+            EXPECT_EQ(pfds[0].revents, POLLOUT|POLLHUP);
+            EXPECT_EQ(pfds[1].revents, POLLOUT|POLLHUP);
+        }
+
+        close(fds[0]);
+
+        {
+            pollfd pfds[2] = {{fds[0], POLLOUT, 0}, {fds[1], POLLIN|POLLOUT, 0}};
+            int n = poll(pfds, 2, 1000);
+            EXPECT_EQ(n, 2);
+            EXPECT_EQ(pfds[0].revents, POLLNVAL);
+            EXPECT_EQ(pfds[1].revents, POLLIN|POLLOUT|POLLHUP);
+        }
+
+        fds[0] = -1;
+
+        {
+            pollfd pfds[1] = {{fds[0], POLLOUT, 0}};
+            auto start = system_clock::now();
+            auto yc = g_Scheduler.GetCurrentTaskYieldCount();
+            int n = poll(pfds, 1, 300);
+            EXPECT_EQ(g_Scheduler.GetCurrentTaskYieldCount(), yc + 1);
+            auto elapse = duration_cast<milliseconds>(system_clock::now() - start).count();
+            EXPECT_GT(elapse, 299);
+            EXPECT_LT(elapse, 350);
+            EXPECT_EQ(n, 0);
+            EXPECT_EQ(pfds[0].revents, 0);
+        }
+
+        {
+            pollfd pfds[2] = {{fds[0], POLLOUT, 0}, {fds[1], POLLIN|POLLOUT, 0}};
+            int n = poll(pfds, 2, 1000);
+            EXPECT_EQ(n, 1);
+            EXPECT_EQ(pfds[0].revents, 0);
+            EXPECT_EQ(pfds[1].revents, POLLIN|POLLOUT|POLLHUP);
+        }
     };
     g_Scheduler.RunUntilNoTask();
     EXPECT_EQ(Task::GetTaskCount(), 0);
 }
 
+TEST(PollTrigger, MultiPollTimeout1)
+{
+//    g_Scheduler.GetOptions().debug = dbg_ioblock | dbg_fd_ctx;
+
+    int fds[2];
+    int res = socketpair(AF_LOCAL, SOCK_STREAM, 0, fds);
+    EXPECT_EQ(res, 0);
+
+    res = fill_send_buffer(fds[0]);
+    cout << "fill " << res << " bytes." << endl;
+
+    for (int i = 0; i < 10; ++i) {
+        go [=] {
+            pollfd pfds[1] = {{fds[0], POLLIN, 0}};
+            auto start = high_resolution_clock::now();
+            int n = poll(pfds, 1, 1000);
+            auto end = system_clock::now();
+            auto c = duration_cast<milliseconds>(end - start).count();
+            EXPECT_LT(c, 1050);
+            EXPECT_GT(c, 999);
+            EXPECT_EQ(n, 0);
+            EXPECT_EQ(pfds[0].revents, 0);
+        };
+    }
+
+    for (int i = 0; i < 10; ++i) {
+        go [=] {
+            pollfd pfds[1] = {{fds[0], POLLOUT, 0}};
+            auto start = high_resolution_clock::now();
+            int n = poll(pfds, 1, 500);
+            auto end = system_clock::now();
+            auto c = duration_cast<milliseconds>(end - start).count();
+            EXPECT_LT(c, 550);
+            EXPECT_GT(c, 499);
+            EXPECT_EQ(n, 0);
+            EXPECT_EQ(pfds[0].revents, 0);
+            EXPECT_EQ(pfds[1].revents, 0);
+        };
+    }
+    g_Scheduler.RunUntilNoTask();
+    EXPECT_EQ(Task::GetTaskCount(), 0);
+
+    g_Scheduler.GetOptions().debug = 0;
+    close(fds[0]);
+    close(fds[1]);
+}
+
+TEST(PollTrigger, MultiPollTimeout2)
+{
+//    g_Scheduler.GetOptions().debug = dbg_ioblock | dbg_fd_ctx;
+
+    int fds[2];
+    int res = socketpair(AF_LOCAL, SOCK_STREAM, 0, fds);
+    EXPECT_EQ(res, 0);
+
+    for (int i = 0; i < 10; ++i) {
+        go [=] {
+            pollfd pfds[2] = {{fds[0], POLLIN, 0}, {fds[1], POLLIN, 0}};
+            auto start = high_resolution_clock::now();
+            int n = poll(pfds, 2, 1000);
+            auto end = system_clock::now();
+            auto c = duration_cast<milliseconds>(end - start).count();
+            EXPECT_LT(c, 1050);
+            EXPECT_GT(c, 999);
+            EXPECT_EQ(n, 0);
+            EXPECT_EQ(pfds[0].revents, 0);
+            EXPECT_EQ(pfds[1].revents, 0);
+        };
+    }
+
+    g_Scheduler.RunUntilNoTask();
+    EXPECT_EQ(Task::GetTaskCount(), 0);
+
+    res = fill_send_buffer(fds[0]);
+    cout << "fill " << res << " bytes." << endl;
+    res = fill_send_buffer(fds[1]);
+    cout << "fill " << res << " bytes." << endl;
+
+    for (int i = 0; i < 10; ++i) {
+        go [=] {
+            pollfd pfds[2] = {{fds[0], POLLOUT, 0}, {fds[1], POLLOUT, 0}};
+            auto start = high_resolution_clock::now();
+            int n = poll(pfds, 2, 500);
+            auto end = system_clock::now();
+            auto c = duration_cast<milliseconds>(end - start).count();
+            EXPECT_LT(c, 550);
+            EXPECT_GT(c, 499);
+            EXPECT_EQ(n, 0);
+            EXPECT_EQ(pfds[0].revents, 0);
+            EXPECT_EQ(pfds[1].revents, 0);
+        };
+    }
+    g_Scheduler.RunUntilNoTask();
+    EXPECT_EQ(Task::GetTaskCount(), 0);
+
+    g_Scheduler.GetOptions().debug = 0;
+    close(fds[0]);
+    close(fds[1]);
+}
+
+TEST(PollTrigger, MultiPollTrigger)
+{
+//    g_Scheduler.GetOptions().debug = dbg_ioblock | dbg_fd_ctx;
+
+    int fds[2];
+    int res = socketpair(AF_LOCAL, SOCK_STREAM, 0, fds);
+    EXPECT_EQ(res, 0);
+
+    for (int i = 0; i < 1; ++i) {
+        go [=] {
+            pollfd pfds[1] = {{fds[0], POLLIN, 0}};
+            auto start = high_resolution_clock::now();
+            int n = poll(pfds, 1, 1000);
+            auto end = system_clock::now();
+            auto c = duration_cast<milliseconds>(end - start).count();
+            EXPECT_LT(c, 550);
+            EXPECT_GT(c, 499);
+            EXPECT_EQ(n, 1);
+            EXPECT_EQ(pfds[0].revents, POLLIN);
+        };
+    }
+
+    for (int i = 0; i < 1; ++i) {
+        go [=] {
+            pollfd pfds[2] = {{fds[0], POLLOUT, 0}, {fds[1], POLLOUT, 0}};
+            int n = poll(pfds, 2, 1000);
+            EXPECT_EQ(n, 2);
+            EXPECT_EQ(pfds[0].revents, POLLOUT);
+            EXPECT_EQ(pfds[1].revents, POLLOUT);
+        };
+    }
+
+    go [=] {
+        co_sleep(500);
+        write(fds[1], "a", 1);
+    };
+    g_Scheduler.RunUntilNoTask();
+    EXPECT_EQ(Task::GetTaskCount(), 0);
+
+    g_Scheduler.GetOptions().debug = 0;
+    close(fds[0]);
+    close(fds[1]);
+}
+
+TEST(PollTrigger, MultiPollClose)
+{
+//    g_Scheduler.GetOptions().debug = dbg_ioblock | dbg_fd_ctx;
+
+    int fds[2];
+    int res = socketpair(AF_LOCAL, SOCK_STREAM, 0, fds);
+    EXPECT_EQ(res, 0);
+
+    for (int i = 0; i < 1; ++i) {
+        go [=] {
+            pollfd pfds[1] = {{fds[0], POLLIN, 0}};
+            auto start = high_resolution_clock::now();
+            int n = poll(pfds, 1, 1000);
+            auto end = system_clock::now();
+            auto c = duration_cast<milliseconds>(end - start).count();
+            EXPECT_LT(c, 550);
+            EXPECT_GT(c, 499);
+            EXPECT_EQ(n, 1);
+            EXPECT_EQ(pfds[0].revents, POLLNVAL);
+            cout << "read wait exit" << endl;
+        };
+    }
+
+    fill_send_buffer(fds[0]);
+
+    for (int i = 0; i < 1; ++i) {
+        go [=] {
+            pollfd pfds[1] = {{fds[0], POLLOUT, 0}};
+            int n = poll(pfds, 1, 1000);
+            EXPECT_EQ(n, 1);
+            EXPECT_EQ(pfds[0].revents, POLLNVAL);
+            cout << "write wait exit" << endl;
+        };
+    }
+
+    go [=] {
+        co_sleep(500);
+        cout << "close " << fds[0] << endl;
+        close(fds[0]);
+    };
+    g_Scheduler.RunUntilNoTask();
+    EXPECT_EQ(Task::GetTaskCount(), 0);
+
+//    g_Scheduler.GetOptions().debug = 0;
+    close(fds[0]);
+    close(fds[1]);
+}
+
 TEST(Poll, MultiThreads)
 {
-    for (int i = 0; i < 100; ++i)
+    for (int i = 0; i < 20; ++i)
         go [] {
-            pollfd fds[1];
-            CreatePollfds(fds);
-            connect_me(fds[0].fd);
-            uint64_t yield_count = g_Scheduler.GetCurrentTaskYieldCount();
-            fds[0].events = POLLIN;
-            auto start = std::chrono::high_resolution_clock::now();
-            int n = poll(fds, 1, 1000);
-            auto end = std::chrono::high_resolution_clock::now();
-            auto c = std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count();
+            int fds[2];
+            int res = socketpair(AF_LOCAL, SOCK_STREAM, 0, fds);
+            EXPECT_EQ(res, 0);
+            uint64_t yc = g_Scheduler.GetCurrentTaskYieldCount();
+            pollfd pfds[1] = {{fds[0], POLLIN, 0}};
+            auto start = high_resolution_clock::now();
+            int n = poll(pfds, 1, 1000);
+            auto end = system_clock::now();
+            auto c = duration_cast<milliseconds>(end - start).count();
             EXPECT_LT(c, 1200);
-            EXPECT_GT(c, 950);
-//            EXPECT_LT(c, 1010);
-//            EXPECT_GT(c, 1000);
+            EXPECT_GT(c, 999);
             EXPECT_EQ(n, 0);
-            EXPECT_EQ(g_Scheduler.GetCurrentTaskYieldCount(), yield_count + 1);
+            EXPECT_EQ(g_Scheduler.GetCurrentTaskYieldCount(), yc + 1);
+            EXPECT_EQ(close(fds[0]), 0);
+            EXPECT_EQ(close(fds[1]), 0);
+            close(fds[0]);
+            close(fds[1]);
         };
     printf("coroutines create done.\n");
     boost::thread_group tg;
@@ -190,9 +596,7 @@ TEST(Poll, MultiThreads)
                 });
     tg.join_all();
     printf("coroutines run done.\n");
-    EXPECT_EQ(Task::GetTaskCount(), Task::GetDeletedTaskCount());
     if (Task::GetTaskCount()) // 可能会有一些Task还未删除，执行删除逻辑。
         g_Scheduler.RunUntilNoTask();
     EXPECT_EQ(Task::GetTaskCount(), 0);
-    EXPECT_EQ(Task::GetDeletedTaskCount(), 0);
 }

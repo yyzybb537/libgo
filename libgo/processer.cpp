@@ -63,7 +63,7 @@ uint32_t Processer::Run(ThreadLocalInfo &info, uint32_t &done_count)
         DebugPrint(dbg_switch, "enter task(%s)", tk->DebugInfo());
         if (!tk->SwapIn()) {
             fprintf(stderr, "swapcontext error:%s\n", strerror(errno));
-            runnable_list_.push(tk);
+            runnable_list_.push(std::move(slist));
             ThrowError(eCoErrorCode::ec_swapcontext_failed);
         }
         DebugPrint(dbg_switch, "leave task(%s) state=%d", tk->DebugInfo(), (int)tk->state_);
@@ -85,14 +85,10 @@ uint32_t Processer::Run(ThreadLocalInfo &info, uint32_t &done_count)
                 break;
 
             case TaskState::sys_block:
-                {
-                    assert(tk->block_);
-                    if (tk->block_) {
-                        it = slist.erase(it);
-                        if (!tk->block_->AddWaitTask(tk))
-                            runnable_list_.push(tk);
-                    }
-                }
+                assert(tk->block_);
+                it = slist.erase(it);
+                if (!tk->block_->AddWaitTask(tk))
+                    runnable_list_.push(tk);
                 break;
 
             case TaskState::done:

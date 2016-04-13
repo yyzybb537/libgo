@@ -1,7 +1,6 @@
 #include <iostream>
 #include <unistd.h>
 #include <gtest/gtest.h>
-#include "test_server.h"
 #include "coroutine.h"
 #include <chrono>
 #include <fstream>
@@ -14,6 +13,8 @@ using namespace co;
 
 using ::testing::TestWithParam;
 using ::testing::Values;
+
+bool is_show_memory = false;
 
 struct MassCo : public TestWithParam<int>
 {
@@ -36,11 +37,14 @@ void foo()
 
 TEST_P(MassCo, LittleStack)
 {
+    co_sched.GetOptions().debug = dbg_task;
+
     c = 0;
     int n = n_;
     for (int i = 0; i < n; ++i)
         go_stack(1024) foo;
 
+    if (is_show_memory)
     {
         pinfo pi;
         cout << n << " coroutines, VirtMem: " << pi.get_virt_str() << ", RealMem: " << pi.get_mem_str() << endl;
@@ -49,6 +53,7 @@ TEST_P(MassCo, LittleStack)
     co_sched.Run();
     EXPECT_EQ(c, n);
 
+    if (is_show_memory)
     {
         pinfo pi;
         cout << n << " coroutines, VirtMem: " << pi.get_virt_str() << ", RealMem: " << pi.get_mem_str() << endl;
@@ -57,6 +62,7 @@ TEST_P(MassCo, LittleStack)
     co_sched.Run();
     EXPECT_EQ(c, n * 2);
 
+    if (is_show_memory)
     {
         pinfo pi;
         cout << n << " coroutines, VirtMem: " << pi.get_virt_str() << ", RealMem: " << pi.get_mem_str() << endl;
@@ -65,6 +71,7 @@ TEST_P(MassCo, LittleStack)
     co_sched.RunUntilNoTask();
     EXPECT_TRUE(co_sched.IsEmpty());
 
+    if (is_show_memory)
     {
         pinfo pi;
         cout << n << " coroutines, VirtMem: " << pi.get_virt_str() << ", RealMem: " << pi.get_mem_str() << endl;
@@ -88,6 +95,7 @@ TEST_P(MassCo, CnK)
     for (int i = 0; i < n; ++i)
         go foo;
 
+    if (is_show_memory)
     {
         pinfo pi;
         cout << n << " coroutines, VirtMem: " << pi.get_virt_str() << ", RealMem: " << pi.get_mem_str() << endl;
@@ -96,6 +104,7 @@ TEST_P(MassCo, CnK)
     co_sched.Run();
     EXPECT_EQ(c, n);
 
+    if (is_show_memory)
     {
         pinfo pi;
         cout << n << " coroutines, VirtMem: " << pi.get_virt_str() << ", RealMem: " << pi.get_mem_str() << endl;
@@ -104,6 +113,7 @@ TEST_P(MassCo, CnK)
     co_sched.Run();
     EXPECT_EQ(c, n * 2);
 
+    if (is_show_memory)
     {
         pinfo pi;
         cout << n << " coroutines, VirtMem: " << pi.get_virt_str() << ", RealMem: " << pi.get_mem_str() << endl;
@@ -112,6 +122,7 @@ TEST_P(MassCo, CnK)
     co_sched.RunUntilNoTask();
     EXPECT_TRUE(co_sched.IsEmpty());
 
+    if (is_show_memory)
     {
         pinfo pi;
         cout << n << " coroutines, VirtMem: " << pi.get_virt_str() << ", RealMem: " << pi.get_mem_str() << endl;
@@ -126,6 +137,7 @@ TEST_P(MassCo, CnK)
 //    printf("press anykey to continue. task_c=%u\n", (uint32_t)co::Task::GetTaskCount());
 //    getchar();
 
+    if (is_show_memory)
     {
         pinfo pi;
         cout << n << " coroutines, VirtMem: " << pi.get_virt_str() << ", RealMem: " << pi.get_mem_str() << endl;
@@ -139,10 +151,10 @@ TEST_P(MassCo, CnK)
 INSTANTIATE_TEST_CASE_P(
 	MassCoTest,
 	MassCo,
-	Values(100, 1000, 10000));
+	Values(1, 100, 1000, 10000));
 #else
 INSTANTIATE_TEST_CASE_P(
 	MassCoTest,
 	MassCo,
-	Values(100, 1000, 10000, 100000));
+	Values(1, 100, 1000, 10000, 100000));
 #endif

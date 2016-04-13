@@ -27,7 +27,7 @@ static ssize_t read_write_mode(int fd, OriginF fn, const char* hook_fn_name, uin
             tk ? tk->DebugInfo() : "nil", hook_fn_name, g_Scheduler.IsCoroutine() ? "In" : "Not in");
 
     FdCtxPtr fd_ctx = FdManager::getInstance().get_fd_ctx(fd);
-    if (fd_ctx->closed()) {
+    if (!fd_ctx || fd_ctx->closed()) {
         errno = EBADF;
         return -1;
     }
@@ -96,6 +96,8 @@ nanosleep_t nanosleep_f = NULL;
 close_t close_f = NULL;
 fcntl_t fcntl_f = NULL;
 ioctl_t ioctl_f = NULL;
+getsockopt_t getsockopt_f = NULL;
+setsockopt_t setsockopt_f = NULL;
 dup_t dup_f = NULL;
 dup2_t dup2_f = NULL;
 dup3_t dup3_f = NULL;
@@ -118,7 +120,7 @@ int connect(int fd, const struct sockaddr *addr, socklen_t addrlen)
         return connect_f(fd, addr, addrlen);
 
     FdCtxPtr fd_ctx = FdManager::getInstance().get_fd_ctx(fd);
-    if (fd_ctx->closed()) {
+    if (!fd_ctx || fd_ctx->closed()) {
         errno = EBADF;
         return -1;
     }
@@ -244,13 +246,21 @@ int poll(struct pollfd *fds, nfds_t nfds, int timeout)
     if (timeout == 0)
         return poll_f(fds, nfds, timeout);
 
-    if (nfds == 0) {
+    // --------------------------------
+    // 全部是负数fd时, 等价于sleep
+    nfds_t negative_fd_n = 0;
+    for (nfds_t i = 0; i < nfds; ++i)
+        if (fds[i].fd < 0)
+            ++ negative_fd_n;
+
+    if (nfds == negative_fd_n) {
         // co sleep
         g_Scheduler.SleepSwitch(timeout);
         return 0;
     }
+    // --------------------------------
 
-    // test nonblock poll
+    // 执行一次非阻塞的poll, 检测异常或无效fd.
     int res = poll_f(fds, nfds, 0);
     if (res != 0)
         return res;
@@ -263,8 +273,11 @@ int poll(struct pollfd *fds, nfds_t nfds, int timeout)
     for (nfds_t i = 0; i < nfds; ++i) {
         fds[i].revents = 0;     // clear revents
         pollfd & pfd = io_sentry->watch_fds_[i];
+        if (pfd.fd < 0)
+            continue;
+
         FdCtxPtr fd_ctx = FdManager::getInstance().get_fd_ctx(pfd.fd);
-        if (fd_ctx->closed()) {
+        if (!fd_ctx || fd_ctx->closed()) {
             // bad file descriptor
             pfd.revents = POLLNVAL;
             continue;
@@ -287,14 +300,14 @@ int poll(struct pollfd *fds, nfds_t nfds, int timeout)
         io_sentry->timer_ = g_Scheduler.ExpireAt(
                 std::chrono::milliseconds(timeout),
                 [io_sentry]{
-                    g_Scheduler.IOBlockTriggered(io_sentry);
+                    g_Scheduler.GetIoWait().IOBlockTriggered(io_sentry);
                 });
 
     // save io-sentry
     tk->io_sentry_ = io_sentry;
 
     // yield
-    g_Scheduler.IOBlockSwitch();
+    g_Scheduler.GetIoWait().CoSwitch();
 
     // clear task->io_sentry_ reference count
     tk->io_sentry_.reset();
@@ -340,6 +353,25 @@ int select(int nfds, fd_set *readfds, fd_set *writefds,
 
     nfds = std::min<int>(nfds, FD_SETSIZE);
 
+    // 执行一次非阻塞的select, 检测异常或无效fd.
+    fd_set rfs, wfs, efs;
+    FD_ZERO(&rfs);
+    FD_ZERO(&wfs);
+    FD_ZERO(&efs);
+    if (readfds) rfs = *readfds;
+    if (writefds) wfs = *writefds;
+    if (exceptfds) efs = *exceptfds;
+    timeval zero_tv = {0, 0};
+    int n = select_f(nfds, (readfds ? &rfs : nullptr),
+            (writefds ? &wfs : nullptr),
+            (exceptfds ? &efs : nullptr), &zero_tv);
+    if (n != 0) {
+        if (readfds) *readfds = rfs;
+        if (writefds) *writefds = wfs;
+        if (exceptfds) *exceptfds = efs;
+        return n;
+    }
+
     // -------------------------------------
     // convert fd_set to pollfd, and clear 3 fd_set.
     std::pair<fd_set*, uint32_t> sets[3] = {
@@ -373,7 +405,7 @@ int select(int nfds, fd_set *readfds, fd_set *writefds,
 
     // -------------------------------------
     // poll
-    int n = poll(pfds.data(), pfds.size(), timeout_ms);
+    n = poll(pfds.data(), pfds.size(), timeout_ms);
     if (n <= 0)
         return n;
     // -------------------------------------
@@ -494,7 +526,7 @@ int fcntl(int __fd, int __cmd, ...)
                 int flags = va_arg(va, int);
                 va_end(va);
                 FdCtxPtr fd_ctx = FdManager::getInstance().get_fd_ctx(__fd);
-                if (fd_ctx->closed()) return fcntl_f(__fd, __cmd, flags);
+                if (!fd_ctx || fd_ctx->closed()) return fcntl_f(__fd, __cmd, flags);
                 fd_ctx->set_user_nonblock(flags & O_NONBLOCK);
                 if (fd_ctx->sys_nonblock())
                     flags |= O_NONBLOCK;
@@ -528,7 +560,7 @@ int fcntl(int __fd, int __cmd, ...)
                 va_end(va);
                 int flags = fcntl_f(__fd, __cmd);
                 FdCtxPtr fd_ctx = FdManager::getInstance().get_fd_ctx(__fd);
-                if (fd_ctx->closed()) return flags;
+                if (!fd_ctx || fd_ctx->closed()) return flags;
                 if (fd_ctx->user_nonblock())
                     return flags | O_NONBLOCK;
                 else
@@ -561,11 +593,32 @@ int ioctl(int fd, unsigned long int request, ...)
     if (FIONBIO == request) {
         bool user_nonblock = !!*(int*)arg;
         FdCtxPtr fd_ctx = FdManager::getInstance().get_fd_ctx(fd);
-        fd_ctx->set_user_nonblock(user_nonblock);
+        if (fd_ctx) fd_ctx->set_user_nonblock(user_nonblock);
         return 0;
     }
 
     return ioctl_f(fd, request, arg);
+}
+
+int getsockopt(int sockfd, int level, int optname, void *optval, socklen_t *optlen)
+{
+    if (!getsockopt_f) coroutine_hook_init();
+    return getsockopt_f(sockfd, level, optname, optval, optlen);
+}
+int setsockopt(int sockfd, int level, int optname, const void *optval, socklen_t optlen)
+{
+    if (!setsockopt_f) coroutine_hook_init();
+
+    if (level == SOL_SOCKET) {
+        if (optname == SO_RCVTIMEO || optname == SO_SNDTIMEO) {
+            FdCtxPtr fd_ctx = FdManager::getInstance().get_fd_ctx(sockfd);
+            if (fd_ctx) {
+                fd_ctx->set_time_o(optname, *(const timeval*)optval);
+            }
+        }
+    }
+
+    return setsockopt_f(sockfd, level, optname, optval, optlen);
 }
 
 int dup(int oldfd)
@@ -644,6 +697,10 @@ extern int __nanosleep(const struct timespec *req, struct timespec *rem);
 extern int __close(int);
 extern int __fcntl(int __fd, int __cmd, ...);
 extern int __ioctl(int fd, unsigned long int request, ...);
+extern int __getsockopt(int sockfd, int level, int optname,
+        void *optval, socklen_t *optlen);
+extern int __setsockopt(int sockfd, int level, int optname,
+        const void *optval, socklen_t optlen);
 extern int __dup(int);
 extern int __dup2(int, int);
 extern int __dup3(int, int, int);
@@ -678,6 +735,8 @@ void coroutine_hook_init()
     close_f = (close_t)dlsym(RTLD_NEXT, "close");
     fcntl_f = (fcntl_t)dlsym(RTLD_NEXT, "fcntl");
     ioctl_f = (ioctl_t)dlsym(RTLD_NEXT, "ioctl");
+    getsockopt_f = (getsockopt_t)dlsym(RTLD_NEXT, "getsockopt");
+    setsockopt_f = (setsockopt_t)dlsym(RTLD_NEXT, "setsockopt");
     dup_f = (dup_t)dlsym(RTLD_NEXT, "dup");
     dup2_f = (dup2_t)dlsym(RTLD_NEXT, "dup2");
     dup3_f = (dup3_t)dlsym(RTLD_NEXT, "dup3");
@@ -701,6 +760,8 @@ void coroutine_hook_init()
     close_f = &__close;
     fcntl_f = &__fcntl;
     ioctl_f = &__ioctl;
+    getsockopt_f = &__getsockopt;
+    setsockopt_f = &__setsockopt;
     dup_f = &__dup;
     dup2_f = &__dup2;
     dup3_f = &__dup3;
@@ -708,8 +769,8 @@ void coroutine_hook_init()
 
     if (!connect_f || !read_f || !write_f || !readv_f || !writev_f || !send_f
             || !sendto_f || !sendmsg_f || !accept_f || !poll_f || !select_f
-            || !sleep_f || !nanosleep_f || !close_f || !fcntl_f || !dup_f
-            || !dup2_f || !dup3_f)
+            || !sleep_f || !nanosleep_f || !close_f || !fcntl_f || !setsockopt_f
+            || !getsockopt_f || !dup_f || !dup2_f || !dup3_f)
     {
         fprintf(stderr, "Hook syscall failed. Please don't remove libc.a when static-link.\n");
         exit(1);

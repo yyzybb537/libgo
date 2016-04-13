@@ -100,7 +100,7 @@ TEST(TSQueue, PushPopMulti) {
         id_vec.pop_front();
         id_vec.push_back(bak_id);
     }
-    q.push(slist);
+    q.push(std::move(slist));
     ++first;
     EXPECT_EQ(id_vec.front(), first);
 
@@ -113,7 +113,7 @@ TEST(TSQueue, PushPopMulti) {
         id_vec.pop_front();
         id_vec.push_back(bak_id);
     }
-    q.push(slist);
+    q.push(std::move(slist));
     first += 2;
     EXPECT_EQ(id_vec.front(), first);
 
@@ -126,7 +126,7 @@ TEST(TSQueue, PushPopMulti) {
         id_vec.pop_front();
         id_vec.push_back(bak_id);
     }
-    q.push(slist);
+    q.push(std::move(slist));
     first += 3;
     EXPECT_EQ(id_vec.front(), first);
 
@@ -139,7 +139,7 @@ TEST(TSQueue, PushPopMulti) {
         id_vec.pop_front();
         id_vec.push_back(bak_id);
     }
-    q.push(slist);
+    q.push(std::move(slist));
     first += 94;
     first %= 100;
     EXPECT_EQ(id_vec.front(), first);
@@ -154,7 +154,7 @@ TEST(TSQueue, PushPopMulti) {
         id_vec.pop_front();
         id_vec.push_back(bak_id);
     }
-    q.push(slist);
+    q.push(std::move(slist));
     EXPECT_EQ(id_vec.front(), first);
 
     slist = q.pop(101);
@@ -167,8 +167,13 @@ TEST(TSQueue, PushPopMulti) {
         id_vec.pop_front();
         id_vec.push_back(bak_id);
     }
-    q.push(slist);
+    q.push(std::move(slist));
     EXPECT_EQ(id_vec.front(), first);
+
+    q.push(std::move(slist));
+    q.pop_all();
+    q.pop_all();
+    q.pop_all();
 }
 
 TEST(TSQueue, Erase) {
@@ -391,5 +396,122 @@ TEST(CompareQueues, TSQueueTest)
                 });
     }
     tg.join_all();
+}
+
+struct TestRef : public TSQueueHook, public RefObject
+{
+    static std::atomic<uint32_t> s_id;
+    static std::atomic<uint32_t> s_count;
+    uint32_t id_;
+
+    TestRef() : id_(++s_id) { ++s_count; }
+    explicit TestRef(uint32_t a) : id_(a) { ++s_count; }
+    ~TestRef() { --s_count; }
+};
+std::atomic<uint32_t> TestRef::s_id {0};
+std::atomic<uint32_t> TestRef::s_count {0};
+
+TEST(Ref, TsQueueRef)
+{
+    {
+        TestRef * ptr = new TestRef;
+        EXPECT_EQ(TestRef::s_count, 1);
+        EXPECT_EQ(ptr->reference_, 1);
+        TSQueue<TestRef> q;
+        q.push(ptr);
+        EXPECT_EQ(ptr->reference_, 2);
+        TestRef * out = q.pop();
+        EXPECT_EQ(ptr->reference_, 1);
+        out->DecrementRef();
+        EXPECT_EQ(TestRef::s_count, 0);
+    }
+
+    {
+        TestRef * ptr = new TestRef;
+        EXPECT_EQ(TestRef::s_count, 1);
+        EXPECT_EQ(ptr->reference_, 1);
+        TSQueue<TestRef> q;
+        q.push(ptr);
+        EXPECT_EQ(ptr->reference_, 2);
+        q.erase(ptr);
+        EXPECT_EQ(ptr->reference_, 1);
+        ptr->DecrementRef();
+        EXPECT_EQ(TestRef::s_count, 0);
+    }
+
+    {
+        const int n = 128;
+        TSQueue<TestRef> q;
+        for (int i = 0; i < n; ++i)
+            q.push(new TestRef);
+        EXPECT_EQ(TestRef::s_count, n);
+        SList<TestRef> slist = q.pop_all();
+        EXPECT_EQ(TestRef::s_count, n);
+        for (auto &elem : slist)
+            elem.DecrementRef();
+        EXPECT_EQ(TestRef::s_count, n);
+        slist.clear();
+        EXPECT_EQ(TestRef::s_count, 0);
+    }
+
+    {
+        const int n = 128;
+        TSQueue<TestRef> q;
+        for (int i = 0; i < n; ++i)
+            q.push(new TestRef);
+        EXPECT_EQ(TestRef::s_count, n);
+        SList<TestRef> slist = q.pop(28);
+        EXPECT_EQ(TestRef::s_count, n);
+        for (auto &elem : slist)
+            elem.DecrementRef();
+        EXPECT_EQ(TestRef::s_count, n);
+        slist.clear();
+        EXPECT_EQ(TestRef::s_count, 100);
+        q.push(q.pop_all());
+        q.push(q.pop_all());
+        q.push(q.pop_all());
+        q.push(q.pop_all());
+        slist = q.pop_all();
+        for (auto &elem : slist)
+            elem.DecrementRef();
+        EXPECT_EQ(TestRef::s_count, 100);
+    }
+}
+
+TEST(Ref, TsSkipQueueRef)
+{
+    {
+        const int n = 128;
+        TSSkipQueue<TestRef> q;
+        for (int i = 0; i < n; ++i)
+            q.push(new TestRef);
+        EXPECT_EQ(TestRef::s_count, n);
+        SList<TestRef> slist = q.pop(128);
+        EXPECT_EQ(TestRef::s_count, n);
+        for (auto &elem : slist)
+            elem.DecrementRef();
+        EXPECT_EQ(TestRef::s_count, n);
+        slist.clear();
+        EXPECT_EQ(TestRef::s_count, 0);
+    }
+
+    {
+        const int n = 128;
+        TSSkipQueue<TestRef> q;
+        for (int i = 0; i < n; ++i)
+            q.push(new TestRef);
+        EXPECT_EQ(TestRef::s_count, n);
+        SList<TestRef> slist = q.pop(28);
+        EXPECT_EQ(TestRef::s_count, n);
+        for (auto &elem : slist)
+            elem.DecrementRef();
+        EXPECT_EQ(TestRef::s_count, n);
+        slist.clear();
+        EXPECT_EQ(TestRef::s_count, 100);
+        slist = q.pop(100);
+        for (auto &elem : slist)
+            elem.DecrementRef();
+        EXPECT_EQ(TestRef::s_count, 100);
+    }
 }
 

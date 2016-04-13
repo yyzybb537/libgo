@@ -35,7 +35,7 @@ struct IoSentry : public RefObject, public TSQueueHook
     };
 
     volatile std::atomic<long> io_state_;
-    std::vector<pollfd> watch_fds_;
+    std::vector<pollfd> watch_fds_; //会被多线程并行访问, add_into_reactor后长度不能变
     CoTimerPtr timer_;
     TaskPtr task_ptr_;
 
@@ -89,6 +89,8 @@ private:
 
     TaskWSet& ChooseSet(int events);
 
+    void set_pending_events(int events);
+
 private:
     std::mutex lock_;
     bool is_initialize_;
@@ -109,6 +111,7 @@ class FdManager
 {
 public:
     typedef std::deque<FdCtxPtr*> FdList;
+    typedef std::map<int, FdCtxPtr*> BigFdMap;
 
     static FdManager& getInstance();
 
@@ -119,8 +122,12 @@ public:
     int close(int fd, bool call_syscall = true);
 
 private:
+    FdCtxPtr* &get_ref(int fd);
+
+private:
     LFLock lock_;
     FdList fd_list_;
+    BigFdMap big_fds_;
 };
 
 } //namespace co 

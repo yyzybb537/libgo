@@ -63,6 +63,7 @@ Task::Task(TaskF const& fn, std::size_t stack_size)
     : id_(++s_id), ctx_(stack_size, [this]{C_func(this);}), fn_(fn)
 {
     ++s_task_count;
+    DebugPrint(dbg_task, "task(%s) construct. this=%p", DebugInfo(), this);
 }
 
 Task::~Task()
@@ -70,6 +71,7 @@ Task::~Task()
     assert(!this->prev);
     assert(!this->next);
     assert(!this->check_);
+    assert(s_task_count > 0);
 
     if (Scheduler::getInstance().GetOptions().enable_coro_stat) {
         std::unique_lock<LFLock> lock(s_stat_lock);
@@ -77,6 +79,8 @@ Task::~Task()
     }
 
     --s_task_count;
+
+    DebugPrint(dbg_task, "task(%s) destruct. this=%p", DebugInfo(), this);
 }
 
 void Task::InitLocation(const char* file, int lineno)

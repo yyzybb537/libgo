@@ -74,6 +74,7 @@ public:
         check_ = other.check_;
         count_ = other.count_;
         other.stealed();
+        return *this;
     }
 
     ~SList()
@@ -197,8 +198,8 @@ public:
 
     void push(SList<T> && elements)
     {
+        if (elements.empty()) return ;  // empty的SList不能check, 因为stealed的时候已经清除check_.
         assert(elements.check(this));
-        if (elements.empty()) return ;
         LockGuard lock(lck);
         count_ += elements.size();
         tail_->next = elements.head();
