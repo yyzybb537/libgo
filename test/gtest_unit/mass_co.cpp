@@ -14,7 +14,7 @@ using namespace co;
 using ::testing::TestWithParam;
 using ::testing::Values;
 
-bool is_show_memory = false;
+bool is_show_memory = true;
 
 struct MassCo : public TestWithParam<int>
 {
@@ -37,12 +37,12 @@ void foo()
 
 TEST_P(MassCo, LittleStack)
 {
-    co_sched.GetOptions().debug = dbg_task;
+//    co_sched.GetOptions().debug = dbg_task;
 
     c = 0;
     int n = n_;
     for (int i = 0; i < n; ++i)
-        go_stack(1024) foo;
+        go_stack(4096) foo;
 
     if (is_show_memory)
     {
@@ -151,10 +151,10 @@ TEST_P(MassCo, CnK)
 INSTANTIATE_TEST_CASE_P(
 	MassCoTest,
 	MassCo,
-	Values(1, 100, 1000, 10000));
+	Values(100, 1000, 10000));
 #else
 INSTANTIATE_TEST_CASE_P(
 	MassCoTest,
 	MassCo,
-	Values(1, 100, 1000, 10000, 100000));
+	Values(100, 1000, 10000, 100000));
 #endif
