@@ -3,9 +3,7 @@
 
 // VS2013²»Ö§³Öthread_local
 #if defined(_MSC_VER) && _MSC_VER < 1900
-#define co_thread_local __declspec(thread)
-#else 
-#define co_thread_local thread_local
+#define thread_local __declspec(thread)
 #endif
 
 #ifndef _WIN32

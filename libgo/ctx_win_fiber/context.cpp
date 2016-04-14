@@ -7,7 +7,7 @@ namespace co
 {
     static void*& GetTlsContext()
     {
-        static co_thread_local void* native = nullptr;
+        static thread_local void* native = nullptr;
         return native;
     }
 

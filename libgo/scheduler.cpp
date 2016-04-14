@@ -28,7 +28,7 @@ Scheduler::~Scheduler()
 
 ThreadLocalInfo& Scheduler::GetLocalInfo()
 {
-    static co_thread_local ThreadLocalInfo *info = NULL;
+    static thread_local ThreadLocalInfo *info = NULL;
     if (!info)
         info = new ThreadLocalInfo();
 
