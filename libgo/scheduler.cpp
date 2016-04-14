@@ -119,11 +119,11 @@ uint32_t Scheduler::Run()
     return run_task_count;
 }
 
-void Scheduler::RunUntilNoTask()
+void Scheduler::RunUntilNoTask(uint32_t loop_task_count)
 {
     do { 
         Run();
-    } while (!IsEmpty());
+    } while (task_count_ > loop_task_count);
 }
 
 // Run函数的一部分, 处理runnable状态的协程
