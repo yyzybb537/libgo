@@ -52,7 +52,7 @@ extern uint32_t codebug_GetCurrentThreadID();
 
 #define DebugPrint(type, fmt, ...) \
     do { \
-        if (::co::codebug_GetDebugOptions() & type) { \
+        if (::co::codebug_GetDebugOptions() & (type)) { \
             fprintf(::co::codebug_GetDebugOutput(), "co_dbg[%08u][%04u] " fmt "\n", \
                     ::co::codebug_GetCurrentProcessID(), ::co::codebug_GetCurrentThreadID(), ##__VA_ARGS__); \
         } \

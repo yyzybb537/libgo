@@ -92,7 +92,8 @@ struct Task
 
     int sleep_ms_ = 0;                  // 睡眠时间
 
-    explicit Task(TaskF const& fn, std::size_t stack_size);
+    explicit Task(TaskF const& fn, std::size_t stack_size,
+            const char* file, int lineno);
     ~Task();
 
     void InitLocation(const char* file, int lineno);

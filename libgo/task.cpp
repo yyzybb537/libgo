@@ -33,7 +33,7 @@ static void C_func(Task* self)
 
                 default:
                 case eCoExHandle::debugger_only:
-                    DebugPrint(dbg_exception, "task(%s) has uncaught exception:%s",
+                    DebugPrint(dbg_exception|dbg_task, "task(%s) has uncaught exception:%s",
                             self->DebugInfo(), e.what());
                     break;
             }
@@ -49,7 +49,7 @@ static void C_func(Task* self)
 
                 default:
                 case eCoExHandle::debugger_only:
-                    DebugPrint(dbg_exception, "task(%s) has uncaught exception.", self->DebugInfo());
+                    DebugPrint(dbg_exception|dbg_task, "task(%s) has uncaught exception.", self->DebugInfo());
                     break;
             }
         }
@@ -59,10 +59,11 @@ static void C_func(Task* self)
     Scheduler::getInstance().CoYield();
 }
 
-Task::Task(TaskF const& fn, std::size_t stack_size)
+Task::Task(TaskF const& fn, std::size_t stack_size, const char* file, int lineno)
     : id_(++s_id), ctx_(stack_size, [this]{C_func(this);}), fn_(fn)
 {
     ++s_task_count;
+    InitLocation(file, lineno);
     DebugPrint(dbg_task, "task(%s) construct. this=%p", DebugInfo(), this);
 }
 
