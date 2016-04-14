@@ -25,7 +25,7 @@ using namespace co;
 typedef int(*select_t)(int nfds, fd_set *readfds, fd_set *writefds,
                           fd_set *exceptfds, struct timeval *timeout);
 
-bool FD_EQUAL(fd_set *lhs, fd_set *rhs){
+bool FD_EQUAL(fd_set const* lhs, fd_set const* rhs){
     return memcmp(lhs, rhs, sizeof(fd_set)) == 0;
 }
 
@@ -42,6 +42,20 @@ int FD_SIZE(fd_set *fds){
         if (FD_ISSET(i, fds))
             ++n;
     return n;
+}
+
+int FD_NFDS(fd_set *fds1 = nullptr, fd_set *fds2 = nullptr, fd_set *fds3 = nullptr)
+{
+    int n = 0;
+    fd_set* fdss[3] = {fds1, fds2, fds3};
+    for (int i = 0; i < 3; ++i) {
+        fd_set* fds = fdss[i];
+        if (!fds) continue;
+        for (int fd = 0; fd < FD_SETSIZE; ++fd)
+            if (FD_ISSET(fd, fds))
+                n = (std::max)(fd, n);
+    }
+    return n + 1;
 }
 
 struct GcNew
@@ -111,14 +125,43 @@ TEST(Select, TimeoutIs0)
 //    g_Scheduler.GetOptions().debug = dbg_all;
 //    g_Scheduler.GetOptions().debug_output = fopen("log", "w+");
     go [] {
-        fd_set wr_fds;
-        auto x = CreateFds(&wr_fds, 2);
         uint64_t yield_count = g_Scheduler.GetCurrentTaskYieldCount();
-        EXPECT_EQ(FD_SIZE(&wr_fds), 2);
-        EXPECT_FALSE(FD_ISZERO(&wr_fds));
-        int n = select(x->nfds_, NULL, &wr_fds, NULL, &zero_timeout);
+        select(0, NULL, NULL, NULL, &zero_timeout);
+        EXPECT_EQ(g_Scheduler.GetCurrentTaskYieldCount(), yield_count);
+
+        int fds[2];
+        int res = socketpair(AF_LOCAL, SOCK_STREAM, 0, fds);
+        EXPECT_EQ(res, 0);
+
+        fd_set wfs;
+        FD_ZERO(&wfs);
+        FD_SET(fds[0], &wfs);
+        FD_SET(fds[1], &wfs);
+        EXPECT_EQ(FD_SIZE(&wfs), 2);
+        const fd_set x = wfs;
+
+        yield_count = g_Scheduler.GetCurrentTaskYieldCount();
+        int n = select(FD_NFDS(&wfs), NULL, &wfs, NULL, &zero_timeout);
         EXPECT_EQ(n, 2);
-        EXPECT_TRUE(*x == wr_fds);
+        EXPECT_TRUE(FD_EQUAL(&x, &wfs));
+        EXPECT_EQ(g_Scheduler.GetCurrentTaskYieldCount(), yield_count);
+
+        fd_set rfs = x;
+
+        yield_count = g_Scheduler.GetCurrentTaskYieldCount();
+        n = select(FD_NFDS(&rfs), &rfs, NULL, NULL, &zero_timeout);
+        EXPECT_EQ(n, 0);
+        EXPECT_TRUE(FD_ISZERO(&rfs));
+        EXPECT_EQ(g_Scheduler.GetCurrentTaskYieldCount(), yield_count);
+
+        rfs = x;
+        wfs = x;
+
+        yield_count = g_Scheduler.GetCurrentTaskYieldCount();
+        n = select(FD_NFDS(&rfs, &wfs), &rfs, &wfs, NULL, &zero_timeout);
+        EXPECT_EQ(n, 2);
+        EXPECT_TRUE(FD_ISZERO(&rfs));
+        EXPECT_TRUE(FD_EQUAL(&x, &wfs));
         EXPECT_EQ(g_Scheduler.GetCurrentTaskYieldCount(), yield_count);
     };
     g_Scheduler.RunUntilNoTask();
@@ -128,24 +171,35 @@ TEST(Select, TimeoutIs0)
 TEST(Select, TimeoutIsF1)
 {
     go [] {
-        fd_set wr_fds;
-        auto x = CreateFds(&wr_fds, 2);
-        EXPECT_EQ(FD_SIZE(&wr_fds), 2);
         uint64_t yield_count = g_Scheduler.GetCurrentTaskYieldCount();
-        int n = select(x->nfds_, NULL, &wr_fds, NULL, NULL);
-        EXPECT_TRUE(*x == wr_fds);
-        EXPECT_EQ(n, 2);
+        select(0, NULL, NULL, NULL, nullptr);
         EXPECT_EQ(g_Scheduler.GetCurrentTaskYieldCount(), yield_count + 1);
 
-        fd_set rd_fds;
-        auto r = CreateFds(&rd_fds, 2);
-        EXPECT_EQ(FD_SIZE(&rd_fds), 2);
+        int fds[2];
+        int res = socketpair(AF_LOCAL, SOCK_STREAM, 0, fds);
+        EXPECT_EQ(res, 0);
+
+        fd_set wfs;
+        FD_ZERO(&wfs);
+        FD_SET(fds[0], &wfs);
+        FD_SET(fds[1], &wfs);
+        EXPECT_EQ(FD_SIZE(&wfs), 2);
+        const fd_set x = wfs;
+
         yield_count = g_Scheduler.GetCurrentTaskYieldCount();
-        n = select(std::max(x->nfds_, r->nfds_), &rd_fds, &wr_fds, NULL, NULL);
-        EXPECT_TRUE(*x == wr_fds);
-        EXPECT_TRUE(FD_ISZERO(&rd_fds));
+        int n = select(FD_NFDS(&wfs), NULL, &wfs, NULL, nullptr);
         EXPECT_EQ(n, 2);
-        EXPECT_EQ(g_Scheduler.GetCurrentTaskYieldCount(), yield_count + 1);
+        EXPECT_TRUE(FD_EQUAL(&x, &wfs));
+        EXPECT_EQ(g_Scheduler.GetCurrentTaskYieldCount(), yield_count);
+
+        fd_set rfs = x;
+        yield_count = g_Scheduler.GetCurrentTaskYieldCount();
+        n = select(FD_NFDS(&rfs, &wfs), &rfs, &wfs, NULL, nullptr);
+        EXPECT_EQ(n, 2);
+        EXPECT_TRUE(FD_EQUAL(&x, &wfs));
+        EXPECT_TRUE(FD_ISZERO(&rfs));
+        EXPECT_EQ(g_Scheduler.GetCurrentTaskYieldCount(), yield_count);
+
     };
     g_Scheduler.RunUntilNoTask();
     EXPECT_EQ(Task::GetTaskCount(), 0);
@@ -161,7 +215,7 @@ TEST(Select, TimeoutIs1)
         int n = select(x->nfds_, NULL, &wr_fds, NULL, gc_new timeval{1, 0});
         EXPECT_TRUE(*x == wr_fds);
         EXPECT_EQ(n, 2);
-        EXPECT_EQ(g_Scheduler.GetCurrentTaskYieldCount(), yield_count + 1);
+        EXPECT_EQ(g_Scheduler.GetCurrentTaskYieldCount(), yield_count);
 
         fd_set rd_fds;
         auto r = CreateFds(&rd_fds, 2);
@@ -171,7 +225,7 @@ TEST(Select, TimeoutIs1)
         EXPECT_TRUE(*x == wr_fds);
         EXPECT_TRUE(FD_ISZERO(&rd_fds));
         EXPECT_EQ(n, 2);
-        EXPECT_EQ(g_Scheduler.GetCurrentTaskYieldCount(), yield_count + 1);
+        EXPECT_EQ(g_Scheduler.GetCurrentTaskYieldCount(), yield_count);
     };
     g_Scheduler.RunUntilNoTask();
     EXPECT_EQ(Task::GetTaskCount(), 0);
@@ -239,9 +293,7 @@ TEST(Select, MultiThreads)
                 g_Scheduler.RunUntilNoTask();
                 });
     tg.join_all();
-    EXPECT_EQ(Task::GetTaskCount(), Task::GetDeletedTaskCount());
     if (Task::GetTaskCount()) // 可能会有一些Task还未删除，执行删除逻辑。
         g_Scheduler.RunUntilNoTask();
     EXPECT_EQ(Task::GetTaskCount(), 0);
-    EXPECT_EQ(Task::GetDeletedTaskCount(), 0);
 }

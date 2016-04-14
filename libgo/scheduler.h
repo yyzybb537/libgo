@@ -110,7 +110,10 @@ class Scheduler
         uint32_t Run();
 
         // 循环Run直到没有协程为止
-        void RunUntilNoTask();
+        // @loop_task_count: 不计数的常驻协程.
+        //    例如：loop_task_count == 2时, 还剩最后2个协程的时候这个函数就会return.
+        // @remarks: 这个接口会至少执行一次Run.
+        void RunUntilNoTask(uint32_t loop_task_count = 0);
         
         // 无限循环执行Run
         void RunLoop();
@@ -162,12 +165,11 @@ class Scheduler
         // }@
         /// ------------------------------------------------------------------------
 
+        // iowait对象
+        IoWait& GetIoWait() { return io_wait_; }
+
     public:
         Task* GetCurrentTask();
-
-        /// 调用阻塞式网络IO时, 将当前协程加入等待队列中, socket加入epoll中.
-        void IOBlockSwitch(int fd, uint32_t event, int timeout_ms);
-        void IOBlockSwitch(std::vector<FdStruct> && fdsts, int timeout_ms);
 
     private:
         Scheduler();
@@ -226,6 +228,7 @@ class Scheduler
         friend class IoWait;
         friend class SleepWait;
         friend class Processer;
+        friend class FileDescriptorCtx;
 };
 
 } //namespace co

@@ -53,13 +53,26 @@ void echo_server()
 
                 int noyield_for_c = 0;
                 for (;;++noyield_for_c) {
+retry_read:
                     auto n = read(sock_fd, buf, buflen);
-                    if (n <= 0) break;
+                    if (n <= 0) {
+                        if (errno == EINTR) {
+                            printf("trigger EINTR. socket=%d\n", sock_fd);
+                            goto retry_read;
+                        }
+                        break;
+                    }
 
                     size_t begin = 0;
 goon_write:
                     ssize_t rn = write(sock_fd, buf + begin, std::min<int>(n, qdata));
-                    if (rn <= 0) break;
+                    if (rn <= 0) {
+                        if (errno == EINTR) {
+                            printf("trigger EINTR. socket=%d\n", sock_fd);
+                            goto goon_write;
+                        }
+                        break;
+                    }
                     n -= rn;
                     begin += rn;
                     if ((noyield_for_c & 0xff) == 0)
@@ -70,7 +83,7 @@ goon_write:
                         goto goon_write;
                     }
                 }
-                printf("error trigger, socket=%d\n", sock_fd);
+                printf("error trigger, socket=%d. errinfo:%s\n", sock_fd, strerror(errno));
                 err << true;
             };
 

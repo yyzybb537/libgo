@@ -2,75 +2,118 @@
 #include <mutex>
 #include <assert.h>
 #include <deque>
+#include "util.h"
 #include "spinlock.h"
 
 namespace co
 {
 
-struct fake_lock_guard
-{
-    template <typename Mutex>
-    explicit fake_lock_guard(Mutex&) {}
-};
-
+// 侵入式数据结构Hook基类
 struct TSQueueHook
 {
-    TSQueueHook *prev = NULL;
-    TSQueueHook *next = NULL;
-    void *check_ = NULL;
+    TSQueueHook *prev = nullptr;
+    TSQueueHook *next = nullptr;
+    void *check_ = nullptr;
 };
 
+// 侵入式双向链表
+// moveable, noncopyable, foreachable
+// erase, size, empty: O(1)
 template <typename T>
 class SList
 {
+    static_assert((std::is_base_of<TSQueueHook, T>::value), "T must be baseof TSQueueHook");
+
 public:
-    struct iterator;
     struct iterator
     {
-        TSQueueHook* ptr;
+        T* ptr;
 
-        iterator() : ptr(NULL) {}
-        explicit iterator(TSQueueHook* p) : ptr(p) {}
+        iterator() : ptr(nullptr) {}
+        explicit iterator(T* p) : ptr(p) {}
         friend bool operator==(iterator const& lhs, iterator const& rhs)
         { return lhs.ptr == rhs.ptr; }
         friend bool operator!=(iterator const& lhs, iterator const& rhs)
         { return !(lhs.ptr == rhs.ptr); }
-        iterator& operator++() { ptr = ptr->next; return *this; }
+        iterator& operator++() { ptr = (T*)ptr->next; return *this; }
         iterator operator++(int) { iterator ret = *this; ++(*this); return ret; }
-        iterator& operator--() { ptr = ptr->prev; return *this; }
+        iterator& operator--() { ptr = (T*)ptr->prev; return *this; }
         iterator operator--(int) { iterator ret = *this; --(*this); return ret; }
         T& operator*() { return *(T*)ptr; }
         T* operator->() { return (T*)ptr; }
     };
 
-    TSQueueHook* head_;
-    TSQueueHook* tail_;
+    T* head_;
+    T* tail_;
     void *check_;
     std::size_t count_;
 
 public:
-    SList() : head_(NULL), tail_(NULL), check_(NULL), count_(0) {}
+    SList() : head_(nullptr), tail_(nullptr), check_(nullptr), count_(0) {}
+
     SList(TSQueueHook* h, TSQueueHook* t, std::size_t count, void *c)
-        : head_(h), tail_(t), check_(c), count_(count) {}
+        : head_((T*)h), tail_((T*)t), check_(c), count_(count) {}
+
+    SList(SList const&) = delete;
+    SList& operator=(SList const&) = delete;
+
+    SList(SList<T> && other)
+    {
+        head_ = other.head_;
+        tail_ = other.tail_;
+        check_ = other.check_;
+        count_ = other.count_;
+        other.stealed();
+    }
+
+    SList& operator=(SList<T> && other)
+    {
+        clear();
+        head_ = other.head_;
+        tail_ = other.tail_;
+        check_ = other.check_;
+        count_ = other.count_;
+        other.stealed();
+        return *this;
+    }
+
+    ~SList()
+    {
+        clear();
+    }
 
     iterator begin() { return iterator{head_}; }
     iterator end() { return iterator(); }
-    inline bool empty() const { return head_ == NULL; }
+    inline bool empty() const { return head_ == nullptr; }
     iterator erase(iterator it)
     {
-        TSQueueHook* hook = (it++).ptr;
-        if (hook->prev) hook->prev->next = hook->next;
-        else head_ = head_->next;
-        if (hook->next) hook->next->prev = hook->prev;
-        else tail_ = tail_->prev;
-        hook->prev = hook->next = NULL;
-        hook->check_ = NULL;
+        T* ptr = (it++).ptr;
+        if (ptr->prev) ptr->prev->next = ptr->next;
+        else head_ = (T*)head_->next;
+        if (ptr->next) ptr->next->prev = ptr->prev;
+        else tail_ = (T*)tail_->prev;
+        ptr->prev = ptr->next = nullptr;
+        ptr->check_ = nullptr;
         -- count_;
+        DecrementRef(ptr);
         return it;
     }
     std::size_t size() const
     {
         return count_;
+    }
+    void clear()
+    {
+        auto it = begin();
+        while (it != end())
+            it = erase(it);
+        stealed();
+    }
+    void stealed()
+    {
+        head_ = tail_ = nullptr;
+        check_ = nullptr;
+        count_ = 0;
     }
 
     inline TSQueueHook* head() { return head_; }
@@ -82,6 +125,8 @@ public:
 template <typename T, bool ThreadSafe = true>
 class TSQueue
 {
+    static_assert((std::is_base_of<TSQueueHook, T>::value), "T must be baseof TSQueueHook");
+
 private:
     LFLock lck;
     typedef typename std::conditional<ThreadSafe,
@@ -103,7 +148,7 @@ public:
         LockGuard lock(lck);
         while (head_ != tail_) {
             TSQueueHook *prev = tail_->prev;
-            delete (T*)tail_;
+            DecrementRef((T*)tail_);
             tail_ = prev;
         }
         delete head_;
@@ -128,37 +173,40 @@ public:
         TSQueueHook *hook = static_cast<TSQueueHook*>(element);
         tail_->next = hook;
         hook->prev = tail_;
-        hook->next = NULL;
+        hook->next = nullptr;
         hook->check_ = this;
         tail_ = hook;
         ++ count_;
+        IncrementRef(element);
     }
 
     T* pop()
     {
-        if (head_ == tail_) return NULL;
+        if (head_ == tail_) return nullptr;
         LockGuard lock(lck);
-        if (head_ == tail_) return NULL;
+        if (head_ == tail_) return nullptr;
         TSQueueHook* ptr = head_->next;
         if (ptr == tail_) tail_ = head_;
         head_->next = ptr->next;
         if (ptr->next) ptr->next->prev = head_;
-        ptr->prev = ptr->next = NULL;
-        ptr->check_ = NULL;
+        ptr->prev = ptr->next = nullptr;
+        ptr->check_ = nullptr;
         -- count_;
+        DecrementRef((T*)ptr);
         return (T*)ptr;
     }
 
-    void push(SList<T> elements)
+    void push(SList<T> && elements)
     {
+        if (elements.empty()) return ;  // empty的SList不能check, 因为stealed的时候已经清除check_.
         assert(elements.check(this));
-        if (elements.empty()) return ;
         LockGuard lock(lck);
         count_ += elements.size();
         tail_->next = elements.head();
         elements.head()->prev = tail_;
-        elements.tail()->next = NULL;
+        elements.tail()->next = nullptr;
         tail_ = elements.tail();
+        elements.stealed();
     }
 
     // O(n), 慎用.
@@ -175,7 +223,7 @@ public:
         if (last == tail_) tail_ = head_;
         head_->next = last->next;
         if (last->next) last->next->prev = head_;
-        first->prev = last->next = NULL;
+        first->prev = last->next = nullptr;
         count_ -= c;
         return SList<T>(first, last, c, this);
     }
@@ -188,24 +236,25 @@ public:
         TSQueueHook* first = head_->next;
         TSQueueHook* last = tail_;
         tail_ = head_;
-        head_->next = NULL;
-        first->prev = last->next = NULL;
+        head_->next = nullptr;
+        first->prev = last->next = nullptr;
         std::size_t c = count_;
         count_ = 0;
         return SList<T>(first, last, c, this);
     }
 
 
-    bool erase(TSQueueHook* hook)
+    bool erase(T* hook)
     {
         LockGuard lock(lck);
         if (hook->check_ != (void*)this) return false;
         if (hook->prev) hook->prev->next = hook->next;
         if (hook->next) hook->next->prev = hook->prev;
         else if (hook == tail_) tail_ = tail_->prev;
-        hook->prev = hook->next = NULL;
-        hook->check_ = NULL;
+        hook->prev = hook->next = nullptr;
+        hook->check_ = nullptr;
         -- count_;
+        DecrementRef((T*)hook);
         return true;
     }
 };
@@ -217,6 +266,8 @@ template <typename T,
          >
 class TSSkipQueue
 {
+    static_assert((std::is_base_of<TSQueueHook, T>::value), "T must be baseof TSQueueHook");
+
 private:
     LFLock lck;
     typedef typename std::conditional<ThreadSafe,
@@ -247,7 +298,7 @@ public:
         LockGuard lock(lck);
         while (head_ != tail_) {
             TSQueueHook *prev = tail_->prev;
-            delete (T*)tail_;
+            DecrementRef((T*)tail_);
             tail_ = prev;
         }
         delete head_;
@@ -273,10 +324,11 @@ public:
         TSQueueHook *hook = static_cast<TSQueueHook*>(element);
         tail_->next = hook;
         hook->prev = tail_;
-        hook->next = NULL;
+        hook->next = nullptr;
         hook->check_ = this;
         tail_ = hook;
         ++ count_;
+        IncrementRef(element);
 
         // 刷新跳表
         if (++skip_layer_.tail_offset_ == SkipDistance) {
@@ -322,7 +374,7 @@ public:
         if (last == tail_) tail_ = head_;
         head_->next = last->next;
         if (last->next) last->next->prev = head_;
-        first->prev = last->next = NULL;
+        first->prev = last->next = nullptr;
         count_ -= n;
         return SList<T>(first, last, n, this);
     }

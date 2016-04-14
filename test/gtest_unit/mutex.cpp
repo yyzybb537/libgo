@@ -9,6 +9,13 @@ using namespace co;
 
 TEST(Mutex, test_mutex)
 {
+//    co_sched.GetOptions().debug = dbg_switch;
+
+    go []{
+        std::cout << "start mutex test...\n" << std::endl;
+    };
+    co_sched.RunUntilNoTask();
+
     co_mutex m;
 
     go [=]()mutable {

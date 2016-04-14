@@ -1,12 +1,18 @@
 #include <dlfcn.h>
 #include <fcntl.h>
 #include <poll.h>
+#include <sys/select.h>
 #include <sys/epoll.h>
 #include <sys/socket.h>
 #include <sys/stat.h>
+#include <sys/ioctl.h>
 #include <assert.h>
 #include <chrono>
+#include <map>
+#include <stdarg.h>
 #include "scheduler.h"
+#include "fd_context.h"
+#include "linux_glibc_hook.h"
 using namespace co;
 
 namespace co {
@@ -20,139 +26,91 @@ static ssize_t read_write_mode(int fd, OriginF fn, const char* hook_fn_name, uin
     DebugPrint(dbg_hook, "task(%s) hook %s. %s coroutine.",
             tk ? tk->DebugInfo() : "nil", hook_fn_name, g_Scheduler.IsCoroutine() ? "In" : "Not in");
 
-    if (!tk)
-        return fn(fd, std::forward<Args>(args)...);
-
-    struct stat fd_stat;
-    if (-1 == fstat(fd, &fd_stat))
-        return fn(fd, std::forward<Args>(args)...);
-
-    if (!S_ISSOCK(fd_stat.st_mode)) // 不是socket, 不HOOK.
-        return fn(fd, std::forward<Args>(args)...);
-
-    int flags = fcntl(fd, F_GETFL, 0);
-    if (-1 == flags || (flags & O_NONBLOCK))
-        return fn(fd, std::forward<Args>(args)...);
-
-    if (-1 == fcntl(fd, F_SETFL, flags | O_NONBLOCK))
-        return fn(fd, std::forward<Args>(args)...);
-
-    DebugPrint(dbg_hook, "task(%s) real hook %s fd=%d", tk->DebugInfo(), hook_fn_name, fd);
-    ssize_t n = fn(fd, std::forward<Args>(args)...);
-    if (n == -1 && (errno == EAGAIN || errno == EWOULDBLOCK)) {
-        // get timeout option.
-        int timeout_ms = -1;
-        struct timeval timeout;
-        socklen_t timeout_blen = sizeof(timeout);
-        if (0 == getsockopt(fd, SOL_SOCKET, timeout_so, &timeout, &timeout_blen)) {
-            if (timeout.tv_sec > 0 || timeout.tv_usec > 0) {
-                timeout_ms = timeout.tv_sec * 1000 + timeout.tv_usec / 1000;
-                DebugPrint(dbg_hook, "hook task(%s) %s timeout=%dms. fd=%d",
-                        g_Scheduler.GetCurrentTaskDebugInfo(), hook_fn_name, timeout_ms, fd);
-            }
-        }
-        auto start_time = std::chrono::system_clock::now();
-
-retry:
-        // add into epoll, and switch other context.
-        g_Scheduler.IOBlockSwitch(fd, event, timeout_ms);
-        bool is_timeout = false;
-        if (tk->GetIoWaitData().io_block_timer_) {
-            is_timeout = true;
-            if (g_Scheduler.BlockCancelTimer(tk->GetIoWaitData().io_block_timer_)) {
-                is_timeout = false;
-                tk->DecrementRef(); // timer use ref.
-            }
-        }
-
-        if (tk->GetIoWaitData().wait_successful_ == 0) {
-            if (is_timeout) {
-                fcntl(fd, F_SETFL, flags & ~O_NONBLOCK);
-                errno = EAGAIN;
-                return -1;
-            } else {
-                fcntl(fd, F_SETFL, flags & ~O_NONBLOCK);
-                return fn(fd, std::forward<Args>(args)...);
-            }
-        }
-
-        DebugPrint(dbg_hook, "continue task(%s) %s. fd=%d", g_Scheduler.GetCurrentTaskDebugInfo(), hook_fn_name, fd);
-        n = fn(fd, std::forward<Args>(args)...);
-        if (n == -1 && (errno == EAGAIN || errno == EWOULDBLOCK)) {
-            /// epoll误唤醒
-            if (timeout_ms == -1)   // 不超时, 继续重试
-                goto retry;
-
-            int delay_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
-                    std::chrono::system_clock::now() - start_time).count();
-            if (delay_ms < timeout_ms) {    // 还有剩余的超时时间, 重试一次
-                timeout_ms -= delay_ms;
-                goto retry;
-            }
-        }
-    } else {
-        DebugPrint(dbg_hook, "task(%s) syscall(%s) completed immediately. fd=%d",
-                g_Scheduler.GetCurrentTaskDebugInfo(), hook_fn_name, fd);
+    FdCtxPtr fd_ctx = FdManager::getInstance().get_fd_ctx(fd);
+    if (!fd_ctx || fd_ctx->closed()) {
+        errno = EBADF;
+        return -1;
     }
 
-    int e = errno;
-    fcntl(fd, F_SETFL, flags & ~O_NONBLOCK);
-    errno = e;
+    if (fd_ctx->user_nonblock())
+        return fn(fd, std::forward<Args>(args)...);
+
+    timeval tv;
+    fd_ctx->get_time_o(timeout_so, &tv);
+    int timeout_ms = tv.tv_sec * 1000 + tv.tv_usec / 1000;
+    auto start = std::chrono::system_clock::now();
+
+retry:
+    ssize_t n = fn(fd, std::forward<Args>(args)...);
+    if (n == -1 && (errno == EAGAIN || errno == EWOULDBLOCK)) {
+        int poll_timeout = 0;
+        if (!timeout_ms)
+            poll_timeout = -1;
+        else {
+            int expired = std::chrono::duration_cast<std::chrono::milliseconds>(
+                    std::chrono::system_clock::now() - start).count();
+            if (expired > timeout_ms) {
+                errno = EAGAIN;
+                return -1;  // 已超时
+            }
+
+            // 剩余的等待时间
+            poll_timeout = timeout_ms - expired;
+        }
+
+        pollfd pfd;
+        pfd.fd = fd;
+        pfd.events = event;
+eintr:
+        int triggers = poll(&pfd, 1, poll_timeout);
+        if (-1 == triggers) {
+            if (errno == EINTR) goto eintr;
+            return -1;
+        } else if (0 == triggers) {  // poll等待超时
+            errno = EAGAIN;
+            return -1;
+        }
+
+        goto retry;     // 事件触发 OR epoll惊群效应
+    }
+
     return n;
 }
 
 extern "C" {
 
-typedef int(*connect_t)(int, const struct sockaddr *, socklen_t);
-static connect_t connect_f = NULL;
+connect_t connect_f = NULL;
+read_t read_f = NULL;
+readv_t readv_f = NULL;
+recv_t recv_f = NULL;
+recvfrom_t recvfrom_f = NULL;
+recvmsg_t recvmsg_f = NULL;
+write_t write_f = NULL;
+writev_t writev_f = NULL;
+send_t send_f = NULL;
+sendto_t sendto_f = NULL;
+sendmsg_t sendmsg_f = NULL;
+poll_t poll_f = NULL;
+select_t select_f = NULL;
+accept_t accept_f = NULL;
+sleep_t sleep_f = NULL;
+nanosleep_t nanosleep_f = NULL;
+close_t close_f = NULL;
+fcntl_t fcntl_f = NULL;
+ioctl_t ioctl_f = NULL;
+getsockopt_t getsockopt_f = NULL;
+setsockopt_t setsockopt_f = NULL;
+dup_t dup_f = NULL;
+dup2_t dup2_f = NULL;
+dup3_t dup3_f = NULL;
 
-typedef ssize_t(*read_t)(int, void *, size_t);
-static read_t read_f = NULL;
+// 设置阻塞式connect超时时间(-1无限时)
+static thread_local int s_connect_timeout = -1;
 
-typedef ssize_t(*readv_t)(int, const struct iovec *, int);
-static readv_t readv_f = NULL;
-
-typedef ssize_t(*recv_t)(int sockfd, void *buf, size_t len, int flags);
-static recv_t recv_f = NULL;
-
-typedef ssize_t(*recvfrom_t)(int sockfd, void *buf, size_t len, int flags,
-        struct sockaddr *src_addr, socklen_t *addrlen);
-static recvfrom_t recvfrom_f = NULL;
-
-typedef ssize_t(*recvmsg_t)(int sockfd, struct msghdr *msg, int flags);
-static recvmsg_t recvmsg_f = NULL;
-
-typedef ssize_t(*write_t)(int, const void *, size_t);
-static write_t write_f = NULL;
-
-typedef ssize_t(*writev_t)(int, const struct iovec *, int);
-static writev_t writev_f = NULL;
-
-typedef ssize_t(*send_t)(int sockfd, const void *buf, size_t len, int flags);
-static send_t send_f = NULL;
-
-typedef ssize_t(*sendto_t)(int sockfd, const void *buf, size_t len, int flags,
-        const struct sockaddr *dest_addr, socklen_t addrlen);
-static sendto_t sendto_f = NULL;
-
-typedef ssize_t(*sendmsg_t)(int sockfd, const struct msghdr *msg, int flags);
-static sendmsg_t sendmsg_f = NULL;
-
-typedef int(*poll_t)(struct pollfd *fds, nfds_t nfds, int timeout);
-static poll_t poll_f = NULL;
-
-typedef int(*select_t)(int nfds, fd_set *readfds, fd_set *writefds,
-        fd_set *exceptfds, struct timeval *timeout);
-static select_t select_f = NULL;
-
-typedef int(*accept_t)(int sockfd, struct sockaddr *addr, socklen_t *addrlen);
-static accept_t accept_f = NULL;
-
-typedef unsigned int(*sleep_t)(unsigned int seconds);
-static sleep_t sleep_f = NULL;
-
-typedef int(*nanosleep_t)(const struct timespec *req, struct timespec *rem);
-static nanosleep_t nanosleep_f = NULL;
+void set_connect_timeout(int milliseconds)
+{
+    s_connect_timeout = milliseconds;
+}
 
 int connect(int fd, const struct sockaddr *addr, socklen_t addrlen)
 {
@@ -160,58 +118,46 @@ int connect(int fd, const struct sockaddr *addr, socklen_t addrlen)
     DebugPrint(dbg_hook, "task(%s) hook connect. %s coroutine.",
             tk ? tk->DebugInfo() : "nil", g_Scheduler.IsCoroutine() ? "In" : "Not in");
 
-    if (!tk) {
+    if (!tk)
         return connect_f(fd, addr, addrlen);
-    } else {
-        int flags = fcntl(fd, F_GETFL, 0);
-        if (flags & O_NONBLOCK)
-            return connect_f(fd, addr, addrlen);
 
-        if (-1 == fcntl(fd, F_SETFL, flags | O_NONBLOCK))
-            return connect_f(fd, addr, addrlen);
+    FdCtxPtr fd_ctx = FdManager::getInstance().get_fd_ctx(fd);
+    if (!fd_ctx || fd_ctx->closed()) {
+        errno = EBADF;
+        return -1;
+    }
 
-        int n = connect_f(fd, addr, addrlen);
-        int e = errno;
-        if (n == 0) {
-            fcntl(fd, F_SETFL, flags & ~O_NONBLOCK);
-            DebugPrint(dbg_hook, "continue task(%s) connect completed immediately. fd=%d",
-                    g_Scheduler.GetCurrentTaskDebugInfo(), fd);
-            return 0;
-        } else if (n != -1 || errno != EINPROGRESS) {
-            fcntl(fd, F_SETFL, flags & ~O_NONBLOCK);
-            errno = e;
-            return n;
-        } else {
-            // add into epoll, and switch other context.
-            g_Scheduler.IOBlockSwitch(fd, EPOLLOUT, -1);
-        }
+    if (fd_ctx->user_nonblock())
+        return connect_f(fd, addr, addrlen);
 
-        if (tk->GetIoWaitData().wait_successful_ == 0) {
-            // 添加到epoll中失败了
-            fcntl(fd, F_SETFL, flags & ~O_NONBLOCK);
-            errno = e;
-            return n;
-        }
+    int n = connect_f(fd, addr, addrlen);
+    if (n == 0) {
+        DebugPrint(dbg_hook, "continue task(%s) connect completed immediately. fd=%d",
+                g_Scheduler.GetCurrentTaskDebugInfo(), fd);
+        return 0;
+    } else if (n != -1 || errno != EINPROGRESS) {
+        return n;
+    }
 
-        DebugPrint(dbg_hook, "continue task(%s) connect. fd=%d", g_Scheduler.GetCurrentTaskDebugInfo(), fd);
-        int error = 0;
-        socklen_t len = sizeof(int);
-        if (0 == getsockopt(fd, SOL_SOCKET, SO_ERROR, &error, &len)) {
-            if (0 == error) {
-                fcntl(fd, F_SETFL, flags & ~O_NONBLOCK);
-                DebugPrint(dbg_hook, "continue task(%s) connect success async. fd=%d",
-                        g_Scheduler.GetCurrentTaskDebugInfo(), fd);
-                return 0;
-            } else {
-                fcntl(fd, F_SETFL, flags & ~O_NONBLOCK);
-                errno = error;
-                return -1;
-            }
-        }
+    // EINPROGRESS. use poll for wait connect complete.
+    pollfd pfd;
+    pfd.fd = fd;
+    pfd.events = POLLOUT;
+    int poll_res = poll(&pfd, 1, s_connect_timeout);
+    if (poll_res <= 0 || pfd.revents != POLLOUT) {
+        errno = ETIMEDOUT;
+        return -1;
+    }
 
-        e = errno;      // errno set by getsockopt.
-        fcntl(fd, F_SETFL, flags & ~O_NONBLOCK);
-        errno = e;
+    int error = 0;
+    socklen_t len = sizeof(int);
+    if (-1 == getsockopt(fd, SOL_SOCKET, SO_ERROR, &error, &len))
+        return -1;
+
+    if (!error)
+        return 0;
+    else {
+        errno = error;
         return -1;
     }
 }
@@ -219,91 +165,71 @@ int connect(int fd, const struct sockaddr *addr, socklen_t addrlen)
 int accept(int sockfd, struct sockaddr *addr, socklen_t *addrlen)
 {
     if (!accept_f) coroutine_hook_init();
-    return read_write_mode(sockfd, accept_f, "accept", EPOLLIN, SO_RCVTIMEO, addr, addrlen);
+    return read_write_mode(sockfd, accept_f, "accept", POLLIN, SO_RCVTIMEO, addr, addrlen);
 }
 
 ssize_t read(int fd, void *buf, size_t count)
 {
     if (!read_f) coroutine_hook_init();
-    return read_write_mode(fd, read_f, "read", EPOLLIN, SO_RCVTIMEO, buf, count);
+    return read_write_mode(fd, read_f, "read", POLLIN, SO_RCVTIMEO, buf, count);
 }
 
 ssize_t readv(int fd, const struct iovec *iov, int iovcnt)
 {
     if (!readv_f) coroutine_hook_init();
-    return read_write_mode(fd, readv_f, "readv", EPOLLIN, SO_RCVTIMEO, iov, iovcnt);
+    return read_write_mode(fd, readv_f, "readv", POLLIN, SO_RCVTIMEO, iov, iovcnt);
 }
 
 ssize_t recv(int sockfd, void *buf, size_t len, int flags)
 {
     if (!recv_f) coroutine_hook_init();
-    return read_write_mode(sockfd, recv_f, "recv", EPOLLIN, SO_RCVTIMEO, buf, len, flags);
+    return read_write_mode(sockfd, recv_f, "recv", POLLIN, SO_RCVTIMEO, buf, len, flags);
 }
 
 ssize_t recvfrom(int sockfd, void *buf, size_t len, int flags,
         struct sockaddr *src_addr, socklen_t *addrlen)
 {
     if (!recvfrom_f) coroutine_hook_init();
-    return read_write_mode(sockfd, recvfrom_f, "recvfrom", EPOLLIN, SO_RCVTIMEO, buf, len, flags,
+    return read_write_mode(sockfd, recvfrom_f, "recvfrom", POLLIN, SO_RCVTIMEO, buf, len, flags,
             src_addr, addrlen);
 }
 
 ssize_t recvmsg(int sockfd, struct msghdr *msg, int flags)
 {
     if (!recvmsg_f) coroutine_hook_init();
-    return read_write_mode(sockfd, recvmsg_f, "recvmsg", EPOLLIN, SO_RCVTIMEO, msg, flags);
+    return read_write_mode(sockfd, recvmsg_f, "recvmsg", POLLIN, SO_RCVTIMEO, msg, flags);
 }
 
 ssize_t write(int fd, const void *buf, size_t count)
 {
     if (!write_f) coroutine_hook_init();
-    return read_write_mode(fd, write_f, "write", EPOLLOUT, SO_SNDTIMEO, buf, count);
+    return read_write_mode(fd, write_f, "write", POLLOUT, SO_SNDTIMEO, buf, count);
 }
 
 ssize_t writev(int fd, const struct iovec *iov, int iovcnt)
 {
     if (!writev_f) coroutine_hook_init();
-    return read_write_mode(fd, writev_f, "writev", EPOLLOUT, SO_SNDTIMEO, iov, iovcnt);
+    return read_write_mode(fd, writev_f, "writev", POLLOUT, SO_SNDTIMEO, iov, iovcnt);
 }
 
 ssize_t send(int sockfd, const void *buf, size_t len, int flags)
 {
     if (!send_f) coroutine_hook_init();
-    return read_write_mode(sockfd, send_f, "send", EPOLLOUT, SO_SNDTIMEO, buf, len, flags);
+    return read_write_mode(sockfd, send_f, "send", POLLOUT, SO_SNDTIMEO, buf, len, flags);
 }
 
 ssize_t sendto(int sockfd, const void *buf, size_t len, int flags,
         const struct sockaddr *dest_addr, socklen_t addrlen)
 {
     if (!sendto_f) coroutine_hook_init();
-    return read_write_mode(sockfd, sendto_f, "sendto", EPOLLOUT, SO_SNDTIMEO, buf, len, flags,
+    return read_write_mode(sockfd, sendto_f, "sendto", POLLOUT, SO_SNDTIMEO, buf, len, flags,
             dest_addr, addrlen);
 }
 
 ssize_t sendmsg(int sockfd, const struct msghdr *msg, int flags)
 {
     if (!sendmsg_f) coroutine_hook_init();
-    return read_write_mode(sockfd, sendmsg_f, "sendmsg", EPOLLOUT, SO_SNDTIMEO, msg, flags);
-}
-
-static uint32_t PollEvent2Epoll(short events)
-{
-    uint32_t e = 0;
-    if (events & POLLIN)   e |= EPOLLIN;
-    if (events & POLLOUT)  e |= EPOLLOUT;
-    if (events & POLLHUP)  e |= EPOLLHUP;
-    if (events & POLLERR)  e |= EPOLLERR;
-    return e;
-}
-
-static short EpollEvent2Poll(uint32_t events)
-{
-    short e = 0;
-    if (events & EPOLLIN)  e |= POLLIN;
-    if (events & EPOLLOUT) e |= POLLOUT;
-    if (events & EPOLLHUP) e |= POLLHUP;
-    if (events & EPOLLERR) e |= POLLERR;
-    return e;
+    return read_write_mode(sockfd, sendmsg_f, "sendmsg", POLLOUT, SO_SNDTIMEO, msg, flags);
 }
 
 int poll(struct pollfd *fds, nfds_t nfds, int timeout)
@@ -316,58 +242,89 @@ int poll(struct pollfd *fds, nfds_t nfds, int timeout)
             (int)nfds, timeout,
             g_Scheduler.IsCoroutine() ? "In" : "Not in");
 
-    if (!g_Scheduler.IsCoroutine())
+    if (!tk)
         return poll_f(fds, nfds, timeout);
 
     if (timeout == 0)
         return poll_f(fds, nfds, timeout);
 
-    if (nfds == 0) {
+    // --------------------------------
+    // 全部是负数fd时, 等价于sleep
+    nfds_t negative_fd_n = 0;
+    for (nfds_t i = 0; i < nfds; ++i)
+        if (fds[i].fd < 0)
+            ++ negative_fd_n;
+
+    if (nfds == negative_fd_n) {
         // co sleep
         g_Scheduler.SleepSwitch(timeout);
         return 0;
     }
+    // --------------------------------
 
-    std::vector<FdStruct> fdsts;
+    // 执行一次非阻塞的poll, 检测异常或无效fd.
+    int res = poll_f(fds, nfds, 0);
+    if (res != 0)
+        return res;
+
+    // create io-sentry
+    IoSentryPtr io_sentry = MakeShared<IoSentry>(tk, fds, nfds);
+
+    // add file descriptor into epoll or poll.
+    bool added = false;
     for (nfds_t i = 0; i < nfds; ++i) {
-        fdsts.emplace_back();
-        fdsts.back().fd = fds[i].fd;
-        fdsts.back().event = PollEvent2Epoll(fds[i].events);
-        DebugPrint(dbg_hook, "hook poll task(%s), fd[%d]=%d.",
-                tk->DebugInfo(), (int)i, fds[i].fd);
+        fds[i].revents = 0;     // clear revents
+        pollfd & pfd = io_sentry->watch_fds_[i];
+        if (pfd.fd < 0)
+            continue;
+
+        FdCtxPtr fd_ctx = FdManager::getInstance().get_fd_ctx(pfd.fd);
+        if (!fd_ctx || fd_ctx->closed()) {
+            // bad file descriptor
+            pfd.revents = POLLNVAL;
+            continue;
+        }
+        if (!fd_ctx->add_into_reactor(pfd.events, io_sentry)) {
+            pfd.revents = POLLNVAL;
+            continue;
+        }
+
+        added = true;
     }
 
-    // add into epoll, and switch other context.
-    g_Scheduler.IOBlockSwitch(std::move(fdsts), timeout);
-    bool is_timeout = false; // 是否超时
-    if (tk->GetIoWaitData().io_block_timer_) {
-        is_timeout = true;
-        if (g_Scheduler.BlockCancelTimer(tk->GetIoWaitData().io_block_timer_)) {
-            tk->DecrementRef(); // timer use ref.
-            is_timeout = false;
-        }
+    if (!added) {
+        errno = 0;
+        return nfds;
     }
 
-    if (tk->GetIoWaitData().wait_successful_ == 0) {
-        if (is_timeout) {
-            errno = 0;
-            return 0;
-        } else {
-            // 加入epoll失败
-            if (timeout > 0)
-                g_Scheduler.SleepSwitch(timeout);
-            return poll_f(fds, nfds, 0);
-        }
+    // set timer
+    if (timeout > 0)
+        io_sentry->timer_ = g_Scheduler.ExpireAt(
+                std::chrono::milliseconds(timeout),
+                [io_sentry]{
+                    g_Scheduler.GetIoWait().IOBlockTriggered(io_sentry);
+                });
+
+    // save io-sentry
+    tk->io_sentry_ = io_sentry;
+
+    // yield
+    g_Scheduler.GetIoWait().CoSwitch();
+
+    // clear task->io_sentry_ reference count
+    tk->io_sentry_.reset();
+
+    if (io_sentry->timer_) {
+        g_Scheduler.CancelTimer(io_sentry->timer_);
+        io_sentry->timer_.reset();
     }
 
     int n = 0;
-    for (int i = 0; i < (int)tk->GetIoWaitData().wait_fds_.size(); ++i)
-    {
-        fds[i].revents = EpollEvent2Poll(tk->GetIoWaitData().wait_fds_[i].epoll_ptr.revent);
+    for (nfds_t i = 0; i < nfds; ++i) {
+        fds[i].revents = io_sentry->watch_fds_[i].revents;
         if (fds[i].revents) ++n;
     }
-
-    assert(n == (int)tk->GetIoWaitData().wait_successful_);
+    errno = 0;
     return n;
 }
 
@@ -391,87 +348,99 @@ int select(int nfds, fd_set *readfds, fd_set *writefds,
     if (timeout_ms == 0)
         return select_f(nfds, readfds, writefds, exceptfds, timeout);
 
-    if (!nfds && !readfds && !writefds && !exceptfds && timeout) {
+    if (!nfds) {
         g_Scheduler.SleepSwitch(timeout_ms);
         return 0;
     }
 
     nfds = std::min<int>(nfds, FD_SETSIZE);
-    std::pair<fd_set*, uint32_t> sets[3] =
-    {
-        {readfds, EPOLLIN | EPOLLERR | EPOLLHUP},
-        {writefds, EPOLLOUT},
-        {exceptfds, EPOLLERR | EPOLLHUP}
+
+    // 执行一次非阻塞的select, 检测异常或无效fd.
+    fd_set rfs, wfs, efs;
+    FD_ZERO(&rfs);
+    FD_ZERO(&wfs);
+    FD_ZERO(&efs);
+    if (readfds) rfs = *readfds;
+    if (writefds) wfs = *writefds;
+    if (exceptfds) efs = *exceptfds;
+    timeval zero_tv = {0, 0};
+    int n = select_f(nfds, (readfds ? &rfs : nullptr),
+            (writefds ? &wfs : nullptr),
+            (exceptfds ? &efs : nullptr), &zero_tv);
+    if (n != 0) {
+        if (readfds) *readfds = rfs;
+        if (writefds) *writefds = wfs;
+        if (exceptfds) *exceptfds = efs;
+        return n;
+    }
+
+    // -------------------------------------
+    // convert fd_set to pollfd, and clear 3 fd_set.
+    std::pair<fd_set*, uint32_t> sets[3] = {
+        {readfds, POLLIN},
+        {writefds, POLLOUT},
+        {exceptfds, 0}
     };
+    //static const char* set_names[] = {"readfds", "writefds", "exceptfds"};
 
-    static const char* set_names[] = {"readfds", "writefds", "exceptfds"};
-    std::vector<FdStruct> fdsts;
-    for (int i = 0; i < nfds; ++i) {
-        FdStruct *fdst = NULL;
-        for (int si = 0; si < 3; ++si) {
-            if (!sets[si].first)
-                continue;
-
-            if (!FD_ISSET(i, sets[si].first))
-                continue;
-
-            if (!fdst) {
-                fdsts.emplace_back();
-                fdst = &fdsts.back();
-                fdst->fd = i;
+    std::map<int, int> pfd_map;
+    for (int i = 0; i < 3; ++i) {
+        fd_set* fds = sets[i].first;
+        if (!fds) continue;
+        int event = sets[i].second;
+        for (int fd = 0; fd < nfds; ++fd) {
+            if (FD_ISSET(fd, fds)) {
+                pfd_map[fd] &= event;
             }
-
-            fdsts.back().event |= sets[si].second;
-            DebugPrint(dbg_hook, "task(%s) hook select %s(%d)",
-                    tk->DebugInfo(), set_names[si], (int)i);
         }
+        FD_ZERO(fds);
     }
 
-    g_Scheduler.IOBlockSwitch(std::move(fdsts), timeout_ms);
-    bool is_timeout = false;
-    if (tk->GetIoWaitData().io_block_timer_) {
-        is_timeout = true;
-        if (g_Scheduler.BlockCancelTimer(tk->GetIoWaitData().io_block_timer_)) {
-            is_timeout = false;
-            tk->DecrementRef(); // timer use ref.
-        }
+    std::vector<pollfd> pfds(pfd_map.size());
+    int i = 0;
+    for (auto &kv : pfd_map) {
+        pollfd &pfd = pfds[i++];
+        pfd.fd = kv.first;
+        pfd.events = kv.second;
     }
+    // -------------------------------------
 
-    if (tk->GetIoWaitData().wait_successful_ == 0) {
-        if (is_timeout) {
-            if (readfds) FD_ZERO(readfds);
-            if (writefds) FD_ZERO(writefds);
-            if (exceptfds) FD_ZERO(exceptfds);
-            errno = 0;
-            return 0;
-        } else {
-            if (timeout_ms > 0)
-                g_Scheduler.SleepSwitch(timeout_ms);
-            timeval immedaitely = {0, 0};
-            return select_f(nfds, readfds, writefds, exceptfds, &immedaitely);
-        }
-    }
+    // -------------------------------------
+    // poll
+    n = poll(pfds.data(), pfds.size(), timeout_ms);
+    if (n <= 0)
+        return n;
+    // -------------------------------------
 
-    int n = 0;
-    for (auto &fdst : tk->GetIoWaitData().wait_fds_) {
-        int fd = fdst.fd;
-        for (int si = 0; si < 3; ++si) {
-            if (!sets[si].first)
-                continue;
-
-            if (!FD_ISSET(fd, sets[si].first))
-                continue;
-
-            if (sets[si].second & fdst.epoll_ptr.revent) {
-                ++n;
-                continue;
+    // -------------------------------------
+    // convert pollfd to fd_set.
+    int ret = 0;
+    for (size_t i = 0; i < pfds.size(); ++i) {
+        pollfd &pfd = pfds[i];
+        if (pfd.events & POLLIN) {
+            if (readfds) {
+                FD_SET(pfd.fd, readfds);
+                ++ret;
             }
+        }
 
-            FD_CLR(fd, sets[si].first);
+        if (pfd.events & POLLOUT) {
+            if (writefds) {
+                FD_SET(pfd.fd, writefds);
+                ++ret;
+            }
+        }
+
+        if (pfd.events & ~(POLLIN | POLLOUT)) {
+            if (exceptfds) {
+                FD_SET(pfd.fd, exceptfds);
+                ++ret;
+            }
         }
     }
+    // -------------------------------------
 
-    return n;
+    return ret;
 }
 
 unsigned int sleep(unsigned int seconds)
@@ -508,6 +477,205 @@ int nanosleep(const struct timespec *req, struct timespec *rem)
     return 0;
 }
 
+int close(int fd)
+{
+    if (!close_f) coroutine_hook_init();
+    return FdManager::getInstance().close(fd);
+}
+
+int fcntl(int __fd, int __cmd, ...)
+{
+    if (!fcntl_f) coroutine_hook_init();
+
+    va_list va;
+    va_start(va, __cmd);
+
+    switch (__cmd) {
+        // int
+        case F_DUPFD:
+        case F_DUPFD_CLOEXEC:
+            {
+                // TODO: support FD_CLOEXEC
+                int fd = va_arg(va, int);
+                va_end(va);
+                int newfd = fcntl_f(__fd, __cmd, fd);
+                if (newfd < 0) return newfd;
+
+                if (!FdManager::getInstance().dup(__fd, newfd)) {
+                    fprintf(stderr, "fcntl(F_DUPFD) warnning. newfd(%d) is exists in libgo-FdManager. oldfd(%d)\n",
+                            newfd, __fd);
+                }
+
+                return newfd;
+            }
+
+        // int
+        case F_SETFD:
+        case F_SETOWN:
+        case F_SETSIG:
+        case F_SETLEASE:
+        case F_NOTIFY:
+        case F_SETPIPE_SZ:
+            {
+                int arg = va_arg(va, int);
+                va_end(va);
+                return fcntl_f(__fd, __cmd, arg);
+            }
+
+        // int
+        case F_SETFL:
+            {
+                int flags = va_arg(va, int);
+                va_end(va);
+                FdCtxPtr fd_ctx = FdManager::getInstance().get_fd_ctx(__fd);
+                if (!fd_ctx || fd_ctx->closed()) return fcntl_f(__fd, __cmd, flags);
+                fd_ctx->set_user_nonblock(flags & O_NONBLOCK);
+                if (fd_ctx->sys_nonblock())
+                    flags |= O_NONBLOCK;
+                else
+                    flags &= ~O_NONBLOCK;
+                return fcntl_f(__fd, __cmd, flags);
+            }
+
+        // struct flock*
+        case F_GETLK:
+        case F_SETLK:
+        case F_SETLKW:
+            {
+                struct flock* arg = va_arg(va, struct flock*);
+                va_end(va);
+                return fcntl_f(__fd, __cmd, arg);
+            }
+
+        // struct f_owner_ex*
+        case F_GETOWN_EX:
+        case F_SETOWN_EX:
+            {
+                struct f_owner_exlock* arg = va_arg(va, struct f_owner_exlock*);
+                va_end(va);
+                return fcntl_f(__fd, __cmd, arg);
+            }
+
+        // void
+        case F_GETFL:
+            {
+                va_end(va);
+                int flags = fcntl_f(__fd, __cmd);
+                FdCtxPtr fd_ctx = FdManager::getInstance().get_fd_ctx(__fd);
+                if (!fd_ctx || fd_ctx->closed()) return flags;
+                if (fd_ctx->user_nonblock())
+                    return flags | O_NONBLOCK;
+                else
+                    return flags & ~O_NONBLOCK;
+            }
+
+        // void
+        case F_GETFD:
+        case F_GETOWN:
+        case F_GETSIG:
+        case F_GETLEASE:
+        case F_GETPIPE_SZ:
+        default:
+            {
+                va_end(va);
+                return fcntl_f(__fd, __cmd);
+            }
+    }
+}
+
+int ioctl(int fd, unsigned long int request, ...)
+{
+    if (!ioctl_f) coroutine_hook_init();
+
+    va_list va;
+    va_start(va, request);
+    void* arg = va_arg(va, void*);
+    va_end(va);
+
+    if (FIONBIO == request) {
+        bool user_nonblock = !!*(int*)arg;
+        FdCtxPtr fd_ctx = FdManager::getInstance().get_fd_ctx(fd);
+        if (fd_ctx) fd_ctx->set_user_nonblock(user_nonblock);
+        return 0;
+    }
+
+    return ioctl_f(fd, request, arg);
+}
+
+int getsockopt(int sockfd, int level, int optname, void *optval, socklen_t *optlen)
+{
+    if (!getsockopt_f) coroutine_hook_init();
+    return getsockopt_f(sockfd, level, optname, optval, optlen);
+}
+int setsockopt(int sockfd, int level, int optname, const void *optval, socklen_t optlen)
+{
+    if (!setsockopt_f) coroutine_hook_init();
+
+    if (level == SOL_SOCKET) {
+        if (optname == SO_RCVTIMEO || optname == SO_SNDTIMEO) {
+            FdCtxPtr fd_ctx = FdManager::getInstance().get_fd_ctx(sockfd);
+            if (fd_ctx) {
+                fd_ctx->set_time_o(optname, *(const timeval*)optval);
+            }
+        }
+    }
+
+    return setsockopt_f(sockfd, level, optname, optval, optlen);
+}
+
+int dup(int oldfd)
+{
+    if (!dup_f) coroutine_hook_init();
+
+    int newfd = dup_f(oldfd);
+    if (newfd < 0) return newfd;
+
+    if (!FdManager::getInstance().dup(oldfd, newfd)) {
+        fprintf(stderr, "dup warnning. newfd(%d) is exists in libgo-FdManager. oldfd(%d)\n",
+                newfd, oldfd);
+    }
+
+    return newfd;
+}
+// TODO: support FD_CLOEXEC
+int dup2(int oldfd, int newfd)
+{
+    if (!dup2_f) coroutine_hook_init();
+
+    if (newfd < 0 || oldfd < 0 || oldfd == newfd) return dup2_f(oldfd, newfd);
+
+    int ret = dup2_f(oldfd, newfd);
+    if (ret < 0) return ret;
+
+    FdManager::getInstance().close(newfd, false);   // 模拟dup2内部未能hook到的close.
+
+    if (!FdManager::getInstance().dup(oldfd, newfd)) {
+        fprintf(stderr, "dup2 warnning. newfd(%d) is exists in libgo-FdManager. oldfd(%d)\n",
+                newfd, oldfd);
+    }
+
+    return ret;
+}
+// TODO: support FD_CLOEXEC
+int dup3(int oldfd, int newfd, int flags)
+{
+    if (!dup3_f) coroutine_hook_init();
+
+    if (newfd < 0 || oldfd < 0 || oldfd == newfd) return dup3_f(oldfd, newfd, flags);
+
+    int ret = dup3_f(oldfd, newfd, flags);
+    if (ret < 0) return ret;
+
+    FdManager::getInstance().close(newfd, false);   // 模拟dup2内部未能hook到的close.
+
+    if (!FdManager::getInstance().dup(oldfd, newfd)) {
+        fprintf(stderr, "dup3 warnning. newfd(%d) is exists in libgo-FdManager. oldfd(%d)\n",
+                newfd, oldfd);
+    }
+
+    return ret;
+}
+
 #if !defined(CO_DYNAMIC_LINK)
 extern int __connect(int fd, const struct sockaddr *addr, socklen_t addrlen);
 extern ssize_t __read(int fd, void *buf, size_t count);
@@ -528,6 +696,16 @@ extern int __select(int nfds, fd_set *readfds, fd_set *writefds,
                           fd_set *exceptfds, struct timeval *timeout);
 extern unsigned int __sleep(unsigned int seconds);
 extern int __nanosleep(const struct timespec *req, struct timespec *rem);
+extern int __close(int);
+extern int __fcntl(int __fd, int __cmd, ...);
+extern int __ioctl(int fd, unsigned long int request, ...);
+extern int __getsockopt(int sockfd, int level, int optname,
+        void *optval, socklen_t *optlen);
+extern int __setsockopt(int sockfd, int level, int optname,
+        const void *optval, socklen_t optlen);
+extern int __dup(int);
+extern int __dup2(int, int);
+extern int __dup3(int, int, int);
 #endif
 }
 
@@ -556,6 +734,14 @@ void coroutine_hook_init()
     select_f = (select_t)dlsym(RTLD_NEXT, "select");
     sleep_f = (sleep_t)dlsym(RTLD_NEXT, "sleep");
     nanosleep_f = (nanosleep_t)dlsym(RTLD_NEXT, "nanosleep");
+    close_f = (close_t)dlsym(RTLD_NEXT, "close");
+    fcntl_f = (fcntl_t)dlsym(RTLD_NEXT, "fcntl");
+    ioctl_f = (ioctl_t)dlsym(RTLD_NEXT, "ioctl");
+    getsockopt_f = (getsockopt_t)dlsym(RTLD_NEXT, "getsockopt");
+    setsockopt_f = (setsockopt_t)dlsym(RTLD_NEXT, "setsockopt");
+    dup_f = (dup_t)dlsym(RTLD_NEXT, "dup");
+    dup2_f = (dup2_t)dlsym(RTLD_NEXT, "dup2");
+    dup3_f = (dup3_t)dlsym(RTLD_NEXT, "dup3");
 #else
     connect_f = &__connect;
     read_f = &__read;
@@ -573,11 +759,21 @@ void coroutine_hook_init()
     select_f = &__select;
     sleep_f = &__sleep;
     nanosleep_f = &__nanosleep;
+    close_f = &__close;
+    fcntl_f = &__fcntl;
+    ioctl_f = &__ioctl;
+    getsockopt_f = &__getsockopt;
+    setsockopt_f = &__setsockopt;
+    dup_f = &__dup;
+    dup2_f = &__dup2;
+    dup3_f = &__dup3;
 #endif
 
     if (!connect_f || !read_f || !write_f || !readv_f || !writev_f || !send_f
             || !sendto_f || !sendmsg_f || !accept_f || !poll_f || !select_f
-            || !sleep_f || !nanosleep_f) {
+            || !sleep_f || !nanosleep_f || !close_f || !fcntl_f || !setsockopt_f
+            || !getsockopt_f || !dup_f || !dup2_f || !dup3_f)
+    {
         fprintf(stderr, "Hook syscall failed. Please don't remove libc.a when static-link.\n");
         exit(1);
     }

@@ -76,6 +76,7 @@ runnable *          v
 #include <list>
 #include <set>
 #include "task.h"
+#include "fd_context.h"
 
 namespace co
 {
@@ -85,11 +86,30 @@ class IoWait
 public:
     IoWait();
 
-    // 在协程中调用的switch, 暂存状态并yield
-    void CoSwitch(std::vector<FdStruct> && fdsts, int timeout_ms);
+    int GetEpollFd();
 
+    // 在协程中调用的switch, 暂存状态并yield
+    void CoSwitch();
+
+    // --------------------------------------
+    /*
+    * 以下两个接口实现了ABBA式的并行
+    */
     // 在调度器中调用的switch, 如果成功则进入等待队列，如果失败则重新加回runnable队列
     void SchedulerSwitch(Task* tk);
+
+    // trigger by timer or epoll or poll.
+    void IOBlockTriggered(IoSentryPtr io_sentry);
+    void __IOBlockTriggered(IoSentryPtr io_sentry);
+    // --------------------------------------
+
+    // --------------------------------------
+    /*
+    * reactor相关操作, 使用类似epoll的接口屏蔽epoll/poll的区别
+    * TODO: 同时支持socket-io和文件io.
+    */
+    int reactor_ctl(int epoll_ctl_mod, int fd, uint32_t poll_events, bool is_socket);
+    // --------------------------------------
 
     int WaitLoop(bool enable_block);
 
@@ -99,39 +119,22 @@ public:
     bool IsEpollCreated() const;
 
 private:
-    void Cancel(Task *tk, uint32_t id);
-
     void CreateEpoll();
-    int GetEpollType(int epoll_fd);
-    int ChooseEpoll(uint32_t event);
-    int GetEpoll(int type);
 
-    struct EpollWaitSt
-    {
-        Task* tk;
-        uint32_t id;
-
-        friend bool operator<(EpollWaitSt const& lhs, EpollWaitSt const& rhs) {
-            return lhs.tk < rhs.tk;
-        }
-    };
-
-    int epoll_fds_[2];
+    int epoll_fd_;
     LFLock epoll_create_lock_;
     int epoll_event_size_;
     pid_t epoll_owner_pid_;
 
     LFLock epoll_lock_;
-    std::set<EpollWaitSt> epollwait_tasks_;
-    std::list<CoTimerPtr> timeout_list_;
-    LFLock timeout_list_lock_;
-    CoTimerMgr timer_mgr_;
     int epollwait_ms_;
     uint64_t loop_index_;
 
-    typedef TSQueue<Task> TaskList;
-    TaskList wait_tasks_;
-};
+    typedef TSQueue<IoSentry> IoSentryList;
+    IoSentryList wait_io_sentries_;
 
+
+    // TODO: poll to support (file-fd, other-fd)
+};
 
 } //namespace co

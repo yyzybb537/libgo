@@ -3,9 +3,7 @@
 
 // VS2013²»Ö§³Öthread_local
 #if defined(_MSC_VER) && _MSC_VER < 1900
-#define co_thread_local __declspec(thread)
-#else 
-#define co_thread_local thread_local
+#define thread_local __declspec(thread)
 #endif
 
 #ifndef _WIN32
@@ -32,7 +30,8 @@ static const uint64_t dbg_timer             = 0x1 << 9;
 static const uint64_t dbg_scheduler_sleep   = 0x1 << 10;
 static const uint64_t dbg_sleepblock        = 0x1 << 11;
 static const uint64_t dbg_spinlock          = 0x1 << 12;
-static const uint64_t dbg_debugger          = 0x1 << 13;
+static const uint64_t dbg_fd_ctx            = 0x1 << 13;
+static const uint64_t dbg_debugger          = 0x1 << 14;
 static const uint64_t dbg_sys_max           = dbg_debugger;
 ///-------------------
 
@@ -51,7 +50,7 @@ extern uint32_t codebug_GetCurrentThreadID();
 
 #define DebugPrint(type, fmt, ...) \
     do { \
-        if (::co::codebug_GetDebugOptions() & type) { \
+        if (::co::codebug_GetDebugOptions() & (type)) { \
             fprintf(::co::codebug_GetDebugOutput(), "co_dbg[%08u][%04u] " fmt "\n", \
                     ::co::codebug_GetCurrentProcessID(), ::co::codebug_GetCurrentThreadID(), ##__VA_ARGS__); \
         } \

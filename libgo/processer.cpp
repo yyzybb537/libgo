@@ -31,7 +31,7 @@ void Processer::AddTaskRunnable(Task *tk)
         tk->AddIntoProcesser(this, shared_stack_, shared_stack_cap_);
         if (tk->state_ == TaskState::fatal) {
             // 创建失败
-            delete tk;
+            tk->DecrementRef();
             throw std::system_error(errno, std::system_category());
         }
         ++ task_count_;
@@ -49,7 +49,7 @@ uint32_t Processer::Run(ThreadLocalInfo &info, uint32_t &done_count)
     info.current_task = NULL;
     done_count = 0;
     uint32_t c = 0;
-    SList<Task> slist = runnable_list_.pop_all();
+    SList<Task> slist(runnable_list_.pop_all());
     uint32_t do_count = slist.size();
 
     DebugPrint(dbg_scheduler, "Run [Proc(%d) do_count:%u] --------------------------", id_, do_count);
@@ -63,7 +63,7 @@ uint32_t Processer::Run(ThreadLocalInfo &info, uint32_t &done_count)
         DebugPrint(dbg_switch, "enter task(%s)", tk->DebugInfo());
         if (!tk->SwapIn()) {
             fprintf(stderr, "swapcontext error:%s\n", strerror(errno));
-            runnable_list_.push(tk);
+            runnable_list_.push(std::move(slist));
             ThrowError(eCoErrorCode::ec_swapcontext_failed);
         }
         DebugPrint(dbg_switch, "leave task(%s) state=%d", tk->DebugInfo(), (int)tk->state_);
@@ -85,14 +85,10 @@ uint32_t Processer::Run(ThreadLocalInfo &info, uint32_t &done_count)
                 break;
 
             case TaskState::sys_block:
-                {
-                    assert(tk->block_);
-                    if (tk->block_) {
-                        it = slist.erase(it);
-                        if (!tk->block_->AddWaitTask(tk))
-                            runnable_list_.push(tk);
-                    }
-                }
+                assert(tk->block_);
+                it = slist.erase(it);
+                if (!tk->block_->AddWaitTask(tk))
+                    runnable_list_.push(tk);
                 break;
 
             case TaskState::done:
@@ -103,7 +99,7 @@ uint32_t Processer::Run(ThreadLocalInfo &info, uint32_t &done_count)
                 DebugPrint(dbg_task, "task(%s) done.", tk->DebugInfo());
                 if (tk->eptr_) {
                     std::exception_ptr ep = tk->eptr_;
-                    runnable_list_.push(slist);
+                    runnable_list_.push(std::move(slist));
                     tk->DecrementRef();
                     std::rethrow_exception(ep);
                 } else
@@ -111,9 +107,8 @@ uint32_t Processer::Run(ThreadLocalInfo &info, uint32_t &done_count)
                 break;
         }
     }
-    if (do_count)
-        runnable_list_.push(slist);
 
+    runnable_list_.push(std::move(slist));
     return c;
 }
 

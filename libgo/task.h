@@ -10,6 +10,8 @@
 #include "ts_queue.h"
 #include "timer.h"
 #include <string.h>
+#include "fd_context.h"
+#include "util.h"
 
 namespace co
 {
@@ -27,41 +29,8 @@ enum class TaskState
 
 typedef std::function<void()> TaskF;
 
-struct FdStruct;
-struct Task;
-
-struct EpollPtr
-{
-    FdStruct* fdst = NULL;
-    Task* tk = NULL;
-    uint32_t io_block_id = 0;
-    uint32_t revent = 0;    // 结果event
-};
-
-struct FdStruct
-{
-    int fd;
-    uint32_t event;     // epoll event flags.
-    EpollPtr epoll_ptr; // 传递入epoll的指针
-
-    FdStruct() : fd(-1), event(0) {
-        epoll_ptr.fdst = this;
-    }
-};
-
 class BlockObject;
 class Processer;
-
-// Network IO block所需的数据
-struct IoWaitData
-{
-    std::atomic<uint32_t> io_block_id_{0}; // 每次io_block请求分配一个ID
-    std::vector<FdStruct> wait_fds_;    // io_block等待的fd列表
-    uint32_t wait_successful_ = 0;      // io_block成功等待到的fd数量(用于poll和select)
-    LFLock io_block_lock_;              // 当等待的fd多余1个时, 用此锁sync添加到epoll和从epoll删除的操作, 以防在epoll中残留fd, 导致Task无法释放.
-    int io_block_timeout_ = 0;
-    CoTimerPtr io_block_timer_;
-};
 
 // 创建协程的源码文件位置
 struct SourceLocation
@@ -99,7 +68,7 @@ struct SourceLocation
 };
 
 struct Task
-    : public TSQueueHook
+    : public TSQueueHook, public RefObject
 {
     uint64_t id_;
     TaskState state_ = TaskState::init;
@@ -110,9 +79,10 @@ struct Task
     std::string debug_info_;
     SourceLocation location_;
     std::exception_ptr eptr_;           // 保存exception的指针
-    std::atomic<uint32_t> ref_count_{1};// 引用计数
 
-    IoWaitData *io_wait_data_ = nullptr;// Network IO block所需的数据
+    // Network IO block所需的数据
+    // shared_ptr不具有线程安全性, 只能在协程中和SchedulerSwitch中使用.
+    IoSentryPtr io_sentry_;     
 
     BlockObject* block_ = nullptr;      // sys_block等待的block对象
     uint32_t block_sequence_ = 0;       // sys_block等待序号(用于做超时校验)
@@ -122,7 +92,8 @@ struct Task
 
     int sleep_ms_ = 0;                  // 睡眠时间
 
-    explicit Task(TaskF const& fn, std::size_t stack_size);
+    explicit Task(TaskF const& fn, std::size_t stack_size,
+            const char* file, int lineno);
     ~Task();
 
     void InitLocation(const char* file, int lineno);
@@ -134,54 +105,14 @@ struct Task
     void SetDebugInfo(std::string const& info);
     const char* DebugInfo();
 
-    IoWaitData& GetIoWaitData();
-
     static uint64_t s_id;
     static std::atomic<uint64_t> s_task_count;
 
-    // 引用计数
-    void IncrementRef();
-    void DecrementRef();
     static uint64_t GetTaskCount();
-
-    // Task引用计数归0时不要立即释放, 以防epoll_wait取到残余数据时访问野指针.
-    typedef TSQueue<Task> DeleteList;
-    typedef std::shared_ptr<DeleteList> DeleteListPtr;
-
-    static LFLock s_delete_lists_lock;
-    static std::list<DeleteListPtr> s_delete_lists;
 
     static LFLock s_stat_lock;
     static std::set<Task*> s_stat_set;
     static std::map<SourceLocation, uint32_t> GetStatInfo();
-
-    static void PopDeleteList(std::vector<SList<Task>> & output);
-    static std::size_t GetDeletedTaskCount();
 };
-
-template <typename T = Task>
-class RefGuard
-{
-public:
-    explicit RefGuard(T* tk) : tk_(tk)
-    {
-        tk_->IncrementRef();
-    }
-    explicit RefGuard(T& tk) : tk_(&tk)
-    {
-        tk_->IncrementRef();
-    }
-    ~RefGuard()
-    {
-        tk_->DecrementRef();
-    }
-
-    RefGuard(RefGuard const&) = delete;
-    RefGuard& operator=(RefGuard const&) = delete;
-
-private:
-    T *tk_;
-};
-
 
 } //namespace co

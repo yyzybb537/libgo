@@ -28,7 +28,7 @@ Scheduler::~Scheduler()
 
 ThreadLocalInfo& Scheduler::GetLocalInfo()
 {
-    static co_thread_local ThreadLocalInfo *info = NULL;
+    static thread_local ThreadLocalInfo *info = NULL;
     if (!info)
         info = new ThreadLocalInfo();
 
@@ -44,8 +44,7 @@ CoroutineOptions& Scheduler::GetOptions()
 void Scheduler::CreateTask(TaskF const& fn, std::size_t stack_size,
         const char* file, int lineno)
 {
-    Task* tk = new Task(fn, stack_size ? stack_size : GetOptions().stack_size);
-    tk->InitLocation(file, lineno);
+    Task* tk = new Task(fn, stack_size ? stack_size : GetOptions().stack_size, file, lineno);
     ++task_count_;
     DebugPrint(dbg_task, "task(%s) created.", tk->DebugInfo());
     AddTaskRunnable(tk);
@@ -82,7 +81,7 @@ uint32_t Scheduler::Run()
         if (lock.try_lock() && proc_count < op.processer_count) {
             uint32_t i = proc_count;
             for (; i < op.processer_count; ++i) {
-                Processer *proc = new Processer(op.stack_size);
+                Processer* proc = new Processer(op.stack_size);
                 run_proc_list_.push(proc);
             }
 
@@ -120,11 +119,11 @@ uint32_t Scheduler::Run()
     return run_task_count;
 }
 
-void Scheduler::RunUntilNoTask()
+void Scheduler::RunUntilNoTask(uint32_t loop_task_count)
 {
     do { 
         Run();
-    } while (!IsEmpty());
+    } while (task_count_ > loop_task_count);
 }
 
 // Run函数的一部分, 处理runnable状态的协程
@@ -146,10 +145,13 @@ uint32_t Scheduler::DoRunnable()
             uint32_t popn = average > ti ? (average - ti) : 0;
             if (popn) {
                 static int sc = 0;
-                SList<Task> s = run_tasks_.pop(popn);
+                SList<Task> s(run_tasks_.pop(popn));
                 auto it = s.begin();
-                while (it != s.end())
-                    proc->AddTaskRunnable(&*it++);
+                while (it != s.end()) {
+                    Task* tk = &*it;
+                    it = s.erase(it);
+                    proc->AddTaskRunnable(tk);
+                }
                 sc += s.size();
 //                printf("popn = %d, get %d coroutines, sc=%d, remain=%d\n",
 //                        (int)popn, (int)s.size(), (int)sc, (int)run_tasks_.size());
@@ -271,19 +273,6 @@ uint32_t Scheduler::GetCurrentProcessID()
 Task* Scheduler::GetCurrentTask()
 {
     return GetLocalInfo().current_task;
-}
-
-void Scheduler::IOBlockSwitch(int fd, uint32_t event, int timeout_ms)
-{
-    std::vector<FdStruct> fdst(1);
-    fdst[0].fd = fd;
-    fdst[0].event = event;
-    IOBlockSwitch(std::move(fdst), timeout_ms);
-}
-
-void Scheduler::IOBlockSwitch(std::vector<FdStruct> && fdsts, int timeout_ms)
-{
-    io_wait_.CoSwitch(std::move(fdsts), timeout_ms);
 }
 
 void Scheduler::SleepSwitch(int timeout_ms)
