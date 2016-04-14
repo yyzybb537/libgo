@@ -147,7 +147,8 @@ TEST(Poll, TimeoutIsNegative1)
         {
             go [=]{
                 sleep(1);
-                write(fds[1], "a", 1);
+                ssize_t n = write(fds[1], "a", 1);
+                (void)n;
             };
             auto start = system_clock::now();
             pollfd pfds[2] = {{fds[0], POLLIN, 0}, {fds[1], POLLIN, 0}};
@@ -250,7 +251,8 @@ TEST(Poll, TimeoutIs1)
         {
             go [=]{
                 co_sleep(200);
-                write(fds[1], "a", 1);
+                ssize_t n = write(fds[1], "a", 1);
+                (void)n;
             };
             auto start = system_clock::now();
             pollfd pfds[2] = {{fds[0], POLLIN, 0}, {fds[1], POLLIN, 0}};
@@ -270,7 +272,8 @@ TEST(Poll, TimeoutIs1)
         {
             go [=]{
                 co_sleep(500);
-                write(fds[1], "a", 1);
+                ssize_t n = write(fds[1], "a", 1);
+                (void)n;
             };
             auto start = system_clock::now();
             pollfd pfds[2] = {{fds[0], POLLIN, 0}, {fds[1], POLLIN, 0}};
@@ -508,7 +511,8 @@ TEST(PollTrigger, MultiPollTrigger)
 
     go [=] {
         co_sleep(500);
-        write(fds[1], "a", 1);
+        ssize_t n = write(fds[1], "a", 1);
+        (void)n;
     };
     g_Scheduler.RunUntilNoTask();
     EXPECT_EQ(Task::GetTaskCount(), 0);

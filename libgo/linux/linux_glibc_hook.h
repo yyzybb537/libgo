@@ -80,6 +80,8 @@ extern dup2_t dup2_f;
 typedef int(*dup3_t)(int, int, int);
 extern dup3_t dup3_f;
 
-extern void set_connect_timeout(int milliseconds);
+} //extern "C"
 
+namespace co {
+    extern void set_connect_timeout(int milliseconds);
 } //namespace co
