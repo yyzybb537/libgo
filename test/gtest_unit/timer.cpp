@@ -6,7 +6,10 @@
 #include <atomic>
 #include <boost/timer.hpp>
 #include "gtest_exit.h"
+#include <iostream>
 using namespace co;
+using std::cout;
+using std::endl;
 
 double second_duration(std::chrono::system_clock::time_point start)
 {
@@ -115,3 +118,55 @@ TEST(ThreadsTimer, Cancel)
     EXPECT_TRUE(executed);
 }
 
+
+TEST(Timer, resolution)
+{
+    g_Scheduler.GetOptions().debug = co::dbg_scheduler_sleep;
+
+    bool stop = false;
+    go [&] {
+        cout << "add sleep 300 ms" << endl;
+        co_sleep(300);
+        cout << "add timer 327 ms" << endl;
+        co_timer_add(std::chrono::milliseconds(327), [&]{
+                    cout << "timer trigger" << endl;
+                    stop = true;
+                });
+    };
+
+    auto start = std::chrono::system_clock::now();
+    while (!stop)
+        g_Scheduler.Run();
+    EXPECT_LT(second_duration(start), 0.627 + 0.005);   // 误差不超过5ms
+}
+
+TEST(Timer, wait_resolution)
+{
+    g_Scheduler.GetOptions().debug = co::dbg_scheduler_sleep;
+
+#if !defined(_WIN32)
+    go [] {
+        int fds[2];
+        socketpair(AF_LOCAL, SOCK_STREAM, 0, fds);
+        pollfd pfd = {fds[0], POLLIN, 1};
+        poll(&pfd, 1, 100);
+    };
+    co_sched.RunUntilNoTask();
+#endif
+
+    bool stop = false;
+    go [&] {
+        cout << "add sleep 300 ms" << endl;
+        co_sleep(300);
+        cout << "add timer 327 ms" << endl;
+        co_timer_add(std::chrono::milliseconds(327), [&]{
+                    cout << "timer trigger" << endl;
+                    stop = true;
+                });
+    };
+
+    auto start = std::chrono::system_clock::now();
+    while (!stop)
+        g_Scheduler.Run();
+    EXPECT_LT(second_duration(start), 0.627 + 0.005);   // 误差不超过5ms
+}

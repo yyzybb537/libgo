@@ -92,28 +92,37 @@ uint32_t Scheduler::Run()
     uint32_t run_task_count = DoRunnable();
 
     // timer
-    uint32_t tm_count = DoTimer();
+    long long timer_next_ms = 0;
+    uint32_t tm_count = DoTimer(timer_next_ms);
 
     // sleep wait.
-    uint32_t sl_count = DoSleep();
+    long long sleep_next_ms = 0;
+    uint32_t sl_count = DoSleep(sleep_next_ms);
+
+    // 下一次timer或sleeper触发的时间毫秒数, 休眠或阻塞等待IO事件触发的时间不能超过这个值
+    long long next_ms = (std::min)(timer_next_ms, sleep_next_ms);
 
     // epoll
-    bool enable_block = !run_task_count && !tm_count && !sl_count;
-    int ep_count = DoEpoll(enable_block);
+    int wait_milliseconds = 0;
+    if (run_task_count || tm_count || sl_count)
+        wait_milliseconds = 0;
+    else {
+        wait_milliseconds = (std::min<long long>)(next_ms, GetOptions().max_sleep_ms);
+        DebugPrint(dbg_scheduler_sleep, "wait_milliseconds %d ms, next_ms=%lld", wait_milliseconds, next_ms);
+    }
+    int ep_count = DoEpoll(wait_milliseconds);
 
     if (!run_task_count && ep_count <= 0 && !tm_count && !sl_count) {
         if (ep_count == -1) {
             // 此线程没有执行epoll_wait, 使用sleep降低空转时的cpu使用率
-            DebugPrint(dbg_scheduler_sleep, "sleep %d ms", (int)sleep_ms_);
-            sleep_ms_ = (std::min)(++sleep_ms_, GetOptions().max_sleep_ms);
-            usleep(sleep_ms_ * 1000);
-        } else {
-            // 此线程执行了epoll_wait, 增加epoll_wait超时时间降低空转时的cpu使用率
-            io_wait_.DelayEventWaitTime();
+            ++info.sleep_ms;
+            info.sleep_ms = (std::min)(info.sleep_ms, GetOptions().max_sleep_ms);
+            info.sleep_ms = (std::min<long long>)(info.sleep_ms, next_ms);
+            DebugPrint(dbg_scheduler_sleep, "sleep %d ms, next_ms=%lld", (int)info.sleep_ms, next_ms);
+            usleep(info.sleep_ms * 1000);
         }
     } else {
-        sleep_ms_ = 1;
-        io_wait_.ResetEventWaitTime();
+        info.sleep_ms = 1;
     }
 
     return run_task_count;
@@ -181,32 +190,32 @@ uint32_t Scheduler::DoRunnable()
 }
 
 // Run函数的一部分, 处理epoll相关
-int Scheduler::DoEpoll(bool enable_block)
+int Scheduler::DoEpoll(int wait_milliseconds)
 {
-    return io_wait_.WaitLoop(enable_block);
+    return io_wait_.WaitLoop(wait_milliseconds);
 }
 
-uint32_t Scheduler::DoSleep()
+uint32_t Scheduler::DoSleep(long long &next_ms)
 {
-    return sleep_wait_.WaitLoop();
+    return sleep_wait_.WaitLoop(next_ms);
 }
 
 // Run函数的一部分, 处理定时器
-uint32_t Scheduler::DoTimer()
+uint32_t Scheduler::DoTimer(long long &next_ms)
 {
     uint32_t c = 0;
     while (!GetOptions().timer_handle_every_cycle || c < GetOptions().timer_handle_every_cycle)
     {
         std::list<CoTimerPtr> timers;
-        timer_mgr_.GetExpired(timers, 128);
+        next_ms = timer_mgr_.GetExpired(timers, 128);
+        if (timers.empty()) break;
+        c += timers.size();
         for (auto &sp_timer : timers)
         {
             DebugPrint(dbg_timer, "enter timer callback %llu", (long long unsigned)sp_timer->GetId());
             (*sp_timer)();
             DebugPrint(dbg_timer, "leave timer callback %llu", (long long unsigned)sp_timer->GetId());
         }
-        c += timers.size();
-        if (timers.empty()) break;
     }
 
     return c;

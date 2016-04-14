@@ -74,6 +74,7 @@ struct ThreadLocalInfo
 {
     Task* current_task = NULL;
     uint32_t thread_id = 0;     // Run thread index, increment from 1.
+    uint8_t sleep_ms = 0;
 };
 
 class ThreadPool;
@@ -187,13 +188,15 @@ class Scheduler
         uint32_t DoRunnable();
 
         // Run函数的一部分, 处理epoll相关
-        int DoEpoll(bool enable_block);
+        int DoEpoll(int wait_milliseconds);
 
         // Run函数的一部分, 处理sleep相关
-        uint32_t DoSleep();
+        // @next_ms: 距离下一个timer触发的毫秒数
+        uint32_t DoSleep(long long &next_ms);
 
         // Run函数的一部分, 处理定时器
-        uint32_t DoTimer();
+        // @next_ms: 距离下一个timer触发的毫秒数
+        uint32_t DoTimer(long long &next_ms);
 
         // 获取线程局部信息
         ThreadLocalInfo& GetLocalInfo();
@@ -219,7 +222,6 @@ class Scheduler
         ThreadPool *thread_pool_;
 
         std::atomic<uint32_t> task_count_{0};
-        std::atomic<uint8_t> sleep_ms_{0};
         std::atomic<uint32_t> thread_id_{0};
 
     private:
