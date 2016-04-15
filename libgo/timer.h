@@ -39,7 +39,6 @@ typedef CoTimerPtr TimerId;
 class CoTimerMgr
 {
 public:
-    typedef std::map<uint64_t, CoTimerPtr> Timers;
     typedef std::chrono::time_point<std::chrono::high_resolution_clock> TimePoint;
     typedef std::multimap<TimePoint, CoTimerPtr> DeadLines;
 
@@ -57,18 +56,29 @@ public:
     bool Cancel(CoTimerPtr co_timer_ptr);
     bool BlockCancel(CoTimerPtr co_timer_ptr);
 
-    uint32_t GetExpired(std::list<CoTimerPtr> &result, uint32_t n = 1);
+    // @returns: 下一个触发的timer时间(单位: milliseconds)
+    long long GetExpired(std::list<CoTimerPtr> &result, uint32_t n = 1);
 
     static TimePoint Now();
 
 private:
     void __Cancel(CoTimerPtr co_timer_ptr);
 
+    long long GetNextTriggerTime();
+
+    void SetNextTriggerTime(TimePoint const& tp);
+
 private:
-    Timers timers_;
     DeadLines deadlines_;
     LFLock lock_;
-};
 
+    // 定时器创建时的时间点, 作为时间基准
+    TimePoint zero_time_;
+
+    // 下一个timer触发的时间
+    //  单位: milliseconds, 0时刻基准点: zero_time_
+    // 这个值由GetExpired时成功lock的线程来设置, 未lock成功的线程也允许读取.
+    std::atomic<long long> next_trigger_time_;
+};
 
 } //namespace co

@@ -28,9 +28,12 @@ static ssize_t read_write_mode(int fd, OriginF fn, const char* hook_fn_name, uin
 
     FdCtxPtr fd_ctx = FdManager::getInstance().get_fd_ctx(fd);
     if (!fd_ctx || fd_ctx->closed()) {
-        errno = EBADF;
+        errno = EBADF;  // 已被close或无效的fd
         return -1;
     }
+
+    if (!fd_ctx->is_socket())   // 非socket, 暂不HOOK. 以保障文件fd读写正常
+        return fn(fd, std::forward<Args>(args)...);
 
     if (fd_ctx->user_nonblock())
         return fn(fd, std::forward<Args>(args)...);
@@ -284,7 +287,9 @@ int poll(struct pollfd *fds, nfds_t nfds, int timeout)
             pfd.revents = POLLNVAL;
             continue;
         }
+
         if (!fd_ctx->add_into_reactor(pfd.events, io_sentry)) {
+            // TODO: 兼容文件fd
             pfd.revents = POLLNVAL;
             continue;
         }

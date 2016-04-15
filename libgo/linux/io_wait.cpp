@@ -8,21 +8,9 @@ namespace co
 IoWait::IoWait()
 {
     loop_index_ = 0;
-    epollwait_ms_ = 0;
     epoll_event_size_ = 1024;
     epoll_owner_pid_ = 0;
     epoll_fd_ = -1;
-}
-
-void IoWait::DelayEventWaitTime()
-{
-    ++epollwait_ms_;
-    epollwait_ms_ = std::min<int>(epollwait_ms_, g_Scheduler.GetOptions().max_sleep_ms);
-}
-
-void IoWait::ResetEventWaitTime()
-{
-    epollwait_ms_ = 0;
 }
 
 static uint32_t PollEvent2Epoll(short events)
@@ -117,7 +105,7 @@ int IoWait::reactor_ctl(int epoll_ctl_mod, int fd, uint32_t poll_events, bool is
     errno = EPERM;
     return -1;
 }
-int IoWait::WaitLoop(bool enable_block)
+int IoWait::WaitLoop(int wait_milliseconds)
 {
     if (!IsEpollCreated())
         return -1;
@@ -130,9 +118,8 @@ int IoWait::WaitLoop(bool enable_block)
     ++loop_index_;
     static epoll_event *evs = new epoll_event[epoll_event_size_];
 
-    int timeout = enable_block ? epollwait_ms_ : 0;
 retry:
-    int n = epoll_wait(GetEpollFd(), evs, epoll_event_size_, timeout);
+    int n = epoll_wait(GetEpollFd(), evs, epoll_event_size_, wait_milliseconds);
     if (n == -1) {
         if (errno == EINTR) {
             goto retry;
@@ -141,7 +128,8 @@ retry:
         return 0;
     }
 
-    DebugPrint(dbg_scheduler, "epollwait returns: %d", n);
+    DebugPrint(dbg_scheduler|dbg_scheduler_sleep, "epollwait(%d ms) returns: %d",
+            wait_milliseconds, n);
 
     TriggerSet triggers;
     for (int i = 0; i < n; ++i)

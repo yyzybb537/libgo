@@ -18,7 +18,8 @@ public:
     // 在调度器中调用的switch
     void SchedulerSwitch(Task* tk);
 
-    uint32_t WaitLoop();
+    // @next_ms: 距离下一个timer触发的毫秒数
+    uint32_t WaitLoop(long long &next_ms);
 
 private:
     void Wakeup(Task *tk);

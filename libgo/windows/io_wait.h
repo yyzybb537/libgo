@@ -7,19 +7,12 @@
 
 namespace co
 {
-
     class IoWait
     {
     public:
         void SchedulerSwitch(Task* tk);
 
-        int WaitLoop(bool enable_block);
-
-        void DelayEventWaitTime();
-        void ResetEventWaitTime();
-
-    private:
-        int epollwait_ms_;
+        int WaitLoop(int);
     };
 
 } //namespace co

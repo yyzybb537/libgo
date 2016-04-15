@@ -2,6 +2,8 @@
  * 处理IO协程切换、epoll等待、等待成功、超时取消等待，
  *     及其多线程并行关系。
 *************************************************
+* 此图已过时！
+*************************************************
  _______ *
     ^    * -------------------
     |    *       Syscall
@@ -111,10 +113,7 @@ public:
     int reactor_ctl(int epoll_ctl_mod, int fd, uint32_t poll_events, bool is_socket);
     // --------------------------------------
 
-    int WaitLoop(bool enable_block);
-
-    void DelayEventWaitTime();
-    void ResetEventWaitTime();
+    int WaitLoop(int wait_milliseconds);
 
     bool IsEpollCreated() const;
 
@@ -127,7 +126,6 @@ private:
     pid_t epoll_owner_pid_;
 
     LFLock epoll_lock_;
-    int epollwait_ms_;
     uint64_t loop_index_;
 
     typedef TSQueue<IoSentry> IoSentryList;

@@ -58,6 +58,8 @@ public:
     explicit FileDescriptorCtx(int fd);
     ~FileDescriptorCtx();
 
+    bool re_initialize();
+
     bool is_initialize();
     bool is_socket();
     bool closed();
@@ -93,15 +95,15 @@ private:
 
 private:
     std::mutex lock_;
-    bool is_initialize_;
-    bool is_socket_;
-    bool sys_nonblock_;
-    bool user_nonblock_;
-    bool closed_;
-    int fd_;
-    int pending_events_;
-    timeval recv_o_;
-    timeval send_o_;
+    bool is_initialize_ = false;
+    bool is_socket_ = false;
+    bool sys_nonblock_ = false;
+    bool user_nonblock_ = false;
+    bool closed_ = false;
+    int fd_ = -1;
+    int pending_events_ = 0;
+    timeval recv_o_ = {0, 0};
+    timeval send_o_ = {0, 0};
     TaskWSet i_tasks_;
     TaskWSet o_tasks_;
     TaskWSet io_tasks_;

@@ -1,5 +1,6 @@
 #include "timer.h"
 #include <mutex>
+#include <limits>
 
 namespace co
 {
@@ -48,7 +49,10 @@ bool CoTimer::BlockCancel()
 }
 
 CoTimerMgr::CoTimerMgr()
-{}
+    : next_trigger_time_{std::numeric_limits<long>::max()}
+{
+    zero_time_ = Now();
+}
 
 CoTimerMgr::~CoTimerMgr()
 {
@@ -60,7 +64,8 @@ CoTimerPtr CoTimerMgr::ExpireAt(TimePoint const& time_point, CoTimer::fn_t const
     std::unique_lock<LFLock> lock(lock_);
     CoTimerPtr sptr(new CoTimer(fn));
     sptr->next_time_point_ = time_point;
-    timers_[sptr->GetId()] = sptr;
+    if (deadlines_.empty())
+        SetNextTriggerTime(time_point);
     deadlines_.insert(std::make_pair(time_point, sptr));
     return sptr;
 }
@@ -81,14 +86,7 @@ bool CoTimerMgr::BlockCancel(CoTimerPtr co_timer_ptr)
 
 void CoTimerMgr::__Cancel(CoTimerPtr co_timer_ptr)
 {
-    uint64_t timer_id = co_timer_ptr->GetId();
-
     std::unique_lock<LFLock> lock(lock_);
-    Timers::iterator timers_it = timers_.find(timer_id);
-    if (timers_.end() == timers_it)
-        return ;
-
-    timers_.erase(timers_it);
 
     auto range = deadlines_.equal_range(co_timer_ptr->next_time_point_);
     for (auto it = range.first; it != range.second; ++it) {
@@ -99,10 +97,10 @@ void CoTimerMgr::__Cancel(CoTimerPtr co_timer_ptr)
     }
 }
 
-uint32_t CoTimerMgr::GetExpired(std::list<CoTimerPtr> &result, uint32_t n)
+long long CoTimerMgr::GetExpired(std::list<CoTimerPtr> &result, uint32_t n)
 {
     std::unique_lock<LFLock> lock(lock_, std::defer_lock);
-    if (!lock.try_lock()) return 0;
+    if (!lock.try_lock()) return GetNextTriggerTime();
 
     TimePoint now = Now();
     auto it = deadlines_.begin();
@@ -113,11 +111,17 @@ uint32_t CoTimerMgr::GetExpired(std::list<CoTimerPtr> &result, uint32_t n)
         }
 
         result.push_back(it->second);
-        timers_.erase(it->second->GetId());
     }
 
+    if (it != deadlines_.end()) {
+        // 还有timer需要触发
+        TimePoint const& next_tp = it->first;
+        SetNextTriggerTime(next_tp);
+    } else
+        next_trigger_time_ = std::numeric_limits<long>::max();
+
     deadlines_.erase(deadlines_.begin(), it);
-    return result.size();
+    return GetNextTriggerTime();
 }
 
 CoTimerMgr::TimePoint CoTimerMgr::Now()
@@ -125,5 +129,21 @@ CoTimerMgr::TimePoint CoTimerMgr::Now()
     return TimePoint::clock::now();
 }
 
+long long CoTimerMgr::GetNextTriggerTime()
+{
+    auto now_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
+            Now() - zero_time_).count();
+    if (next_trigger_time_ > now_ms)
+        return next_trigger_time_ - now_ms;
+
+    return 0;
+}
+
+void CoTimerMgr::SetNextTriggerTime(TimePoint const& tp)
+{
+    auto now_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
+            tp - zero_time_).count();
+    next_trigger_time_ = now_ms;
+}
 
 } //namespace co

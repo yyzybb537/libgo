@@ -28,21 +28,21 @@ void SleepWait::SchedulerSwitch(Task* tk)
             });
 }
 
-uint32_t SleepWait::WaitLoop()
+uint32_t SleepWait::WaitLoop(long long &next_ms)
 {
     uint32_t c = 0;
     for (;;)
     {
         std::list<CoTimerPtr> timers;
-        timer_mgr_.GetExpired(timers, 128);
+        next_ms = timer_mgr_.GetExpired(timers, 128);
+        if (timers.empty()) break;
+        c += timers.size();
         for (auto &sp_timer : timers)
         {
             DebugPrint(dbg_sleepblock, "enter timer callback %llu", (long long unsigned)sp_timer->GetId());
             (*sp_timer)();
             DebugPrint(dbg_sleepblock, "leave timer callback %llu", (long long unsigned)sp_timer->GetId());
         }
-        c += timers.size();
-        if (timers.empty()) break;
     }
 
     return c;
