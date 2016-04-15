@@ -34,6 +34,24 @@ bool IoSentry::switch_state_to_triggered()
 FileDescriptorCtx::FileDescriptorCtx(int fd)
     : fd_(fd)
 {
+    re_initialize();
+}
+FileDescriptorCtx::~FileDescriptorCtx()
+{
+    assert(i_tasks_.empty());
+    assert(o_tasks_.empty());
+    assert(io_tasks_.empty());
+    assert(pending_events_ == 0);
+    assert(closed_);
+    DebugPrint(dbg_fd_ctx, "fd(%p:%d) context destruct", this, fd_);
+}
+bool FileDescriptorCtx::re_initialize()
+{
+    if (is_initialize())
+        return true;
+
+    recv_o_ = timeval{0, 0};
+    send_o_ = timeval{0, 0};
     struct stat fd_stat;
     if (-1 == fstat(fd_, &fd_stat)) {
         is_initialize_ = false;
@@ -49,8 +67,6 @@ FileDescriptorCtx::FileDescriptorCtx(int fd)
             fcntl_f(fd_, F_SETFL, flags | O_NONBLOCK);
 
         sys_nonblock_ = true;
-//        recv_o_ = send_o_ = timeval{0, 0};
-//        getsockopt_f()
     } else {
         sys_nonblock_ = false;
         recv_o_ = send_o_ = timeval{0, 0};
@@ -62,17 +78,14 @@ FileDescriptorCtx::FileDescriptorCtx(int fd)
     DebugPrint(dbg_fd_ctx, "fd(%p:%d) context construct. "
             "is_socket(%d) sys_nonblock(%d) user_nonblock(%d)",
             this, fd_, (int)is_socket_, (int)sys_nonblock_, (int)user_nonblock_);
-}
-FileDescriptorCtx::~FileDescriptorCtx()
-{
-    assert(i_tasks_.empty());
-    assert(o_tasks_.empty());
-    assert(io_tasks_.empty());
-    assert(pending_events_ == 0);
-    assert(closed_);
-    DebugPrint(dbg_fd_ctx, "fd(%p:%d) context destruct", this, fd_);
+
+    return is_initialize();
 }
 
+bool FileDescriptorCtx::is_initialize()
+{
+    return is_initialize_;
+}
 bool FileDescriptorCtx::is_socket()
 {
     return is_socket_;
@@ -356,8 +369,11 @@ FdCtxPtr FdManager::get_fd_ctx(int fd)
     std::unique_lock<LFLock> lock(lock_);
 
     FdCtxPtr* & pptr = get_ref(fd);
-    if (!pptr)
-        pptr =  new FdCtxPtr(new FileDescriptorCtx(fd));
+    if (!pptr) pptr = new FdCtxPtr(new FileDescriptorCtx(fd));
+
+    (*pptr)->re_initialize();
+    if (!(*pptr)->is_initialize())
+        return FdCtxPtr();
 
     return *pptr;
 }
@@ -386,6 +402,10 @@ bool FdManager::dup(int src, int dst)
     FdCtxPtr* & src_ptr = get_ref(src);
     if (!src_ptr)
         src_ptr = new FdCtxPtr(new FileDescriptorCtx(src));
+
+    (*src_ptr)->re_initialize();
+    if (!(*src_ptr)->is_initialize())
+        return false;
 
     FdCtxPtr* & dst_ptr = get_ref(dst);
     if (dst_ptr) return false;
