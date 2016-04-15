@@ -105,6 +105,8 @@ int main(int argc, char **argv)
             exit(1);
         }
 
+//    co_sched.GetOptions().debug = co::dbg_ioblock;
+
     if (argc > 1)
         thread_count = atoi(argv[1]);
     if (argc > 2)
