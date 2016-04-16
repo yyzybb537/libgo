@@ -80,6 +80,16 @@ eintr:
     return n;
 }
 
+// 设置阻塞式connect超时时间(-1无限时)
+static thread_local int s_connect_timeout = -1;
+
+namespace co {
+    void set_connect_timeout(int milliseconds)
+    {
+        s_connect_timeout = milliseconds;
+    }
+} //namespace co
+
 extern "C" {
 
 connect_t connect_f = NULL;
@@ -106,14 +116,6 @@ setsockopt_t setsockopt_f = NULL;
 dup_t dup_f = NULL;
 dup2_t dup2_f = NULL;
 dup3_t dup3_f = NULL;
-
-// 设置阻塞式connect超时时间(-1无限时)
-static thread_local int s_connect_timeout = -1;
-
-void set_connect_timeout(int milliseconds)
-{
-    s_connect_timeout = milliseconds;
-}
 
 int connect(int fd, const struct sockaddr *addr, socklen_t addrlen)
 {
@@ -534,6 +536,7 @@ int fcntl(int __fd, int __cmd, ...)
                 va_end(va);
                 FdCtxPtr fd_ctx = FdManager::getInstance().get_fd_ctx(__fd);
                 if (!fd_ctx || fd_ctx->closed()) return fcntl_f(__fd, __cmd, flags);
+                if (!fd_ctx->is_socket()) return fcntl_f(__fd, __cmd, flags);
                 fd_ctx->set_user_nonblock(flags & O_NONBLOCK);
                 if (fd_ctx->sys_nonblock())
                     flags |= O_NONBLOCK;
@@ -568,6 +571,7 @@ int fcntl(int __fd, int __cmd, ...)
                 int flags = fcntl_f(__fd, __cmd);
                 FdCtxPtr fd_ctx = FdManager::getInstance().get_fd_ctx(__fd);
                 if (!fd_ctx || fd_ctx->closed()) return flags;
+                if (!fd_ctx->is_socket()) return flags;
                 if (fd_ctx->user_nonblock())
                     return flags | O_NONBLOCK;
                 else
@@ -600,7 +604,10 @@ int ioctl(int fd, unsigned long int request, ...)
     if (FIONBIO == request) {
         bool user_nonblock = !!*(int*)arg;
         FdCtxPtr fd_ctx = FdManager::getInstance().get_fd_ctx(fd);
-        if (fd_ctx) fd_ctx->set_user_nonblock(user_nonblock);
+        if (!fd_ctx || fd_ctx->closed()) return ioctl_f(fd, request, arg);
+        if (!fd_ctx->is_socket()) return ioctl_f(fd, request, arg);
+
+        fd_ctx->set_user_nonblock(user_nonblock);
         return 0;
     }
 
