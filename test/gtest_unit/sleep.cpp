@@ -12,6 +12,7 @@ using namespace co;
 enum class sleep_type
 {
     syscall_sleep,
+    syscall_usleep,
     syscall_nanosleep,
     syscall_poll_0,
     syscall_poll,
@@ -23,6 +24,10 @@ void do_sleep(sleep_type type, int timeout)
     {
         case sleep_type::syscall_sleep:
             sleep(timeout / 1000);
+            break;
+
+        case sleep_type::syscall_usleep:
+            usleep(timeout * 1000);
             break;
 
         case sleep_type::syscall_nanosleep:
@@ -94,5 +99,5 @@ TEST_P(Sleep, sleep1)
 INSTANTIATE_TEST_CASE_P(
         SleepTypeTest,
         Sleep,
-        Values(sleep_type::syscall_sleep, sleep_type::syscall_nanosleep,
+        Values(sleep_type::syscall_sleep, sleep_type::syscall_usleep, sleep_type::syscall_nanosleep,
             sleep_type::syscall_poll_0, sleep_type::syscall_poll));

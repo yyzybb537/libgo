@@ -1,4 +1,5 @@
 #pragma once
+#include <unistd.h>
 
 extern "C" {
 
@@ -49,6 +50,9 @@ extern accept_t accept_f;
 
 typedef unsigned int(*sleep_t)(unsigned int seconds);
 extern sleep_t sleep_f;
+
+typedef int (*usleep_t)(useconds_t usec);
+extern usleep_t usleep_f;
 
 typedef int(*nanosleep_t)(const struct timespec *req, struct timespec *rem);
 extern nanosleep_t nanosleep_f;

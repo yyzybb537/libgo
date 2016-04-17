@@ -39,6 +39,7 @@ poll_t poll_f = &poll;
 select_t select_f = &select;
 accept_t accept_f = &accept;
 sleep_t sleep_f = &sleep;
+usleep_t usleep_f = &usleep;
 nanosleep_t nanosleep_f = &nanosleep;
 close_t close_f = &close;
 fcntl_t fcntl_f = &fcntl;
