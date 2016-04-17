@@ -107,6 +107,7 @@ poll_t poll_f = NULL;
 select_t select_f = NULL;
 accept_t accept_f = NULL;
 sleep_t sleep_f = NULL;
+usleep_t usleep_f = NULL;
 nanosleep_t nanosleep_f = NULL;
 close_t close_f = NULL;
 fcntl_t fcntl_f = NULL;
@@ -467,6 +468,24 @@ unsigned int sleep(unsigned int seconds)
     return 0;
 }
 
+int usleep(useconds_t usec)
+{
+    if (!usleep_f) coroutine_hook_init();
+
+    Task* tk = g_Scheduler.GetCurrentTask();
+    DebugPrint(dbg_hook, "task(%s) hook usleep(microseconds=%u). %s coroutine.",
+            tk ? tk->DebugInfo() : "nil", usec,
+            g_Scheduler.IsCoroutine() ? "In" : "Not in");
+
+    if (!g_Scheduler.IsCoroutine())
+        return usleep_f(usec);
+
+    int timeout_ms = usec / 1000;
+    g_Scheduler.SleepSwitch(timeout_ms);
+    return 0;
+
+}
+
 int nanosleep(const struct timespec *req, struct timespec *rem)
 {
     if (!nanosleep_f) coroutine_hook_init();
@@ -718,6 +737,7 @@ extern int __setsockopt(int sockfd, int level, int optname,
 extern int __dup(int);
 extern int __dup2(int, int);
 extern int __dup3(int, int, int);
+extern int __usleep(useconds_t usec);
 #endif
 }
 
@@ -745,6 +765,7 @@ void coroutine_hook_init()
     poll_f = (poll_t)dlsym(RTLD_NEXT, "poll");
     select_f = (select_t)dlsym(RTLD_NEXT, "select");
     sleep_f = (sleep_t)dlsym(RTLD_NEXT, "sleep");
+    usleep_f = (usleep_t)dlsym(RTLD_NEXT, "usleep");
     nanosleep_f = (nanosleep_t)dlsym(RTLD_NEXT, "nanosleep");
     close_f = (close_t)dlsym(RTLD_NEXT, "close");
     fcntl_f = (fcntl_t)dlsym(RTLD_NEXT, "fcntl");
@@ -770,6 +791,7 @@ void coroutine_hook_init()
     poll_f = &__poll;
     select_f = &__select;
     sleep_f = &__sleep;
+    usleep_f = &__usleep;
     nanosleep_f = &__nanosleep;
     close_f = &__close;
     fcntl_f = &__fcntl;
@@ -783,7 +805,7 @@ void coroutine_hook_init()
 
     if (!connect_f || !read_f || !write_f || !readv_f || !writev_f || !send_f
             || !sendto_f || !sendmsg_f || !accept_f || !poll_f || !select_f
-            || !sleep_f || !nanosleep_f || !close_f || !fcntl_f || !setsockopt_f
+            || !sleep_f|| !usleep_f || !nanosleep_f || !close_f || !fcntl_f || !setsockopt_f
             || !getsockopt_f || !dup_f || !dup2_f || !dup3_f)
     {
         fprintf(stderr, "Hook syscall failed. Please don't remove libc.a when static-link.\n");

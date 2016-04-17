@@ -4,11 +4,10 @@
  * coroutine库原生提供了一个线程安全的定时器
  *  协程内外均可使用. 加入定时器的回调函数会在调度器Run时被触发.
  *
- * 还提供了休眠当前协程的方法co_sleep，类似于系统调用sleep.
- * 同时HOOK了系统调用sleep、nanosleep, 在协程中使用这两个系统
+ * 还提供了休眠当前协程的方法co_sleep，类似于系统调用sleep, 不过时间单
+ * 位是毫秒.
+ * 同时HOOK了系统调用sleep、usleep、nanosleep, 在协程中使用这几个系统
  * 调用, 会自动变为co_sleep, 协程外使用效果不变.
- *
- * 注意: 没有HOOK usleep系统调用, 协程中不要使用.
 ************************************************/
 #include <chrono>
 #include "coroutine.h"
@@ -16,7 +15,7 @@
 
 int main()
 {
-    bool *is_exit = new bool(false);
+    bool is_exit = false;
 
     // co_timer_add接受两个参数
     // 第一个参数可以是std::chrono中的时间长度，也可以是时间点。
@@ -34,9 +33,9 @@ int main()
     bool cancelled = co_timer_cancel(id1);
     printf("cancelled:%s\n", cancelled ? "true" : "false");
 
-    co_timer_add(std::chrono::seconds(2), [=]{
+    co_timer_add(std::chrono::seconds(2), [&]{
             printf("Timer Callback.\n");
-            *is_exit = true;
+            is_exit = true;
             });
 
     for (int i = 0; i < 100; ++i)
@@ -46,7 +45,19 @@ int main()
             co_sleep(1000);
         };
 
-    while (!*is_exit)
+#if !defined(_WIN32)
+    go []{
+        // 休眠当前协程 1 second
+        sleep(1);
+    };
+
+    go []{
+        // 休眠当前协程 100 milliseconds
+        usleep(100 * 1000);
+    };
+#endif
+
+    while (!is_exit)
         co_sched.Run();
     return 0;
 }
