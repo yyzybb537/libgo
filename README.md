@@ -171,3 +171,24 @@ libgo有以下特点：
 		dup3      
 
     以上系统调用不会造成阻塞, 虽然也被Hook, 但并不会完全改变其行为, 仅用于跟踪socket的选项和状态. 
+
+##### Windows系统上Hook的系统调用列表：
+* 
+
+		ioctlsocket                                                                        
+		WSAIoctl                                                                           
+		select                                                                             
+		connect                                                                            
+		WSAConnect                                                                         
+		accept                                                                             
+		WSAAccept                                                                          
+		WSARecv                                                                            
+		recv                                                                               
+		recvfrom                                                                           
+		WSARecvFrom                                                                        
+		WSARecvMsg                                                                         
+		WSASend                                                                            
+		send                                                                               
+		sendto                                                                             
+		WSASendTo                                                                          
+		WSASendMsg
