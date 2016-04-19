@@ -738,6 +738,14 @@ extern int __dup(int);
 extern int __dup2(int, int);
 extern int __dup3(int, int, int);
 extern int __usleep(useconds_t usec);
+
+// 某些版本libc.a中没有__usleep.
+__attribute__((weak))
+int __usleep(useconds_t usec)
+{
+    timespec req = {usec / 1000000, usec * 1000};
+    return __nanosleep(&req, nullptr);
+}
 #endif
 }
 
