@@ -147,7 +147,7 @@ class Scheduler
 
         /// ------------------------------------------------------------------------
         // @{ 定时器
-        TimerId ExpireAt(CoTimerMgr::TimePoint const& time_point, CoTimer::fn_t const& fn);
+        TimerId ExpireAt(TimePoint const& time_point, CoTimer::fn_t const& fn);
 
         template <typename Duration>
         TimerId ExpireAt(Duration const& duration, CoTimer::fn_t const& fn)

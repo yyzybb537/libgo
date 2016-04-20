@@ -541,7 +541,9 @@ int fcntl(int __fd, int __cmd, ...)
         case F_SETSIG:
         case F_SETLEASE:
         case F_NOTIFY:
+#if defined(F_SETPIPE_SZ)
         case F_SETPIPE_SZ:
+#endif
             {
                 int arg = va_arg(va, int);
                 va_end(va);
@@ -602,7 +604,9 @@ int fcntl(int __fd, int __cmd, ...)
         case F_GETOWN:
         case F_GETSIG:
         case F_GETLEASE:
+#if defined(F_GETPIPE_SZ)
         case F_GETPIPE_SZ:
+#endif
         default:
             {
                 va_end(va);
@@ -738,6 +742,14 @@ extern int __dup(int);
 extern int __dup2(int, int);
 extern int __dup3(int, int, int);
 extern int __usleep(useconds_t usec);
+
+// 某些版本libc.a中没有__usleep.
+__attribute__((weak))
+int __usleep(useconds_t usec)
+{
+    timespec req = {usec / 1000000, usec * 1000};
+    return __nanosleep(&req, nullptr);
+}
 #endif
 }
 
