@@ -10,11 +10,15 @@
 namespace co
 {
 
+class CoTimer;
+typedef std::chrono::time_point<std::chrono::high_resolution_clock> TimePoint;
+typedef std::shared_ptr<CoTimer> CoTimerPtr;
+
 class CoTimer
 {
 public:
     typedef std::function<void()> fn_t;
-    typedef std::chrono::time_point<std::chrono::high_resolution_clock> TimePoint;
+    typedef std::multimap<TimePoint, CoTimerPtr>::iterator Token;
 
     explicit CoTimer(fn_t const& fn);
     uint64_t GetId();
@@ -28,7 +32,7 @@ private:
     fn_t fn_;
     bool active_;
     LFLock fn_lock_;
-    TimePoint next_time_point_;
+    Token token_;
 
     friend class CoTimerMgr;
 };
@@ -39,7 +43,6 @@ typedef CoTimerPtr TimerId;
 class CoTimerMgr
 {
 public:
-    typedef std::chrono::time_point<std::chrono::high_resolution_clock> TimePoint;
     typedef std::multimap<TimePoint, CoTimerPtr> DeadLines;
 
     CoTimerMgr();

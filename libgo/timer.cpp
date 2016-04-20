@@ -63,10 +63,9 @@ CoTimerPtr CoTimerMgr::ExpireAt(TimePoint const& time_point, CoTimer::fn_t const
 {
     std::unique_lock<LFLock> lock(lock_);
     CoTimerPtr sptr(new CoTimer(fn));
-    sptr->next_time_point_ = time_point;
     if (deadlines_.empty())
         SetNextTriggerTime(time_point);
-    deadlines_.insert(std::make_pair(time_point, sptr));
+    sptr->token_ = deadlines_.insert(std::make_pair(time_point, sptr));
     return sptr;
 }
 
@@ -87,14 +86,7 @@ bool CoTimerMgr::BlockCancel(CoTimerPtr co_timer_ptr)
 void CoTimerMgr::__Cancel(CoTimerPtr co_timer_ptr)
 {
     std::unique_lock<LFLock> lock(lock_);
-
-    auto range = deadlines_.equal_range(co_timer_ptr->next_time_point_);
-    for (auto it = range.first; it != range.second; ++it) {
-        if (it->second == co_timer_ptr) {
-            deadlines_.erase(it);
-            break;
-        }
-    }
+    deadlines_.erase(co_timer_ptr->token_);
 }
 
 long long CoTimerMgr::GetExpired(std::list<CoTimerPtr> &result, uint32_t n)
@@ -124,7 +116,7 @@ long long CoTimerMgr::GetExpired(std::list<CoTimerPtr> &result, uint32_t n)
     return GetNextTriggerTime();
 }
 
-CoTimerMgr::TimePoint CoTimerMgr::Now()
+TimePoint CoTimerMgr::Now()
 {
     return TimePoint::clock::now();
 }

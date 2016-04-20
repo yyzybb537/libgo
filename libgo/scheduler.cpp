@@ -292,7 +292,7 @@ void Scheduler::SleepSwitch(int timeout_ms)
         sleep_wait_.CoSwitch(timeout_ms);
 }
 
-TimerId Scheduler::ExpireAt(CoTimerMgr::TimePoint const& time_point,
+TimerId Scheduler::ExpireAt(TimePoint const& time_point,
         CoTimer::fn_t const& fn)
 {
     TimerId id = timer_mgr_.ExpireAt(time_point, fn);
