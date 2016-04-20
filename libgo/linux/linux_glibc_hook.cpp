@@ -541,7 +541,9 @@ int fcntl(int __fd, int __cmd, ...)
         case F_SETSIG:
         case F_SETLEASE:
         case F_NOTIFY:
+#if defined(F_SETPIPE_SZ)
         case F_SETPIPE_SZ:
+#endif
             {
                 int arg = va_arg(va, int);
                 va_end(va);
@@ -602,7 +604,9 @@ int fcntl(int __fd, int __cmd, ...)
         case F_GETOWN:
         case F_GETSIG:
         case F_GETLEASE:
+#if defined(F_GETPIPE_SZ)
         case F_GETPIPE_SZ:
+#endif
         default:
             {
                 va_end(va);
