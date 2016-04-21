@@ -47,7 +47,7 @@ struct Times : public TestWithParam<int>
     void SetUp() { tc_ = GetParam(); }
 };
 
-TEST_P(Times, testBm)
+TEST_P(Times, testCo)
 {
 //    g_Scheduler.GetOptions().debug = dbg_scheduler;
 //    g_Scheduler.GetOptions().debug_output = fopen("log", "w");
@@ -120,7 +120,10 @@ TEST_P(Times, testBm)
         tg.join_all();
     }
     g_Scheduler.RunUntilNoTask();
+}
 
+TEST_P(Times, testChan)
+{
 //    co_chan<int> chan;
     co_chan<int> chan(tc_);
     go [=] {
@@ -140,7 +143,11 @@ TEST_P(Times, testBm)
         g_Scheduler.RunUntilNoTask();
     }
     g_Scheduler.RunUntilNoTask();
+}
 
+
+TEST_P(Times, testTimer)
+{
     {
         stdtimer st(tc_, "Create Timer");
         for (int i = 0; i < tc_; ++i)
@@ -192,4 +199,5 @@ INSTANTIATE_TEST_CASE_P(
         BmTest,
         Times,
         Values(100000));
+//        Values(1000000, 3000000, 10000000));
 #endif
