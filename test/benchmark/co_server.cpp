@@ -3,6 +3,7 @@
 #include <sys/socket.h>
 #include <arpa/inet.h>
 #include <assert.h>
+#include <signal.h>
 #include "coroutine.h"
 
 static const char* g_ip = "127.0.0.1";
@@ -96,6 +97,8 @@ goon_write:
 
 int main(int argc, char **argv)
 {
+    sigignore(SIGPIPE);
+
     if (argc > 1) 
         if (strcmp(argv[1], "-h") == 0 || strcmp(argv[1], "--help") == 0) {
             printf("\n    Usage: %s [ThreadCount] [QueryDataLength]\n", argv[0]);
