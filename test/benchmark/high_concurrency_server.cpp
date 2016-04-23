@@ -9,6 +9,7 @@
 #include <atomic>
 #include <fcntl.h>
 #include <assert.h>
+#include <signal.h>
 #include "coroutine.h"
 
 static const char* g_ip = "0.0.0.0";
@@ -129,6 +130,7 @@ void show_status()
 
 int main(int argc, char **argv)
 {
+    sigignore(SIGPIPE);
     if (argc > 1) 
         if (strcmp(argv[1], "-h") == 0 || strcmp(argv[1], "--help") == 0) {
             printf("\n    Usage: %s [ThreadCount]\n", argv[0]);

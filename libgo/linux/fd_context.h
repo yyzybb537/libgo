@@ -112,8 +112,9 @@ private:
 class FdManager
 {
 public:
-    typedef std::deque<FdCtxPtr*> FdList;
-    typedef std::map<int, FdCtxPtr*> BigFdMap;
+    typedef std::pair<FdCtxPtr*, LFLock> FdPair;
+    typedef std::deque<FdPair> FdDeque;
+    typedef std::map<int, FdPair> BigFdMap;
 
     static FdManager& getInstance();
 
@@ -124,11 +125,15 @@ public:
     int close(int fd, bool call_syscall = true);
 
 private:
-    FdCtxPtr* &get_ref(int fd);
+    FdPair & get_pair(int fd);
+
+    FdCtxPtr get(FdPair & fpair, int fd);
 
 private:
-    LFLock lock_;
-    FdList fd_list_;
+    LFLock deque_lock_;
+    FdDeque fd_deque_;
+
+    LFLock map_lock_;
     BigFdMap big_fds_;
 };
 

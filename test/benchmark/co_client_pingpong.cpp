@@ -3,6 +3,7 @@
 #include <sys/socket.h>
 #include <arpa/inet.h>
 #include <assert.h>
+#include <signal.h>
 #include "coroutine.h"
 using namespace std::chrono;
 
@@ -73,6 +74,7 @@ void show_status()
 
 int main(int argc, char **argv)
 {
+    sigignore(SIGPIPE);
     if (argc > 1) 
         if (strcmp(argv[1], "-h") == 0 || strcmp(argv[1], "--help") == 0) {
             printf("\n    Usage: %s [ThreadCount] [Connection_Count] [QueryDataLength]\n", argv[0]);

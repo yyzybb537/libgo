@@ -366,24 +366,19 @@ FdCtxPtr FdManager::get_fd_ctx(int fd)
 {
     if (fd < 0) return FdCtxPtr();
 
-    std::unique_lock<LFLock> lock(lock_);
-
-    FdCtxPtr* & pptr = get_ref(fd);
-    if (!pptr) pptr = new FdCtxPtr(new FileDescriptorCtx(fd));
-
-    (*pptr)->re_initialize();
-    if (!(*pptr)->is_initialize())
+    FdPair & fpair = get_pair(fd);
+    FdCtxPtr ptr = get(fpair, fd);
+    if (!ptr->is_initialize())
         return FdCtxPtr();
-
-    return *pptr;
+    return ptr;
 }
 int FdManager::close(int fd, bool call_syscall)
 {
     if (fd < 0) return 0;
 
-    std::unique_lock<LFLock> lock(lock_);
-
-    FdCtxPtr* & pptr = get_ref(fd);
+    FdPair & fpair = get_pair(fd);
+    std::unique_lock<LFLock> lock(fpair.second);
+    FdCtxPtr* & pptr = fpair.first;
     if (!pptr) {
         if (call_syscall)
             return close_f(fd);
@@ -397,32 +392,41 @@ int FdManager::close(int fd, bool call_syscall)
 }
 bool FdManager::dup(int src, int dst)
 {
-    std::unique_lock<LFLock> lock(lock_);
-
-    FdCtxPtr* & src_ptr = get_ref(src);
-    if (!src_ptr)
-        src_ptr = new FdCtxPtr(new FileDescriptorCtx(src));
-
-    (*src_ptr)->re_initialize();
-    if (!(*src_ptr)->is_initialize())
+    FdPair & src_fpair = get_pair(src);
+    FdCtxPtr src_ptr = get(src_fpair, src);
+    if (!src_ptr->is_initialize())
         return false;
 
-    FdCtxPtr* & dst_ptr = get_ref(dst);
-    if (dst_ptr) return false;
-
-    dst_ptr = new FdCtxPtr(*src_ptr);
+    FdPair & dst_fpair = get_pair(dst);
+    std::unique_lock<LFLock> lock(dst_fpair.second);
+    if (dst_fpair.first) return false;
+    dst_fpair.first = new FdCtxPtr(src_ptr);
     return true;
 }
 
-FdCtxPtr*& FdManager::get_ref(int fd)
+FdManager::FdPair & FdManager::get_pair(int fd)
 {
-    if (fd >= 8000000 || fd < 0)
+    if (fd >= 8000000 || fd < 0) {
+        std::unique_lock<LFLock> lock(map_lock_);
         return big_fds_[fd];
+    }
 
-    if ((int)fd_list_.size() <= fd)
-        fd_list_.resize(fd + 1);
+    if ((int)fd_deque_.size() <= fd) {
+        std::unique_lock<LFLock> lock(deque_lock_);
+        fd_deque_.resize(fd + 1);
+    }
 
-    return fd_list_[fd];
+    return fd_deque_[fd];
+}
+
+FdCtxPtr FdManager::get(FdPair & fpair, int fd)
+{
+    std::unique_lock<LFLock> lock(fpair.second);
+    FdCtxPtr* & pptr = fpair.first;
+    if (!pptr) pptr = new FdCtxPtr(new FileDescriptorCtx(fd));
+    (*pptr)->re_initialize();
+    FdCtxPtr ptr = *pptr;
+    return ptr;
 }
 
 } //namespace co
