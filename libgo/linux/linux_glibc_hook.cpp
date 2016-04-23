@@ -88,6 +88,10 @@ namespace co {
     {
         s_connect_timeout = milliseconds;
     }
+    void initialize_socket_async_methods(int socketfd)
+    {
+        FdManager::getInstance().get_fd_ctx(socketfd);
+    }
 } //namespace co
 
 extern "C" {
