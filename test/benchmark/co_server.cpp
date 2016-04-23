@@ -48,14 +48,13 @@ void echo_server()
             co_chan<bool> err;
 
             go [err, sock_fd] {
-                int buflen = 4096;
-                char *buf = new char[buflen];
+                char *buf = new char[qdata];
                 std::unique_ptr<char[]> _ep(buf);
 
                 int noyield_for_c = 0;
                 for (;;++noyield_for_c) {
 retry_read:
-                    auto n = read(sock_fd, buf, buflen);
+                    auto n = read(sock_fd, buf, qdata);
                     if (n <= 0) {
                         if (errno == EINTR) {
                             printf("trigger EINTR. socket=%d\n", sock_fd);
