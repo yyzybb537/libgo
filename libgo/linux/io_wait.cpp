@@ -7,10 +7,18 @@ namespace co
 
 IoWait::IoWait()
 {
-    loop_index_ = 0;
     epoll_event_size_ = 1024;
-    epoll_owner_pid_ = 0;
-    epoll_fd_ = -1;
+}
+
+int& IoWait::EpollFdRef()
+{
+    thread_local static int epoll_fd = -1;
+    return epoll_fd;
+}
+pid_t& IoWait::EpollOwnerPid()
+{
+    thread_local static pid_t owner_pid = -1;
+    return owner_pid;
 }
 
 static uint32_t PollEvent2Epoll(short events)
@@ -88,13 +96,13 @@ void IoWait::__IOBlockTriggered(IoSentryPtr io_sentry)
     }
 }
 
-int IoWait::reactor_ctl(int epoll_ctl_mod, int fd, uint32_t poll_events, bool is_socket)
+int IoWait::reactor_ctl(int epollfd, int epoll_ctl_mod, int fd, uint32_t poll_events, bool is_socket)
 {
     if (is_socket) {
         epoll_event ev;
         ev.events = PollEvent2Epoll(poll_events);
         ev.data.fd = fd;
-        int res = epoll_ctl(GetEpollFd(), epoll_ctl_mod, fd, &ev);
+        int res = epoll_ctl(epollfd, epoll_ctl_mod, fd, &ev);
         DebugPrint(dbg_ioblock, "epoll_ctl(fd:%d, MOD:%s, events:%s) returns %d",
                 fd, EpollMod2Str(epoll_ctl_mod),
                 EpollEvent2Str(ev.events).c_str(), res);
@@ -111,12 +119,8 @@ int IoWait::WaitLoop(int wait_milliseconds)
         return -1;
 
     // TODO: epoll多线程触发, poll单线程触发.
-    std::unique_lock<LFLock> lock(epoll_lock_, std::defer_lock);
-    if (!lock.try_lock())
-        return -1;
 
-    ++loop_index_;
-    static epoll_event *evs = new epoll_event[epoll_event_size_];
+    thread_local static epoll_event *evs = new epoll_event[epoll_event_size_];
 
 retry:
     int n = epoll_wait(GetEpollFd(), evs, epoll_event_size_, wait_milliseconds);
@@ -158,19 +162,21 @@ retry:
 int IoWait::GetEpollFd()
 {
     CreateEpoll();
-    return epoll_fd_;
+    return EpollFdRef();
 }
 
 void IoWait::CreateEpoll()
 {
     pid_t pid = getpid();
-    if (epoll_owner_pid_ == pid) return ;
+    pid_t& epoll_owner_pid = EpollOwnerPid();
+    if (epoll_owner_pid == pid) return ;
     std::unique_lock<LFLock> lock(epoll_create_lock_);
-    if (epoll_owner_pid_ == pid) return ;
+    if (epoll_owner_pid == pid) return ;
 
-    epoll_owner_pid_ = pid;
+    epoll_owner_pid = pid;
     epoll_event_size_ = g_Scheduler.GetOptions().epoll_event_size;
 
+    int & epoll_fd_ = EpollFdRef();
     if (epoll_fd_ >= 0)
         close(epoll_fd_);
 
@@ -185,9 +191,9 @@ void IoWait::CreateEpoll()
     }
 }
 
-bool IoWait::IsEpollCreated() const
+bool IoWait::IsEpollCreated()
 {
-    return epoll_owner_pid_ == getpid();
+    return EpollFdRef() != -1 && EpollOwnerPid() == getpid();
 }
 
 } //namespace co

@@ -110,23 +110,21 @@ public:
     * reactor相关操作, 使用类似epoll的接口屏蔽epoll/poll的区别
     * TODO: 同时支持socket-io和文件io.
     */
-    int reactor_ctl(int epoll_ctl_mod, int fd, uint32_t poll_events, bool is_socket);
+    int reactor_ctl(int epollfd, int epoll_ctl_mod, int fd, uint32_t poll_events, bool is_socket);
     // --------------------------------------
 
     int WaitLoop(int wait_milliseconds);
 
-    bool IsEpollCreated() const;
+    bool IsEpollCreated();
 
 private:
     void CreateEpoll();
 
-    int epoll_fd_;
+    int& EpollFdRef();
+    pid_t& EpollOwnerPid();
+
     LFLock epoll_create_lock_;
     int epoll_event_size_;
-    pid_t epoll_owner_pid_;
-
-    LFLock epoll_lock_;
-    uint64_t loop_index_;
 
     typedef TSQueue<IoSentry> IoSentryList;
     IoSentryList wait_io_sentries_;

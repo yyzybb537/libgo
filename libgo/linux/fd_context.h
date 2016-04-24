@@ -93,6 +93,8 @@ private:
 
     void set_pending_events(int events);
 
+    int GetEpollFd();
+
 private:
     std::mutex lock_;
     bool is_initialize_ = false;
@@ -107,6 +109,10 @@ private:
     TaskWSet i_tasks_;
     TaskWSet o_tasks_;
     TaskWSet io_tasks_;
+
+    LFLock epoll_fd_mtx_;
+    int epoll_fd_ = -1;
+    pid_t owner_pid_ = -1;
 };
 
 class FdManager
