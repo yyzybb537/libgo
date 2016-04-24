@@ -112,6 +112,7 @@ private:
 
     LFLock epoll_fd_mtx_;
     int epoll_fd_ = -1;
+    pid_t owner_pid_ = -1;
 };
 
 class FdManager

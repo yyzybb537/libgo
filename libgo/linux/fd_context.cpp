@@ -358,10 +358,11 @@ void FileDescriptorCtx::set_pending_events(int events)
 }
 int FileDescriptorCtx::GetEpollFd()
 {
-    if (epoll_fd_ == -1) {
+    if (epoll_fd_ == -1 || owner_pid_ != getpid()) {
         std::unique_lock<LFLock> lock(epoll_fd_mtx_);
-        if (epoll_fd_ == -1)
+        if (epoll_fd_ == -1 || owner_pid_ != getpid())
             epoll_fd_ = g_Scheduler.GetIoWait().GetEpollFd();
+        owner_pid_ = getpid();
     }
     return epoll_fd_;
 }
