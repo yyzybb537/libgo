@@ -97,7 +97,7 @@ struct Task
     ~Task();
 
     void InitLocation(const char* file, int lineno);
-    void AddIntoProcesser(Processer *proc, char* shared_stack, uint32_t shared_stack_cap);
+    void AddIntoProcesser(Processer *proc);
 
     bool SwapIn();
     bool SwapOut();

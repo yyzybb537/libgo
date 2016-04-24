@@ -17,13 +17,13 @@ struct stdtimer
     {
         count_ = count;
         name_ = name;
-        cout << "Start " << name << endl;
+        cout << "-------------- Start " << name << " --------------" << endl;
         DebugPrint(co::dbg_all, "Start %s", name.c_str());
         t_ = chrono::system_clock::now();
     }
     ~stdtimer() {
         if (name_.empty() || !count_) return ;
-        auto c = chrono::duration_cast<chrono::microseconds>(chrono::system_clock::now() - t_).count() - except_duration_.count();
+        float c = chrono::duration_cast<chrono::microseconds>(chrono::system_clock::now() - t_).count() - except_duration_.count();
         cout << name_ << " run " << count_ << " times, cost " << (c / 1000) << " ms" << endl;
         cout << "per second op times: " << (size_t)((double)1000000  * count_ / c) << endl;
     }
@@ -55,15 +55,29 @@ TEST_P(Times, testCo)
 //    g_Scheduler.GetOptions().debug_output = fopen("log", "w");
     g_Scheduler.GetOptions().stack_size = 4096;
 
+    int tcs[] = {tc_ / 10, tc_, tc_ * 10};
+
+    for (auto tc : tcs)
+    {
+        go [&] {
+            for (int i = 1; i < tc; ++i)
+                co_yield;
+        };
+        stdtimer st(tc, "Switch 1 coroutine");
+//        while (!g_Scheduler.IsEmpty())
+        for (int i = 0; i < tc; ++i)
+            g_Scheduler.Run(co::Scheduler::erf_do_coroutines);
+    }
+
     // 1 thread test
     {
-        stdtimer st(tc_, "Create coroutine half(1/2)");
+        stdtimer st(tc_ / 2, "Create coroutine half(1/2)");
         for (int i = 0; i < tc_ / 2; ++i) {
             go []{ co_yield; co_yield; };
         }
     }
     {
-        stdtimer st(tc_, "Create coroutine half(2/2)");
+        stdtimer st(tc_ / 2, "Create coroutine half(2/2)");
         for (int i = 0; i < tc_ / 2; ++i) {
             go []{ co_yield; co_yield; };
         }
@@ -74,7 +88,7 @@ TEST_P(Times, testCo)
     }
     {
         stdtimer st(tc_, "Switch coroutine");
-        g_Scheduler.Run();
+        g_Scheduler.Run(co::Scheduler::erf_do_coroutines);
     }
 
     {
@@ -83,6 +97,16 @@ TEST_P(Times, testCo)
         g_Scheduler.RunUntilNoTask();
     }
     g_Scheduler.RunUntilNoTask();
+
+    {
+        for (int i = 0; i < 1000; ++i)
+            go [&] {
+                for (int i = 1; i < tc_ / 1000; ++i)
+                    co_yield;
+            };
+        stdtimer st(tc_, "Switch 1000 coroutine");
+        g_Scheduler.RunUntilNoTask();
+    }
 
 
     // 4 threads test

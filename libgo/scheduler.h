@@ -41,8 +41,8 @@ struct CoroutineOptions
     eCoExHandle exception_handle = eCoExHandle::immedaitely_throw;
 
     // 协程栈大小上限, 只会影响在此值设置之后新创建的P, 建议在首次Run前设置.
-    // 不开启ENABLE_SHARED_STACK选项时, stack_size建议设置不超过1MB
-    // 不开启ENABLE_SHARED_STACK选项时, Linux系统下, 设置2MB的stack_size会导致提交内存的使用量比1MB的stack_size多10倍.
+    // stack_size建议设置不超过1MB
+    // Linux系统下, 设置2MB的stack_size会导致提交内存的使用量比1MB的stack_size多10倍.
     uint32_t stack_size = 1 * 1024 * 1024; 
 
     // 初始协程栈提交的内存大小(不会低于16bytes).
@@ -51,12 +51,6 @@ struct CoroutineOptions
     uint32_t init_commit_stack_size = 1024;
     /************************************************************/
 
-    // P的数量, 首次Run时创建所有P, 随后只能增加新的P不能减少现有的P
-    //    此值越大, 线程间负载均衡效果越好, 但是会增大线程间竞争的开销
-    //    如果使用ENABLE_SHARED_STACK选项, 每个P都会占用stack_size内存.
-    //    建议设置为Run线程数的2-8倍.
-    uint32_t processer_count = 16;
-
     // 没有协程需要调度时, Run最多休眠的毫秒数(开发高实时性系统可以考虑调低这个值)
     uint8_t max_sleep_ms = 20;
 
@@ -64,9 +58,9 @@ struct CoroutineOptions
     uint32_t timer_handle_every_cycle = 0;
 
     // epoll每次触发的event数量(Windows下无效)
-    uint32_t epoll_event_size = 1024;
+    uint32_t epoll_event_size = 10240;
 
-    // 开启当前协程统计功能(会有性能损耗, 默认不开启)
+    // 开启当前协程统计功能(会有一点性能损耗, 默认不开启)
     bool enable_coro_stat = false;
 };
 ///-------------------
@@ -84,8 +78,17 @@ class ThreadPool;
 class Scheduler
 {
     public:
-//        typedef TSQueue<Task> TaskList;  // 线程安全的协程队列
-        typedef TSSkipQueue<Task> TaskList;  // 线程安全的协程队列
+        // Run时执行的内容
+        enum eRunFlags
+        {
+            erf_do_coroutines = 0x1,
+            erf_do_timer = 0x2,
+            erf_do_sleeper = 0x4,
+            erf_do_eventloop = 0x8,
+            erf_idle_cpu = 0x10,
+            erf_all = 0x7fffffff,
+        };
+
         typedef std::deque<Processer*> ProcList;
         typedef std::pair<uint32_t, TSQueue<Task, false>> WaitPair;
         typedef std::unordered_map<uint64_t, WaitPair> WaitZone;
@@ -110,7 +113,7 @@ class Scheduler
         void CoYield();
 
         // 调度器调度函数, 内部执行协程、调度协程
-        uint32_t Run();
+        uint32_t Run(int flags = erf_all);
 
         // 循环Run直到没有协程为止
         // @loop_task_count: 不计数的常驻协程.

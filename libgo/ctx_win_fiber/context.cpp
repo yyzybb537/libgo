@@ -56,11 +56,6 @@ namespace co
         }
     }
 
-    bool Context::Init(char* shared_stack, uint32_t shared_stack_cap)
-    {
-        return true;
-    }
-
     bool Context::SwapIn()
     {
         SwitchToFiber(impl_->native_);

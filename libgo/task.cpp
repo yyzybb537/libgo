@@ -93,17 +93,10 @@ void Task::InitLocation(const char* file, int lineno)
     }
 }
 
-void Task::AddIntoProcesser(Processer *proc, char* shared_stack, uint32_t shared_stack_cap)
+void Task::AddIntoProcesser(Processer *proc)
 {
     assert(!proc_);
     proc_ = proc;
-    if (!ctx_.Init(shared_stack, shared_stack_cap)) {
-        state_ = TaskState::fatal;
-        fprintf(stderr, "task(%s) init, getcontext error:%s\n",
-                DebugInfo(), strerror(errno));
-        return ;
-    }
-
     state_ = TaskState::runnable;
 }
 

@@ -17,12 +17,7 @@ void Processer::AddTaskRunnable(Task *tk)
     DebugPrint(dbg_scheduler, "task(%s) add into proc(%u)", tk->DebugInfo(), id_);
     if (tk->state_ == TaskState::init) {
         assert(!tk->proc_);
-        tk->AddIntoProcesser(this, nullptr, 0);
-        if (tk->state_ == TaskState::fatal) {
-            // 创建失败
-            tk->DecrementRef();
-            throw std::system_error(errno, std::system_category());
-        }
+        tk->AddIntoProcesser(this);
         ++ task_count_;
     }
 

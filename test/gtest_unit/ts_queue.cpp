@@ -4,10 +4,13 @@
 #include <atomic>
 #include <boost/thread.hpp>
 #include "gtest_exit.h"
+#include <chrono>
 #define private public
-#include "ts_queue.h"
 #include "coroutine.h"
+#include "ts_queue.h"
 using namespace co;
+using namespace std;
+using namespace std::chrono;
 
 struct QueueElem : public TSQueueHook
 {
@@ -23,6 +26,26 @@ TEST(TSQueue, DefaultContructor) {
     TSQueue<QueueElem> tsq; 
     EXPECT_TRUE(tsq.empty());
     EXPECT_EQ(NULL, tsq.pop());
+}
+
+TEST(TSQueue, benchmark) {
+    TSQueue<QueueElem> q; 
+    for (int i = 0; i < 1; ++i)
+        q.push(new QueueElem);
+
+    auto s = system_clock::now();
+    for (int i = 0; i < 100000; ++i)
+    {
+        SList<QueueElem> slist(q.pop_all());
+        auto it = slist.begin();
+        for (; it != slist.end(); ) {
+            QueueElem& p = *it++;
+            (void)p;
+        }
+        q.push(std::move(slist));
+    }
+    auto e = system_clock::now();
+    cout << "cost " << duration_cast<milliseconds>(e - s).count() << " ms" << endl;
 }
 
 TEST(TSQueue, PushPopOne) {

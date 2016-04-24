@@ -18,8 +18,6 @@ namespace co
 
     public:
         explicit Context(std::size_t stack_size, std::function<void()> const& fn);
-
-        bool Init(char* shared_stack, uint32_t shared_stack_cap);
         
         bool SwapIn();
 

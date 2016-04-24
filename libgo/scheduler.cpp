@@ -68,7 +68,7 @@ void Scheduler::CoYield()
     tk->proc_->CoYield(GetLocalInfo());
 }
 
-uint32_t Scheduler::Run()
+uint32_t Scheduler::Run(int flags)
 {
     ThreadLocalInfo &info = GetLocalInfo();
     if (info.thread_id < 0) {
@@ -81,40 +81,51 @@ uint32_t Scheduler::Run()
         run_proc_list_.push_back(info.proc);
     }
 
-    uint32_t run_task_count = DoRunnable();
+    uint32_t run_task_count = 0;
+    if (flags & erf_do_coroutines)
+        run_task_count = DoRunnable();
 
     // timer
-    long long timer_next_ms = 0;
-    uint32_t tm_count = DoTimer(timer_next_ms);
+    long long timer_next_ms = GetOptions().max_sleep_ms;
+    uint32_t tm_count = 0;
+    if (flags & erf_do_timer)
+        tm_count = DoTimer(timer_next_ms);
 
     // sleep wait.
-    long long sleep_next_ms = 0;
-    uint32_t sl_count = DoSleep(sleep_next_ms);
+    long long sleep_next_ms = GetOptions().max_sleep_ms;
+    uint32_t sl_count = 0;
+    if (flags & erf_do_sleeper)
+        sl_count = DoSleep(sleep_next_ms);
 
     // 下一次timer或sleeper触发的时间毫秒数, 休眠或阻塞等待IO事件触发的时间不能超过这个值
     long long next_ms = (std::min)(timer_next_ms, sleep_next_ms);
 
     // epoll
-    int wait_milliseconds = 0;
-    if (run_task_count || tm_count || sl_count)
-        wait_milliseconds = 0;
-    else {
-        wait_milliseconds = (std::min<long long>)(next_ms, GetOptions().max_sleep_ms);
-        DebugPrint(dbg_scheduler_sleep, "wait_milliseconds %d ms, next_ms=%lld", wait_milliseconds, next_ms);
-    }
-    int ep_count = DoEpoll(wait_milliseconds);
-
-    if (!run_task_count && ep_count <= 0 && !tm_count && !sl_count) {
-        if (ep_count == -1) {
-            // 此线程没有执行epoll_wait, 使用sleep降低空转时的cpu使用率
-            ++info.sleep_ms;
-            info.sleep_ms = (std::min)(info.sleep_ms, GetOptions().max_sleep_ms);
-            info.sleep_ms = (std::min<long long>)(info.sleep_ms, next_ms);
-            DebugPrint(dbg_scheduler_sleep, "sleep %d ms, next_ms=%lld", (int)info.sleep_ms, next_ms);
-            usleep(info.sleep_ms * 1000);
+    int ep_count = -1;
+    if (flags & erf_do_eventloop) {
+        int wait_milliseconds = 0;
+        if (run_task_count || tm_count || sl_count)
+            wait_milliseconds = 0;
+        else {
+            wait_milliseconds = (std::min<long long>)(next_ms, GetOptions().max_sleep_ms);
+            DebugPrint(dbg_scheduler_sleep, "wait_milliseconds %d ms, next_ms=%lld", wait_milliseconds, next_ms);
         }
-    } else {
-        info.sleep_ms = 1;
+        ep_count = DoEpoll(wait_milliseconds);
+    }
+
+    if (flags & erf_idle_cpu) {
+        if (!run_task_count && ep_count <= 0 && !tm_count && !sl_count) {
+            if (ep_count == -1) {
+                // 此线程没有执行epoll_wait, 使用sleep降低空转时的cpu使用率
+                ++info.sleep_ms;
+                info.sleep_ms = (std::min)(info.sleep_ms, GetOptions().max_sleep_ms);
+                info.sleep_ms = (std::min<long long>)(info.sleep_ms, next_ms);
+                DebugPrint(dbg_scheduler_sleep, "sleep %d ms, next_ms=%lld", (int)info.sleep_ms, next_ms);
+                usleep(info.sleep_ms * 1000);
+            }
+        } else {
+            info.sleep_ms = 1;
+        }
     }
 
     return run_task_count;
@@ -135,7 +146,7 @@ uint32_t Scheduler::DoRunnable()
     uint32_t do_count = 0;
     uint32_t done_count = 0;
     try {
-        do_count += info.proc->Run(GetLocalInfo(), done_count);
+        do_count += info.proc->Run(info, done_count);
     } catch (...) {
         task_count_ -= done_count;
         throw ;
