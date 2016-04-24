@@ -4,6 +4,7 @@
 #include <sys/epoll.h>
 #include <errno.h>
 #include <string.h>
+#include <deque>
 #include "config.h"
 #include "context.h"
 #include "task.h"
@@ -72,9 +73,10 @@ struct CoroutineOptions
 
 struct ThreadLocalInfo
 {
-    Task* current_task = NULL;
-    uint32_t thread_id = 0;     // Run thread index, increment from 1.
+    Task* current_task = nullptr;
+    int thread_id = -1;     // Run thread index, increment from 1.
     uint8_t sleep_ms = 0;
+    Processer *proc = nullptr;
 };
 
 class ThreadPool;
@@ -84,7 +86,7 @@ class Scheduler
     public:
 //        typedef TSQueue<Task> TaskList;  // 线程安全的协程队列
         typedef TSSkipQueue<Task> TaskList;  // 线程安全的协程队列
-        typedef TSQueue<Processer> ProcList;
+        typedef std::deque<Processer*> ProcList;
         typedef std::pair<uint32_t, TSQueue<Task, false>> WaitPair;
         typedef std::unordered_map<uint64_t, WaitPair> WaitZone;
         typedef std::unordered_map<int64_t, WaitZone> WaitTable;
@@ -205,10 +207,7 @@ class Scheduler
         LFLock proc_init_lock_;
         uint32_t proc_count = 0;
         ProcList run_proc_list_;
-        ProcList wait_proc_list_;
-
-        // List of task.
-        TaskList run_tasks_;
+        Processer *first_proc_ = nullptr;
 
         // io block waiter.
         IoWait io_wait_;

@@ -17,6 +17,8 @@ struct stdtimer
     {
         count_ = count;
         name_ = name;
+        cout << "Start " << name << endl;
+        DebugPrint(co::dbg_all, "Start %s", name.c_str());
         t_ = chrono::system_clock::now();
     }
     ~stdtimer() {
@@ -49,7 +51,7 @@ struct Times : public TestWithParam<int>
 
 TEST_P(Times, testCo)
 {
-//    g_Scheduler.GetOptions().debug = dbg_scheduler;
+//    g_Scheduler.GetOptions().debug = dbg_scheduler | dbg_switch; 
 //    g_Scheduler.GetOptions().debug_output = fopen("log", "w");
     g_Scheduler.GetOptions().stack_size = 4096;
 

@@ -19,6 +19,7 @@ Scheduler::Scheduler()
 {
     thread_pool_ = new ThreadPool;
     coroutine_hook_init();
+    first_proc_ = new Processer;
 }
 
 Scheduler::~Scheduler()
@@ -70,23 +71,14 @@ void Scheduler::CoYield()
 uint32_t Scheduler::Run()
 {
     ThreadLocalInfo &info = GetLocalInfo();
-    if (!info.thread_id) {
-        info.thread_id = ++ thread_id_;
-    }
-
-    // 创建、增补P
-    CoroutineOptions &op = GetOptions();
-    if (proc_count < op.processer_count) {
+    if (info.thread_id < 0) {
         std::unique_lock<LFLock> lock(proc_init_lock_, std::defer_lock);
-        if (lock.try_lock() && proc_count < op.processer_count) {
-            uint32_t i = proc_count;
-            for (; i < op.processer_count; ++i) {
-                Processer* proc = new Processer(op.stack_size);
-                run_proc_list_.push(proc);
-            }
-
-            proc_count = i;
-        }
+        info.thread_id = thread_id_++;
+        if (info.thread_id)
+            info.proc = new Processer;
+        else
+            info.proc = first_proc_;
+        run_proc_list_.push_back(info.proc);
     }
 
     uint32_t run_task_count = DoRunnable();
@@ -138,53 +130,19 @@ void Scheduler::RunUntilNoTask(uint32_t loop_task_count)
 // Run函数的一部分, 处理runnable状态的协程
 uint32_t Scheduler::DoRunnable()
 {
+    ThreadLocalInfo& info = GetLocalInfo();
+
     uint32_t do_count = 0;
-    uint32_t proc_c = run_proc_list_.size();
-    for (uint32_t i = 0; i < proc_c; ++i)
-    {
-        Processer *proc = run_proc_list_.pop();
-        if (!proc) break;
-
-        // cherry-pick tasks.
-        if (!run_tasks_.empty()) {
-            uint32_t task_c = task_count_;
-            uint32_t average = task_c / proc_c + (task_c % proc_c ? 1 : 0);
-
-            uint32_t ti = proc->GetTaskCount();
-            uint32_t popn = average > ti ? (average - ti) : 0;
-            if (popn) {
-                static int sc = 0;
-                SList<Task> s(run_tasks_.pop(popn));
-                auto it = s.begin();
-                while (it != s.end()) {
-                    Task* tk = &*it;
-                    it = s.erase(it);
-                    proc->AddTaskRunnable(tk);
-                }
-                sc += s.size();
-//                printf("popn = %d, get %d coroutines, sc=%d, remain=%d\n",
-//                        (int)popn, (int)s.size(), (int)sc, (int)run_tasks_.size());
-            }
-//            for (uint32_t ti = proc->GetTaskCount(); ti < average; ++ti) {
-//                Task *tk = run_tasks_.pop();
-//                if (!tk) break;
-//                proc->AddTaskRunnable(tk);
-//            }
-        }
-
-        uint32_t done_count = 0;
-        try {
-            do_count += proc->Run(GetLocalInfo(), done_count);
-        } catch (...) {
-            task_count_ -= done_count;
-            run_proc_list_.push(proc);
-            throw ;
-        }
+    uint32_t done_count = 0;
+    try {
+        do_count += info.proc->Run(GetLocalInfo(), done_count);
+    } catch (...) {
         task_count_ -= done_count;
-//        printf("run %d coroutines, remain=%d\n", (int)done_count, (int)task_count_);
-
-        run_proc_list_.push(proc);
+        throw ;
     }
+    task_count_ -= done_count;
+    DebugPrint(dbg_scheduler, "run %d coroutines, remain=%d\n",
+            (int)done_count, (int)task_count_);
 
     return do_count;
 }
@@ -231,8 +189,13 @@ void Scheduler::AddTaskRunnable(Task* tk)
     DebugPrint(dbg_scheduler, "Add task(%s) to runnable list.", tk->DebugInfo());
     if (tk->proc_)
         tk->proc_->AddTaskRunnable(tk);
-    else
-        run_tasks_.push(tk);
+    else {
+        ThreadLocalInfo &info = GetLocalInfo();
+        if (info.proc)
+            info.proc->AddTaskRunnable(tk);
+        else
+            first_proc_->AddTaskRunnable(tk);
+    }
 }
 
 uint32_t Scheduler::TaskCount()

@@ -7,20 +7,9 @@ namespace co {
 
 std::atomic<uint32_t> Processer::s_id_{0};
 
-Processer::Processer(uint32_t stack_size)
+Processer::Processer()
     : id_(++s_id_)
 {
-    shared_stack_cap_ = stack_size;
-#if defined(ENABLE_SHARED_STACK)
-    shared_stack_ = new char[shared_stack_cap_];
-#endif
-}
-Processer::~Processer()
-{
-    if (shared_stack_) {
-        delete[] shared_stack_;
-        shared_stack_ = NULL;
-    }
 }
 
 void Processer::AddTaskRunnable(Task *tk)
@@ -28,7 +17,7 @@ void Processer::AddTaskRunnable(Task *tk)
     DebugPrint(dbg_scheduler, "task(%s) add into proc(%u)", tk->DebugInfo(), id_);
     if (tk->state_ == TaskState::init) {
         assert(!tk->proc_);
-        tk->AddIntoProcesser(this, shared_stack_, shared_stack_cap_);
+        tk->AddIntoProcesser(this, nullptr, 0);
         if (tk->state_ == TaskState::fatal) {
             // 创建失败
             tk->DecrementRef();
