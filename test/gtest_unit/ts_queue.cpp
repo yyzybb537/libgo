@@ -30,11 +30,12 @@ TEST(TSQueue, DefaultContructor) {
 
 TEST(TSQueue, benchmark) {
     TSQueue<QueueElem> q; 
-    for (int i = 0; i < 1; ++i)
+    for (int i = 0; i < 1000; ++i)
         q.push(new QueueElem);
 
+    int c = 100000;
     auto s = system_clock::now();
-    for (int i = 0; i < 100000; ++i)
+    for (int i = 0; i < c; ++i)
     {
         SList<QueueElem> slist(q.pop_all());
         auto it = slist.begin();
@@ -45,7 +46,20 @@ TEST(TSQueue, benchmark) {
         q.push(std::move(slist));
     }
     auto e = system_clock::now();
-    cout << "cost " << duration_cast<milliseconds>(e - s).count() << " ms" << endl;
+    cout << "pop_all cost " << duration_cast<milliseconds>(e - s).count() << " ms" << endl;
+
+    s = system_clock::now();
+    for (int i = 0; i < c; ++i)
+    {
+        QueueElem* first = (QueueElem*)q.head_->next;
+        while (first) {
+            QueueElem& p = *first;
+            (void)p;
+            first = (QueueElem*)first->next;
+        }
+    }
+    e = system_clock::now();
+    cout << "pop cost " << duration_cast<milliseconds>(e - s).count() << " ms" << endl;
 }
 
 TEST(TSQueue, PushPopOne) {
