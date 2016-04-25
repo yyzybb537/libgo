@@ -67,7 +67,6 @@ struct CoroutineOptions
 
 struct ThreadLocalInfo
 {
-    Task* current_task = nullptr;
     int thread_id = -1;     // Run thread index, increment from 1.
     uint8_t sleep_ms = 0;
     Processer *proc = nullptr;

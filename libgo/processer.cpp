@@ -10,6 +10,7 @@ std::atomic<uint32_t> Processer::s_id_{0};
 Processer::Processer()
     : id_(++s_id_)
 {
+    ts_runnable_list_.check_ = runnable_list_.check_;
 }
 
 void Processer::AddTaskRunnable(Task *tk)
@@ -23,54 +24,58 @@ void Processer::AddTaskRunnable(Task *tk)
 
     assert(tk->proc_ == this);
     tk->state_ = TaskState::runnable;
-    runnable_list_.push(tk);
+    ts_runnable_list_.push(tk);
 }
 
-uint32_t Processer::Run(ThreadLocalInfo &info, uint32_t &done_count)
+uint32_t Processer::Run(uint32_t &done_count)
 {
     ContextScopedGuard guard;
+    (void)guard;
 
-    info.current_task = NULL;
     done_count = 0;
     uint32_t c = 0;
-    SList<Task> slist(runnable_list_.pop_all());
-    uint32_t do_count = slist.size();
 
-    DebugPrint(dbg_scheduler, "Run [Proc(%d) do_count:%u] --------------------------", id_, do_count);
+    if (!ts_runnable_list_.empty_without_lock())
+        runnable_list_.push(ts_runnable_list_.pop_all());
 
-    SList<Task>::iterator it = slist.begin();
-    for (; it != slist.end(); ++c)
-    {
-        Task* tk = &*it;
-        info.current_task = tk;
-        tk->state_ = TaskState::runnable;
-        DebugPrint(dbg_switch, "enter task(%s)", tk->DebugInfo());
+//    DebugPrint(dbg_scheduler, "Run [Proc(%d) do_count:%u] --------------------------",
+//            id_, (uint32_t)runnable_list_.size());
+
+    Task *pos = (Task*)runnable_list_.head_->next;
+    while (pos) {
+        ++c;
+        Task* tk = pos;
+        pos = (Task*)pos->next;
+
+        current_task_ = tk;
+//        DebugPrint(dbg_switch, "enter task(%s)", tk->DebugInfo());
         if (!tk->SwapIn()) {
             fprintf(stderr, "swapcontext error:%s\n", strerror(errno));
-            runnable_list_.push(std::move(slist));
+            current_task_ = nullptr;
+            runnable_list_.erase(tk);
+            tk->DecrementRef();
             ThrowError(eCoErrorCode::ec_swapcontext_failed);
         }
-        DebugPrint(dbg_switch, "leave task(%s) state=%d", tk->DebugInfo(), (int)tk->state_);
-        info.current_task = NULL;
+//        DebugPrint(dbg_switch, "leave task(%s) state=%d", tk->DebugInfo(), (int)tk->state_);
+        current_task_ = nullptr;
 
         switch (tk->state_) {
             case TaskState::runnable:
-                ++it;
                 break;
 
             case TaskState::io_block:
-                it = slist.erase(it);
+                runnable_list_.erase(tk);
                 g_Scheduler.io_wait_.SchedulerSwitch(tk);
                 break;
 
             case TaskState::sleep:
-                it = slist.erase(it);
+                runnable_list_.erase(tk);
                 g_Scheduler.sleep_wait_.SchedulerSwitch(tk);
                 break;
 
             case TaskState::sys_block:
                 assert(tk->block_);
-                it = slist.erase(it);
+                runnable_list_.erase(tk);
                 if (!tk->block_->AddWaitTask(tk))
                     runnable_list_.push(tk);
                 break;
@@ -79,11 +84,10 @@ uint32_t Processer::Run(ThreadLocalInfo &info, uint32_t &done_count)
             default:
                 --task_count_;
                 ++done_count;
-                it = slist.erase(it);
+                runnable_list_.erase(tk);
                 DebugPrint(dbg_task, "task(%s) done.", tk->DebugInfo());
                 if (tk->eptr_) {
                     std::exception_ptr ep = tk->eptr_;
-                    runnable_list_.push(std::move(slist));
                     tk->DecrementRef();
                     std::rethrow_exception(ep);
                 } else
@@ -92,14 +96,14 @@ uint32_t Processer::Run(ThreadLocalInfo &info, uint32_t &done_count)
         }
     }
 
-    runnable_list_.push(std::move(slist));
     return c;
 }
 
-void Processer::CoYield(ThreadLocalInfo &info)
+void Processer::CoYield()
 {
-    Task *tk = info.current_task;
-    if (!tk) return ;
+    Task *tk = GetCurrentTask();
+    assert(tk);
+    assert(tk->proc_ == this);
 
     DebugPrint(dbg_yield, "yield task(%s) state=%d", tk->DebugInfo(), (int)tk->state_);
     ++tk->yield_count_;
@@ -112,6 +116,11 @@ void Processer::CoYield(ThreadLocalInfo &info)
 uint32_t Processer::GetTaskCount()
 {
     return task_count_;
+}
+
+Task* Processer::GetCurrentTask()
+{
+    return current_task_;
 }
 
 } //namespace co

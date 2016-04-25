@@ -67,7 +67,7 @@ struct SourceLocation
     }
 };
 
-struct Task
+struct alignas(64) Task
     : public TSQueueHook, public RefObject
 {
     uint64_t id_;
@@ -75,8 +75,8 @@ struct Task
     uint64_t yield_count_ = 0;
     Processer* proc_ = NULL;
     Context ctx_;
-    TaskF fn_;
     std::string debug_info_;
+    TaskF fn_;
     SourceLocation location_;
     std::exception_ptr eptr_;           // 保存exception的指针
 

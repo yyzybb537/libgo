@@ -53,7 +53,7 @@ void Scheduler::CreateTask(TaskF const& fn, std::size_t stack_size,
 
 bool Scheduler::IsCoroutine()
 {
-    return !!GetLocalInfo().current_task;
+    return !!GetCurrentTask();
 }
 
 bool Scheduler::IsEmpty()
@@ -63,9 +63,9 @@ bool Scheduler::IsEmpty()
 
 void Scheduler::CoYield()
 {
-    Task* tk = GetLocalInfo().current_task;
-    if (!tk) return ;
-    tk->proc_->CoYield(GetLocalInfo());
+    ThreadLocalInfo& info = GetLocalInfo();
+    if (info.proc)
+        info.proc->CoYield();
 }
 
 uint32_t Scheduler::Run(int flags)
@@ -146,7 +146,7 @@ uint32_t Scheduler::DoRunnable()
     uint32_t do_count = 0;
     uint32_t done_count = 0;
     try {
-        do_count += info.proc->Run(info, done_count);
+        do_count += info.proc->Run(done_count);
     } catch (...) {
         task_count_ -= done_count;
         throw ;
@@ -216,26 +216,26 @@ uint32_t Scheduler::TaskCount()
 
 uint64_t Scheduler::GetCurrentTaskID()
 {
-    Task* tk = GetLocalInfo().current_task;
+    Task* tk = GetCurrentTask();
     return tk ? tk->id_ : 0;
 }
 
 uint64_t Scheduler::GetCurrentTaskYieldCount()
 {
-    Task* tk = GetLocalInfo().current_task;
+    Task* tk = GetCurrentTask();
     return tk ? tk->yield_count_ : 0;
 }
 
 void Scheduler::SetCurrentTaskDebugInfo(std::string const& info)
 {
-    Task* tk = GetLocalInfo().current_task;
+    Task* tk = GetCurrentTask();
     if (!tk) return ;
     tk->SetDebugInfo(info);
 }
 
 const char* Scheduler::GetCurrentTaskDebugInfo()
 {
-    Task* tk = GetLocalInfo().current_task;
+    Task* tk = GetCurrentTask();
     return tk ? tk->DebugInfo() : "";
 }
 
@@ -255,7 +255,8 @@ uint32_t Scheduler::GetCurrentProcessID()
 
 Task* Scheduler::GetCurrentTask()
 {
-    return GetLocalInfo().current_task;
+    ThreadLocalInfo& info = GetLocalInfo();
+    return info.proc ? info.proc->GetCurrentTask() : nullptr;
 }
 
 void Scheduler::SleepSwitch(int timeout_ms)

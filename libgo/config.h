@@ -1,4 +1,5 @@
 #pragma once
+#include "cmake_config.h"
 #include <chrono>
 
 // VS2013²»Ö§³Öthread_local

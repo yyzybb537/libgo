@@ -1,8 +1,10 @@
 #include <iostream>
 #include <gtest/gtest.h>
+#define private public
 #include "coroutine.h"
 #include <chrono>
 #include <boost/thread.hpp>
+#include <boost/coroutine/all.hpp>
 #include "gtest_exit.h"
 using namespace std;
 using namespace co;
@@ -15,6 +17,7 @@ struct stdtimer
     explicit stdtimer(int count = 0, std::string name = "")
         : except_duration_(0)
     {
+        if (!count) return ;
         count_ = count;
         name_ = name;
         cout << "-------------- Start " << name << " --------------" << endl;
@@ -49,13 +52,11 @@ struct Times : public TestWithParam<int>
     void SetUp() { tc_ = GetParam(); }
 };
 
-TEST_P(Times, testCo)
+void foo (int tc_, bool dump)
 {
-//    g_Scheduler.GetOptions().debug = dbg_scheduler | dbg_switch; 
-//    g_Scheduler.GetOptions().debug_output = fopen("log", "w");
-    g_Scheduler.GetOptions().stack_size = 4096;
+//    g_Scheduler.GetOptions().stack_size = 4096;
 
-    int tcs[] = {tc_ / 10, tc_, tc_ * 10};
+    int tcs[] = {tc_ * 10, tc_, tc_ / 10};
 
     for (auto tc : tcs)
     {
@@ -63,40 +64,218 @@ TEST_P(Times, testCo)
             for (int i = 1; i < tc; ++i)
                 co_yield;
         };
-        stdtimer st(tc, "Switch 1 coroutine");
-//        while (!g_Scheduler.IsEmpty())
+        if (dump) {
+            stdtimer st(tc, "Switch 1 coroutine");
+            while (!g_Scheduler.IsEmpty())
+                g_Scheduler.Run(co::Scheduler::erf_do_coroutines);
+        } else
+            g_Scheduler.RunUntilNoTask();
+    }
+}
+
+void ones_loop(int tc_)
+{
+    co::Context **pp_ctx = new co::Context*;
+    *pp_ctx = new co::Context(4096, [=]{
+            for (int i = 1; i < tc_; ++i)
+                (*pp_ctx)->SwapOut();
+            });
+
+    stdtimer st(tc_, "Switch 1 Contxt");
+    for (int i = 1; i < tc_; ++i)
+        (*pp_ctx)->SwapIn();
+}
+
+TEST_P(Times, context)
+{
+    foo(tc_, false);
+    foo(tc_, true);
+
+//    for (int i = 0; i < 10; ++i)
+        ones_loop(tc_);
+}
+
+struct CtxWrap : public co::TSQueueHook
+{
+    co::Context** pp_ctx;
+};
+
+uint32_t process_proc(TSQueue<CtxWrap> & ts_list)
+{
+    uint32_t c = 0;
+    CtxWrap *pos = (CtxWrap*)ts_list.head_->next;
+    while (pos) {
+        ++c;
+        CtxWrap* wrap = pos;
+        pos = (CtxWrap*)pos->next;
+        (*wrap->pp_ctx)->SwapIn();
+    }
+    return c;
+}
+
+TEST_P(Times, context_ts)
+{
+    int rv = 0;
+    for (int i = 0; i < 100; ++i)
+    {
+        CtxWrap* wrap = new CtxWrap;
+        co::Context** &pp_ctx = wrap->pp_ctx;
+        pp_ctx = new co::Context*;
+        *pp_ctx = new co::Context(1024 * 1024, [&]{
+                    for (int i = 1; i < tc_; ++i) {
+                        ++rv;
+                        (*pp_ctx)->SwapOut();
+                    }
+                    ++rv;
+                });
+
+        TSQueue<CtxWrap> ts_list;
+        ts_list.push(wrap);
+
+        stdtimer st(i < 95 ? 0 :tc_, "Switch 1 Contxt in TSQueue");
+        for (int i = 1; i < tc_; ++i) {
+            uint32_t c = process_proc(ts_list);
+            (void)c;
+        }
+    }
+    cout << "rv: " << rv << endl;
+}
+
+typedef ::boost::coroutines::symmetric_coroutine<void>::call_type co_t;
+typedef ::boost::coroutines::symmetric_coroutine<void>::yield_type yd_t;
+using namespace std::chrono;
+
+yd_t *pyd = nullptr;
+int c = 100000;
+int rv = 0;
+void foo()
+{
+    for (int i = 1; i < c; ++i)
+    {
+        ++rv;
+        (*pyd)();
+    }
+    ++rv;
+}
+
+void test_boost()
+{
+    co_t **pp_co = new co_t*;
+    *pp_co = new co_t([&](yd_t& yd) {
+            pyd = &yd;
+            foo();
+            }, boost::coroutines::attributes(1024 * 1024));
+
+    stdtimer st(100000, "boost.coroutines switch");
+    auto s = system_clock::now();
+    for (int i = 0; i < c; ++i)
+        (**pp_co)();
+    auto e = system_clock::now();
+    cout << duration_cast<microseconds>(e-s).count() << " us" << endl;
+    cout << "rv:" << rv << endl;
+}
+
+TEST_P(Times, boost)
+{
+    test_boost();
+}
+
+TEST_P(Times, proc)
+{
+    g_Scheduler.Run();
+    auto& info = g_Scheduler.GetLocalInfo();
+
+    int rv = 0;
+    for (int i = 0; i < 100; ++i)
+    {
+        int tc = tc_;
+        go [&] {
+            for (int i = 1; i < tc; ++i) {
+                ++rv;
+                co_yield;
+            }
+            ++rv;
+        };
+        stdtimer st(i < 95 ? 0 :tc, "Switch 1 coroutine in Processer");
+        for (int i = 0; i < tc; ++i)
+        {
+            uint32_t d;
+            info.proc->Run(d);
+        }
+        --g_Scheduler.task_count_;
+    }
+    cout << "rv:" << rv << endl;
+}
+
+TEST_P(Times, testCo)
+{
+//    g_Scheduler.GetOptions().debug = dbg_scheduler;
+//    g_Scheduler.GetOptions().debug_output = fopen("log", "w");
+    g_Scheduler.GetOptions().stack_size = 4096;
+
+//    int tcs[] = {tc_ / 10, tc_, tc_ * 10};
+    int tcs[] = {tc_};
+
+    for (auto tc : tcs)
+    {
+        go [&] {
+            for (int i = 1; i < tc; ++i)
+                co_yield;
+        };
+        stdtimer st(tc, "Switch 1 coroutine alone");
+        for (int i = 0; i < tc; ++i)
+            g_Scheduler.Run(co::Scheduler::erf_do_coroutines);
+    }
+
+    for (auto tc : tcs)
+    {
+        go [&] {
+            for (int i = 1; i < tc; ++i)
+                co_yield;
+        };
+        stdtimer st(tc, "Switch 1 coroutine flags-all");
+        for (int i = 0; i < tc; ++i)
+            g_Scheduler.Run(co::Scheduler::erf_do_coroutines);
+    }
+
+    for (auto tc : tcs)
+    {
+        stdtimer st(tc, "Switch 0 coroutine");
         for (int i = 0; i < tc; ++i)
             g_Scheduler.Run(co::Scheduler::erf_do_coroutines);
     }
 
     // 1 thread test
+    int rv = 0;
     {
         stdtimer st(tc_ / 2, "Create coroutine half(1/2)");
         for (int i = 0; i < tc_ / 2; ++i) {
-            go []{ co_yield; co_yield; };
+            go [&]{ ++rv; co_yield; ++rv; co_yield; ++rv; };
         }
     }
     {
         stdtimer st(tc_ / 2, "Create coroutine half(2/2)");
         for (int i = 0; i < tc_ / 2; ++i) {
-            go []{ co_yield; co_yield; };
+            go [&]{ ++rv; co_yield; ++rv; co_yield; ++rv; };
         }
     }
     {
         stdtimer st(tc_, "Collect & Switch coroutine");
         g_Scheduler.Run();
     }
+    cout << "rv:" << rv << endl;
     {
         stdtimer st(tc_, "Switch coroutine");
-        g_Scheduler.Run(co::Scheduler::erf_do_coroutines);
+        g_Scheduler.Run();
     }
+    cout << "rv:" << rv << endl;
 
     {
         stdtimer st(tc_, "Switch & Delete coroutine");
         g_Scheduler.RunUntilNoTask();
-        g_Scheduler.RunUntilNoTask();
     }
-    g_Scheduler.RunUntilNoTask();
+    cout << "rv:" << rv << endl;
+    g_Scheduler.GetOptions().debug = 0;
 
     {
         for (int i = 0; i < 1000; ++i)

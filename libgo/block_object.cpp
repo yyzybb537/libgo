@@ -42,7 +42,7 @@ void BlockObject::CoBlockWait()
     }
     lock.unlock();
 
-    Task* tk = g_Scheduler.GetLocalInfo().current_task;
+    Task* tk = g_Scheduler.GetCurrentTask();
     tk->block_ = this;
     tk->state_ = TaskState::sys_block;
 	tk->block_timeout_ = MininumTimeDurationType::zero();
@@ -71,7 +71,7 @@ bool BlockObject::CoBlockWaitTimed(MininumTimeDurationType timeo)
     }
     lock.unlock();
 
-    Task* tk = g_Scheduler.GetLocalInfo().current_task;
+    Task* tk = g_Scheduler.GetCurrentTask();
     tk->block_ = this;
     tk->state_ = TaskState::sys_block;
     ++tk->block_sequence_;
