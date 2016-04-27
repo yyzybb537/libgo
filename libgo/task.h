@@ -105,6 +105,8 @@ struct Task
     void SetDebugInfo(std::string const& info);
     const char* DebugInfo();
 
+    void Task_CB();
+
     static uint64_t s_id;
     static std::atomic<uint64_t> s_task_count;
 

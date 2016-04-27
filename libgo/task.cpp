@@ -14,13 +14,13 @@ std::atomic<uint64_t> Task::s_task_count{0};
 LFLock Task::s_stat_lock;
 std::set<Task*> Task::s_stat_set;
 
-static void C_func(Task* self)
+void Task::Task_CB()
 {
     if (g_Scheduler.GetOptions().exception_handle == eCoExHandle::immedaitely_throw) {
-        (self->fn_)();
+        fn_();
     } else {
         try {
-            (self->fn_)();
+            fn_();
         } catch (std::exception& e) {
             switch (g_Scheduler.GetOptions().exception_handle) {
                 case eCoExHandle::immedaitely_throw:
@@ -28,13 +28,13 @@ static void C_func(Task* self)
                     break;
 
                 case eCoExHandle::delay_rethrow:
-                    self->eptr_ = std::current_exception();
+                    eptr_ = std::current_exception();
                     break;
 
                 default:
                 case eCoExHandle::debugger_only:
                     DebugPrint(dbg_exception|dbg_task, "task(%s) has uncaught exception:%s",
-                            self->DebugInfo(), e.what());
+                            DebugInfo(), e.what());
                     break;
             }
         } catch (...) {
@@ -44,23 +44,23 @@ static void C_func(Task* self)
                     break;
 
                 case eCoExHandle::delay_rethrow:
-                    self->eptr_ = std::current_exception();
+                    eptr_ = std::current_exception();
                     break;
 
                 default:
                 case eCoExHandle::debugger_only:
-                    DebugPrint(dbg_exception|dbg_task, "task(%s) has uncaught exception.", self->DebugInfo());
+                    DebugPrint(dbg_exception|dbg_task, "task(%s) has uncaught exception.", DebugInfo());
                     break;
             }
         }
     }
 
-    self->state_ = TaskState::done;
+    state_ = TaskState::done;
     Scheduler::getInstance().CoYield();
 }
 
 Task::Task(TaskF const& fn, std::size_t stack_size, const char* file, int lineno)
-    : id_(++s_id), ctx_(stack_size, [this]{C_func(this);}), fn_(fn)
+    : id_(++s_id), ctx_(stack_size, [this]{Task_CB();}), fn_(fn)
 {
     ++s_task_count;
     InitLocation(file, lineno);
