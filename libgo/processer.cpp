@@ -10,21 +10,14 @@ std::atomic<uint32_t> Processer::s_id_{0};
 Processer::Processer()
     : id_(++s_id_)
 {
-    ts_runnable_list_.check_ = runnable_list_.check_;
+    runnable_list_.check_ = (void*)&s_id_;
 }
 
 void Processer::AddTaskRunnable(Task *tk)
 {
     DebugPrint(dbg_scheduler, "task(%s) add into proc(%u)", tk->DebugInfo(), id_);
-    if (tk->state_ == TaskState::init) {
-        assert(!tk->proc_);
-        tk->AddIntoProcesser(this);
-        ++ task_count_;
-    }
-
-    assert(tk->proc_ == this);
     tk->state_ = TaskState::runnable;
-    ts_runnable_list_.push(tk);
+    runnable_list_.push(tk);
 }
 
 uint32_t Processer::Run(uint32_t &done_count)
@@ -35,20 +28,18 @@ uint32_t Processer::Run(uint32_t &done_count)
     done_count = 0;
     uint32_t c = 0;
 
-    if (!ts_runnable_list_.empty_without_lock())
-        runnable_list_.push(ts_runnable_list_.pop_all());
+    DebugPrint(dbg_scheduler, "Run [Proc(%d) do_count:%u] --------------------------",
+            id_, (uint32_t)runnable_list_.size());
 
-//    DebugPrint(dbg_scheduler, "Run [Proc(%d) do_count:%u] --------------------------",
-//            id_, (uint32_t)runnable_list_.size());
-
-    Task *pos = (Task*)runnable_list_.head_->next;
-    while (pos) {
+    for (;;)
+    {
+        if (c >= runnable_list_.size()) break;
+        Task *tk = runnable_list_.pop();
+        if (!tk) break;
         ++c;
-        Task* tk = pos;
-        pos = (Task*)pos->next;
 
         current_task_ = tk;
-//        DebugPrint(dbg_switch, "enter task(%s)", tk->DebugInfo());
+        DebugPrint(dbg_switch, "enter task(%s)", tk->DebugInfo());
         if (!tk->SwapIn()) {
             fprintf(stderr, "swapcontext error:%s\n", strerror(errno));
             current_task_ = nullptr;
@@ -56,35 +47,31 @@ uint32_t Processer::Run(uint32_t &done_count)
             tk->DecrementRef();
             ThrowError(eCoErrorCode::ec_swapcontext_failed);
         }
-//        DebugPrint(dbg_switch, "leave task(%s) state=%d", tk->DebugInfo(), (int)tk->state_);
+        DebugPrint(dbg_switch, "leave task(%s) state=%d", tk->DebugInfo(), (int)tk->state_);
         current_task_ = nullptr;
 
         switch (tk->state_) {
             case TaskState::runnable:
+                runnable_list_.push(tk);
                 break;
 
             case TaskState::io_block:
-                runnable_list_.erase(tk);
                 g_Scheduler.io_wait_.SchedulerSwitch(tk);
                 break;
 
             case TaskState::sleep:
-                runnable_list_.erase(tk);
                 g_Scheduler.sleep_wait_.SchedulerSwitch(tk);
                 break;
 
             case TaskState::sys_block:
                 assert(tk->block_);
-                runnable_list_.erase(tk);
                 if (!tk->block_->AddWaitTask(tk))
                     runnable_list_.push(tk);
                 break;
 
             case TaskState::done:
             default:
-                --task_count_;
                 ++done_count;
-                runnable_list_.erase(tk);
                 DebugPrint(dbg_task, "task(%s) done.", tk->DebugInfo());
                 if (tk->eptr_) {
                     std::exception_ptr ep = tk->eptr_;
@@ -103,7 +90,7 @@ void Processer::CoYield()
 {
     Task *tk = GetCurrentTask();
     assert(tk);
-    assert(tk->proc_ == this);
+    tk->proc_ = this;
 
     DebugPrint(dbg_yield, "yield task(%s) state=%d", tk->DebugInfo(), (int)tk->state_);
     ++tk->yield_count_;
@@ -113,14 +100,21 @@ void Processer::CoYield()
     }
 }
 
-uint32_t Processer::GetTaskCount()
-{
-    return task_count_;
-}
-
 Task* Processer::GetCurrentTask()
 {
     return current_task_;
+}
+
+std::size_t Processer::StealHalf(Processer & other)
+{
+    std::size_t runnable_task_count = runnable_list_.size();
+    SList<Task> tasks = runnable_list_.pop_back((runnable_task_count + 1) / 2);
+    std::size_t c = tasks.size();
+    DebugPrint(dbg_scheduler, "proc[%u] steal proc[%u] work returns %d.",
+            other.id_, id_, (int)c);
+    if (!c) return 0;
+    other.runnable_list_.push(std::move(tasks));
+    return c;
 }
 
 } //namespace co

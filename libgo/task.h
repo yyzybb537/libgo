@@ -97,7 +97,6 @@ struct alignas(64) Task
     ~Task();
 
     void InitLocation(const char* file, int lineno);
-    void AddIntoProcesser(Processer *proc);
 
     bool SwapIn();
     bool SwapOut();

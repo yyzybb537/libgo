@@ -12,13 +12,10 @@ class alignas(64) Processer
     : public TSQueueHook
 {
 private:
-    typedef TSQueue<Task, false> TaskList;
-    typedef TSQueue<Task> TaskSList;
+    typedef TSQueue<Task> TaskList;
 
     Task* current_task_ = nullptr;
     TaskList runnable_list_;
-    TaskSList ts_runnable_list_;
-    std::atomic<uint32_t> task_count_{0};
     uint32_t id_;
     static std::atomic<uint32_t> s_id_;
 
@@ -34,6 +31,8 @@ public:
     uint32_t GetTaskCount();
 
     Task* GetCurrentTask();
+
+    std::size_t StealHalf(Processer & other);
 };
 
 } //namespace co

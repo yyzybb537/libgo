@@ -93,13 +93,6 @@ void Task::InitLocation(const char* file, int lineno)
     }
 }
 
-void Task::AddIntoProcesser(Processer *proc)
-{
-    assert(!proc_);
-    proc_ = proc;
-    state_ = TaskState::runnable;
-}
-
 bool Task::SwapIn()
 {
     return ctx_.SwapIn();

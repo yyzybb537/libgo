@@ -164,11 +164,6 @@ public:
         return head_ == tail_;
     }
 
-    bool empty_without_lock()
-    {
-        return head_ == tail_;
-    }
-
     std::size_t size()
     {
         LockGuard lock(lck);
@@ -218,7 +213,7 @@ public:
     }
 
     // O(n), 慎用.
-    SList<T> pop(uint32_t n)
+    SList<T> pop_front(uint32_t n)
     {
         if (head_ == tail_) return SList<T>();
         LockGuard lock(lck);
@@ -232,6 +227,23 @@ public:
         head_->next = last->next;
         if (last->next) last->next->prev = head_;
         first->prev = last->next = nullptr;
+        count_ -= c;
+        return SList<T>(first, last, c, check_);
+    }
+
+    // O(n), 慎用.
+    SList<T> pop_back(uint32_t n)
+    {
+        if (head_ == tail_) return SList<T>();
+        LockGuard lock(lck);
+        if (head_ == tail_) return SList<T>();
+        TSQueueHook* last = tail_;
+        TSQueueHook* first = last;
+        uint32_t c = 1;
+        for (; c < n && first->prev && first->prev != head_; ++c)
+            first = first->prev;
+        tail_ = first->prev;
+        first->prev = tail_->next = nullptr;
         count_ -= c;
         return SList<T>(first, last, c, check_);
     }
@@ -250,7 +262,6 @@ public:
         count_ = 0;
         return SList<T>(first, last, c, check_);
     }
-
 
     bool erase(T* hook)
     {
@@ -345,7 +356,7 @@ public:
         }
     }
 
-    SList<T> pop(std::size_t n)
+    SList<T> pop_front(std::size_t n)
     {
         if (head_ == tail_ || !n) return SList<T>();
         LockGuard lock(lck);

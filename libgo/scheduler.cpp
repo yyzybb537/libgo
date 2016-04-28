@@ -4,6 +4,10 @@
 #include <system_error>
 #include <unistd.h>
 #include "thread_pool.h"
+#include <time.h>
+#ifndef _WIN32
+#include <sys/time.h>
+#endif
 
 namespace co
 {
@@ -72,7 +76,7 @@ uint32_t Scheduler::Run(int flags)
 {
     ThreadLocalInfo &info = GetLocalInfo();
     if (info.thread_id < 0) {
-        std::unique_lock<LFLock> lock(proc_init_lock_, std::defer_lock);
+        std::unique_lock<LFLock> lock(proc_init_lock_);
         info.thread_id = thread_id_++;
         if (info.thread_id)
             info.proc = new Processer;
@@ -139,7 +143,7 @@ void Scheduler::RunUntilNoTask(uint32_t loop_task_count)
 }
 
 // Run函数的一部分, 处理runnable状态的协程
-uint32_t Scheduler::DoRunnable()
+uint32_t Scheduler::DoRunnable(bool allow_steal)
 {
     ThreadLocalInfo& info = GetLocalInfo();
 
@@ -154,6 +158,24 @@ uint32_t Scheduler::DoRunnable()
     task_count_ -= done_count;
     DebugPrint(dbg_scheduler, "run %d coroutines, remain=%d\n",
             (int)done_count, (int)task_count_);
+
+    // Steal-Work
+    if (!do_count && !done_count && allow_steal) {
+        // 没有任务了, 随机选一个线程偷取
+        std::unique_lock<LFLock> lock(proc_init_lock_);
+        std::size_t thread_count = run_proc_list_.size();
+        lock.unlock();
+
+        if (thread_count > 1) {
+            int r = rand() % thread_count;
+            if (r == info.thread_id)    // 不能选到当前线程
+                r = info.thread_id > 0 ? (info.thread_id - 1) : (info.thread_id + 1);
+            std::size_t steal_count = run_proc_list_[r]->StealHalf(*info.proc);
+            if (steal_count) {
+                return DoRunnable(false);
+            }
+        }
+    }
 
     return do_count;
 }
@@ -311,6 +333,22 @@ uint32_t codebug_GetCurrentProcessID()
 uint32_t codebug_GetCurrentThreadID()
 {
     return g_Scheduler.GetCurrentThreadID();
+}
+std::string codebug_GetCurrentTime()
+{
+#ifndef _WIN32
+    struct tm local;
+    struct timeval tv;
+    gettimeofday(&tv, NULL);
+    localtime_r(&tv.tv_sec, &local);
+    char buffer[128];
+    snprintf(buffer, sizeof(buffer), "%04d-%02d-%02d %02d:%02d:%02d.%06lu",
+            local.tm_year+1900, local.tm_mon+1, local.tm_mday, 
+            local.tm_hour, local.tm_min, local.tm_sec, tv.tv_usec);
+    return std::string(buffer);
+#else
+    return std::string();
+#endif
 }
 
 } //namespace co

@@ -189,7 +189,7 @@ class Scheduler
         void AddTaskRunnable(Task* tk);
 
         // Run函数的一部分, 处理runnable状态的协程
-        uint32_t DoRunnable();
+        uint32_t DoRunnable(bool allow_steal = true);
 
         // Run函数的一部分, 处理epoll相关
         int DoEpoll(int wait_milliseconds);

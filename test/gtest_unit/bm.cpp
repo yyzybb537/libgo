@@ -288,6 +288,9 @@ TEST_P(Times, testCo)
     }
 
 
+//    g_Scheduler.GetOptions().debug = dbg_scheduler;
+//    g_Scheduler.GetOptions().debug_output = fopen("log", "w");
+
     // 4 threads test
     {
         stdtimer st(tc_, "Create coroutine - 2");
@@ -300,8 +303,9 @@ TEST_P(Times, testCo)
 
         stdtimer st(tc_, "4 threads Switch & Delete coroutine");
         boost::thread_group tg;
-        for (int i = 0; i < 4; ++i)
+        for (int i = 0; i < 3; ++i)
             tg.create_thread( []{ g_Scheduler.RunUntilNoTask(); } );
+        g_Scheduler.RunUntilNoTask();
         tg.join_all();
     }
     g_Scheduler.RunUntilNoTask();
@@ -320,8 +324,9 @@ TEST_P(Times, testCo)
     {
         stdtimer st(tc_, "4 threads Collect & Switch & Delete coroutine");
         boost::thread_group tg;
-        for (int i = 0; i < 4; ++i)
+        for (int i = 0; i < 3; ++i)
             tg.create_thread( []{ g_Scheduler.RunUntilNoTask(); } );
+        g_Scheduler.RunUntilNoTask();
         tg.join_all();
     }
     g_Scheduler.RunUntilNoTask();
