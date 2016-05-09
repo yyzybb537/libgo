@@ -7,7 +7,7 @@
 
 // 也可以使用co_main宏定义main函数, 
 // 此时, main函数也是执行在协程中, 不要再执行调度器!
-// 链接时需要增加参数：-lcoroutine_main
+// 链接时需要增加参数：-llibgo_main
 co_main(int argc, char **argv)
 {
     // 在协程中使用co_yield关键字, 可以主动让出调度器执行权限,
