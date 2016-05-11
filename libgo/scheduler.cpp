@@ -23,7 +23,6 @@ Scheduler::Scheduler()
 {
     thread_pool_ = new ThreadPool;
     coroutine_hook_init();
-    first_proc_ = new Processer;
 }
 
 Scheduler::~Scheduler()
@@ -40,6 +39,21 @@ ThreadLocalInfo& Scheduler::GetLocalInfo()
     return *info;
 }
 
+Processer* Scheduler::GetProcesser(std::size_t index)
+{
+    if (run_proc_list_.size() > index)
+        return run_proc_list_[index];
+
+    std::unique_lock<LFLock> lock(proc_init_lock_);
+    if (run_proc_list_.size() > index)
+        return run_proc_list_[index];
+
+    while (run_proc_list_.size() <= index)
+        run_proc_list_.push_back(new Processer);
+
+    return run_proc_list_[index];
+}
+
 CoroutineOptions& Scheduler::GetOptions()
 {
     static CoroutineOptions options;
@@ -47,12 +61,12 @@ CoroutineOptions& Scheduler::GetOptions()
 }
 
 void Scheduler::CreateTask(TaskF const& fn, std::size_t stack_size,
-        const char* file, int lineno)
+        const char* file, int lineno, int dispatch)
 {
     Task* tk = new Task(fn, stack_size ? stack_size : GetOptions().stack_size, file, lineno);
     ++task_count_;
     DebugPrint(dbg_task, "task(%s) created.", tk->DebugInfo());
-    AddTaskRunnable(tk);
+    AddTaskRunnable(tk, dispatch);
 }
 
 bool Scheduler::IsCoroutine()
@@ -76,18 +90,13 @@ uint32_t Scheduler::Run(int flags)
 {
     ThreadLocalInfo &info = GetLocalInfo();
     if (info.thread_id < 0) {
-        std::unique_lock<LFLock> lock(proc_init_lock_);
         info.thread_id = thread_id_++;
-        if (info.thread_id)
-            info.proc = new Processer;
-        else
-            info.proc = first_proc_;
-        run_proc_list_.push_back(info.proc);
+        info.proc = GetProcesser(info.thread_id);
     }
 
     uint32_t run_task_count = 0;
     if (flags & erf_do_coroutines)
-        run_task_count = DoRunnable();
+        run_task_count = DoRunnable(GetOptions().enable_work_steal);
 
     // timer
     long long timer_next_ms = GetOptions().max_sleep_ms;
@@ -217,17 +226,43 @@ void Scheduler::RunLoop()
     for (;;) Run();
 }
 
-void Scheduler::AddTaskRunnable(Task* tk)
+void Scheduler::AddTaskRunnable(Task* tk, int dispatch)
 {
     DebugPrint(dbg_scheduler, "Add task(%s) to runnable list.", tk->DebugInfo());
     if (tk->proc_)
         tk->proc_->AddTaskRunnable(tk);
     else {
-        ThreadLocalInfo &info = GetLocalInfo();
-        if (info.proc)
-            info.proc->AddTaskRunnable(tk);
-        else
-            first_proc_->AddTaskRunnable(tk);
+        if (dispatch <= egod_default)
+            dispatch = GetOptions().enable_work_steal ? egod_local_thread : egod_robin;
+
+        switch (dispatch) {
+            case egod_random:
+                {
+                    std::size_t n = std::max<std::size_t>(run_proc_list_.size(), 1);
+                    GetProcesser(rand() % n)->AddTaskRunnable(tk);
+                }
+                return ;
+
+            case egod_robin:
+                {
+                    std::size_t n = std::max<std::size_t>(run_proc_list_.size(), 1);
+                    GetProcesser(dispatch_robin_index_++ % n)->AddTaskRunnable(tk);
+                }
+                return ;
+
+            case egod_local_thread:
+                {
+                    ThreadLocalInfo &info = GetLocalInfo();
+                    if (info.proc)
+                        info.proc->AddTaskRunnable(tk);
+                    else
+                        GetProcesser(0)->AddTaskRunnable(tk);
+                }
+                return ;
+        }
+
+        // 指定了线程索引
+        GetProcesser(dispatch)->AddTaskRunnable(tk);
     }
 }
 

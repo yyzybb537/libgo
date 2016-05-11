@@ -1,7 +1,7 @@
 /************************************************
- * coroutine sample8
+ * libgo sample8
 ************************************************
- * coroutine作为并发编程库使用。
+ * libgo作为并发编程库使用。
 ************************************************/
 #include <chrono>
 #include <iostream>
@@ -36,7 +36,7 @@ int main()
     for (int i = 0; i < 100; ++i)
         go foo;
 
-    // 创建8个线程去并行执行所有协程
+    // 创建8个线程去并行执行所有协程 (由worksteal算法自动做负载均衡)
     boost::thread_group tg;
     for (int i = 0; i < 8; ++i)
         tg.create_thread([] {

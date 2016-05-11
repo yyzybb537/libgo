@@ -1,16 +1,16 @@
 /************************************************
- * coroutine是一个使用C++11编写的调度式stackful协程库,
+ * libgo是一个使用C++11编写的调度式stackful协程库,
  * 同时也是一个强大的并行编程库，
  * 可以运行在Linux和Win7-64bit上.
  * 是专为linux服务端程序开发设计的底层框架。
  *
- * 使用coroutine编写并行程序，即可以像go、erlang这些
+ * 使用libgo编写并行程序，即可以像go、erlang这些
  * 并发语言一样开发迅速且逻辑简洁，又有C++原生的性能优势
  * 鱼和熊掌从此可以兼得。
  *
- * coroutine有以下特点：
- *   1.提供不输与golang的强大的协程
- *     基于corontine编写代码，可以以同步的方式
+ * libgo有以下特点：
+ *   1.提供与golang同样强大的协程(CSP模型)
+ *     基于libgo编写代码，可以以同步的方式
  *     编写简单的代码，同时获得异步的性能，
  *   2.允许用户自主控制协程调度点
  *   3.支持多线程调度协程，极易编写并行代码，
@@ -42,11 +42,12 @@
  * 以s_开头的是静态链接的产物，另一个是动态链接的产物，
  * 两个sample的执行结果会是相同。
 *************************************************
- * coroutine sample1
+ * libgo sample1
 *************************************************/
 #include "coroutine.h"
 #include "win_exit.h"
 #include <stdio.h>
+#include <boost/thread.hpp>
 
 void foo()
 {
@@ -90,6 +91,38 @@ int main()
     //
     // 当仅使用一个线程进行协程调度时, 协程地执行会严格地遵循其创建顺序.
     co_sched.RunUntilNoTask();
+
+    // 多线程模式下, libgo还支持指定协程初始运行于哪个线程
+    // 使用go_dispatch关键字来创建协程, 可以分派协程执行的线程.
+    // 支持多种分派模式
+    // 1.指定线程索引分派 (线程索引从0起, 按照调用Run的顺序决定线程索引)
+    go_dispatch(2) []{
+        printf("dispatch to thread[2] run\n");
+    };
+    // 2.随机 (调用过Run的线程才会参与随机指派)
+    go_dispatch(egod_random) []{
+        printf("random run\n");
+    };
+    // 3.robin算法 (调用过Run的线程, 或强制执行线程索引分派过协程的线程, 才会参与随机指派)
+    go_dispatch(egod_robin) []{
+        printf("robin run\n");
+    };
+    // 4.尽量置于当前线程 (只有当当前线程已经调用过Run后才生效)
+    go_dispatch(egod_local_thread) []{
+        printf("local thread run\n");
+    };
+
+    // 启动额外两个线程和主线程一起调度
+    boost::thread_group tg;
+    for (int i = 0; i < 2; ++i)
+        tg.create_thread([]{ co_sched.RunUntilNoTask(); });
+    co_sched.RunUntilNoTask();
+    tg.join_all();
+
+    // 默认配置下, 多线程调度时会采用worksteal算法做负载均衡, dispatch指定的协程也可能被其他
+    // 线程偷走, 如果不希望被偷走, 可以关闭worksteal算法.
+    co_sched.GetOptions().enable_work_steal = false;    // 关闭worksteal负载均衡算法
+
     return 0;
 }
 
