@@ -1,5 +1,5 @@
 /************************************************
- * coroutine sample2
+ * libgo sample2
 *************************************************/
 #include "coroutine.h"
 #include "win_exit.h"

@@ -42,6 +42,17 @@ static const uint64_t dbg_sys_max           = dbg_debugger;
 	typedef std::chrono::nanoseconds MininumTimeDurationType;
 #endif
 
+// 将协程分派到线程中的策略
+enum e_go_dispatch
+{
+    egod_default = -4,  // if enable_work_steal, it's equal egod_local_thread; else, equal egod_robin.
+    egod_random = -3,
+    egod_robin = -2,
+    egod_local_thread = -1,
+
+    // ...
+};
+
 extern uint64_t codebug_GetDebugOptions();
 extern FILE* codebug_GetDebugOutput();
 extern uint32_t codebug_GetCurrentProcessID();

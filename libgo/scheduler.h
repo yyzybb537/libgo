@@ -60,7 +60,10 @@ struct CoroutineOptions
     // epoll每次触发的event数量(Windows下无效)
     uint32_t epoll_event_size = 10240;
 
-    // 开启当前协程统计功能(会有一点性能损耗, 默认不开启)
+    // 是否启用worksteal算法
+    bool enable_work_steal = true;
+
+    // 是否启用协程统计功能(会有一点性能损耗, 默认不开启)
     bool enable_coro_stat = false;
 };
 ///-------------------
@@ -99,8 +102,8 @@ class Scheduler
         CoroutineOptions& GetOptions();
 
         // 创建一个协程
-        void CreateTask(TaskF const& fn, std::size_t stack_size = 0,
-                const char* file = nullptr, int lineno = 0);
+        void CreateTask(TaskF const& fn, std::size_t stack_size,
+                const char* file, int lineno, int dispatch);
 
         // 当前是否处于协程中
         bool IsCoroutine();
@@ -186,7 +189,7 @@ class Scheduler
         Scheduler& operator=(Scheduler &&) = delete;
 
         // 将一个协程加入可执行队列中
-        void AddTaskRunnable(Task* tk);
+        void AddTaskRunnable(Task* tk, int dispatch = egod_default);
 
         // Run函数的一部分, 处理runnable状态的协程
         uint32_t DoRunnable(bool allow_steal = true);
@@ -205,11 +208,12 @@ class Scheduler
         // 获取线程局部信息
         ThreadLocalInfo& GetLocalInfo();
 
+        Processer* GetProcesser(std::size_t index);
+
         // List of Processer
         LFLock proc_init_lock_;
-        uint32_t proc_count = 0;
         ProcList run_proc_list_;
-        Processer *first_proc_ = nullptr;
+        std::atomic<uint32_t> dispatch_robin_index_{0};
 
         // io block waiter.
         IoWait io_wait_;
