@@ -138,6 +138,11 @@ if (UNIX)
         PATTERN "*.h")
     install(DIRECTORY ${PROJECT_SOURCE_DIR}/libgo/linux/ DESTINATION "include/libgo" FILES_MATCHING PATTERN "*.h")
     install(FILES ${PROJECT_SOURCE_DIR}/tools/libgo.conf DESTINATION "/etc/ld.so.conf.d")
+    if (ENABLE_BOOST_COROUTINE)
+        install(DIRECTORY ${PROJECT_SOURCE_DIR}/libgo/ctx_boost_coroutine/ DESTINATION "include/libgo/ctx_boost_coroutine" FILES_MATCHING PATTERN "*.h")
+    else()
+        install(DIRECTORY ${PROJECT_SOURCE_DIR}/libgo/ctx_ucontext/ DESTINATION "include/libgo/ctx_ucontext" FILES_MATCHING PATTERN "*.h")
+    endif()
 
     add_custom_target(debug
         COMMAND ${CMAKE_COMMAND} -DCMAKE_BUILD_TYPE=DEBUG ${CMAKE_SOURCE_DIR}
