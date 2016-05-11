@@ -4,30 +4,37 @@
 #include <memory>
 #include "error.h"
 
-namespace co
-{
-    struct ContextScopedGuard
-    {
-        ContextScopedGuard();
-        ~ContextScopedGuard();
-    };
+#if USE_BOOST_COROUTINE
+# include "ctx_boost_coroutine/context.h"
+#elif USE_UCONTEXT
+# include "ctx_ucontext/context.h"
+#elif USE_FIBER
+# include "ctx_win_fiber/context.h"
+#else
+# error "No context sets."
+#endif
 
-    class Context
-    {
-        class impl_t;
-
-    public:
-        explicit Context(std::size_t stack_size, std::function<void()> const& fn);
-
-        bool Init(char* shared_stack, uint32_t shared_stack_cap);
-        
-        bool SwapIn();
-
-        bool SwapOut();
-
-    private:
-        std::shared_ptr<impl_t> impl_;
-        std::size_t stack_size_;
-    };
-
-} //namespace co
+//namespace co
+//{
+//    struct ContextScopedGuard
+//    {
+//        ContextScopedGuard();
+//        ~ContextScopedGuard();
+//    };
+//
+//    class Context
+//    {
+//        class impl_t;
+//
+//    public:
+//        explicit Context(std::size_t stack_size, std::function<void()> const& fn);
+//        
+//        bool SwapIn();
+//
+//        bool SwapOut();
+//
+//    private:
+//        std::shared_ptr<impl_t> impl_;
+//        std::size_t stack_size_;
+//    };
+//} //namespace co

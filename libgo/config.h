@@ -1,4 +1,5 @@
 #pragma once
+#include "cmake_config.h"
 #include <chrono>
 
 // VS2013²»Ö§³Öthread_local
@@ -45,13 +46,15 @@ extern uint64_t codebug_GetDebugOptions();
 extern FILE* codebug_GetDebugOutput();
 extern uint32_t codebug_GetCurrentProcessID();
 extern uint32_t codebug_GetCurrentThreadID();
+extern std::string codebug_GetCurrentTime();
 
 } //namespace co
 
 #define DebugPrint(type, fmt, ...) \
     do { \
         if (::co::codebug_GetDebugOptions() & (type)) { \
-            fprintf(::co::codebug_GetDebugOutput(), "co_dbg[%08u][%04u] " fmt "\n", \
+            fprintf(::co::codebug_GetDebugOutput(), "co_dbg[%s][%08u][%04u] " fmt "\n", \
+                    ::co::codebug_GetCurrentTime().c_str(),\
                     ::co::codebug_GetCurrentProcessID(), ::co::codebug_GetCurrentThreadID(), ##__VA_ARGS__); \
         } \
     } while(0)

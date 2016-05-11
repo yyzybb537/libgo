@@ -127,7 +127,8 @@ class TSQueue
 {
     static_assert((std::is_base_of<TSQueueHook, T>::value), "T must be baseof TSQueueHook");
 
-private:
+//private:
+public:
     LFLock lck;
     typedef typename std::conditional<ThreadSafe,
             std::lock_guard<LFLock>,
@@ -135,12 +136,14 @@ private:
     TSQueueHook* head_;
     TSQueueHook* tail_;
     std::size_t count_;
+    void *check_ = nullptr;
 
 public:
     TSQueue()
     {
         head_ = tail_ = new TSQueueHook;
         count_ = 0;
+        check_ = this;
     }
 
     ~TSQueue()
@@ -174,7 +177,7 @@ public:
         tail_->next = hook;
         hook->prev = tail_;
         hook->next = nullptr;
-        hook->check_ = this;
+        hook->check_ = check_;
         tail_ = hook;
         ++ count_;
         IncrementRef(element);
@@ -199,7 +202,7 @@ public:
     void push(SList<T> && elements)
     {
         if (elements.empty()) return ;  // empty的SList不能check, 因为stealed的时候已经清除check_.
-        assert(elements.check(this));
+        assert(elements.check(check_));
         LockGuard lock(lck);
         count_ += elements.size();
         tail_->next = elements.head();
@@ -210,7 +213,7 @@ public:
     }
 
     // O(n), 慎用.
-    SList<T> pop(uint32_t n)
+    SList<T> pop_front(uint32_t n)
     {
         if (head_ == tail_) return SList<T>();
         LockGuard lock(lck);
@@ -225,7 +228,24 @@ public:
         if (last->next) last->next->prev = head_;
         first->prev = last->next = nullptr;
         count_ -= c;
-        return SList<T>(first, last, c, this);
+        return SList<T>(first, last, c, check_);
+    }
+
+    // O(n), 慎用.
+    SList<T> pop_back(uint32_t n)
+    {
+        if (head_ == tail_) return SList<T>();
+        LockGuard lock(lck);
+        if (head_ == tail_) return SList<T>();
+        TSQueueHook* last = tail_;
+        TSQueueHook* first = last;
+        uint32_t c = 1;
+        for (; c < n && first->prev && first->prev != head_; ++c)
+            first = first->prev;
+        tail_ = first->prev;
+        first->prev = tail_->next = nullptr;
+        count_ -= c;
+        return SList<T>(first, last, c, check_);
     }
 
     SList<T> pop_all()
@@ -240,14 +260,13 @@ public:
         first->prev = last->next = nullptr;
         std::size_t c = count_;
         count_ = 0;
-        return SList<T>(first, last, c, this);
+        return SList<T>(first, last, c, check_);
     }
-
 
     bool erase(T* hook)
     {
         LockGuard lock(lck);
-        if (hook->check_ != (void*)this) return false;
+        if (hook->check_ != (void*)check_) return false;
         if (hook->prev) hook->prev->next = hook->next;
         if (hook->next) hook->next->prev = hook->prev;
         else if (hook == tail_) tail_ = tail_->prev;
@@ -337,7 +356,7 @@ public:
         }
     }
 
-    SList<T> pop(std::size_t n)
+    SList<T> pop_front(std::size_t n)
     {
         if (head_ == tail_ || !n) return SList<T>();
         LockGuard lock(lck);
@@ -379,6 +398,5 @@ public:
         return SList<T>(first, last, n, this);
     }
 };
-
 
 } //namespace co

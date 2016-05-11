@@ -4,6 +4,10 @@
 #include <system_error>
 #include <unistd.h>
 #include "thread_pool.h"
+#include <time.h>
+#ifndef _WIN32
+#include <sys/time.h>
+#endif
 
 namespace co
 {
@@ -19,6 +23,7 @@ Scheduler::Scheduler()
 {
     thread_pool_ = new ThreadPool;
     coroutine_hook_init();
+    first_proc_ = new Processer;
 }
 
 Scheduler::~Scheduler()
@@ -52,7 +57,7 @@ void Scheduler::CreateTask(TaskF const& fn, std::size_t stack_size,
 
 bool Scheduler::IsCoroutine()
 {
-    return !!GetLocalInfo().current_task;
+    return !!GetCurrentTask();
 }
 
 bool Scheduler::IsEmpty()
@@ -62,67 +67,69 @@ bool Scheduler::IsEmpty()
 
 void Scheduler::CoYield()
 {
-    Task* tk = GetLocalInfo().current_task;
-    if (!tk) return ;
-    tk->proc_->CoYield(GetLocalInfo());
+    ThreadLocalInfo& info = GetLocalInfo();
+    if (info.proc)
+        info.proc->CoYield();
 }
 
-uint32_t Scheduler::Run()
+uint32_t Scheduler::Run(int flags)
 {
     ThreadLocalInfo &info = GetLocalInfo();
-    if (!info.thread_id) {
-        info.thread_id = ++ thread_id_;
+    if (info.thread_id < 0) {
+        std::unique_lock<LFLock> lock(proc_init_lock_);
+        info.thread_id = thread_id_++;
+        if (info.thread_id)
+            info.proc = new Processer;
+        else
+            info.proc = first_proc_;
+        run_proc_list_.push_back(info.proc);
     }
 
-    // 创建、增补P
-    CoroutineOptions &op = GetOptions();
-    if (proc_count < op.processer_count) {
-        std::unique_lock<LFLock> lock(proc_init_lock_, std::defer_lock);
-        if (lock.try_lock() && proc_count < op.processer_count) {
-            uint32_t i = proc_count;
-            for (; i < op.processer_count; ++i) {
-                Processer* proc = new Processer(op.stack_size);
-                run_proc_list_.push(proc);
-            }
-
-            proc_count = i;
-        }
-    }
-
-    uint32_t run_task_count = DoRunnable();
+    uint32_t run_task_count = 0;
+    if (flags & erf_do_coroutines)
+        run_task_count = DoRunnable();
 
     // timer
-    long long timer_next_ms = 0;
-    uint32_t tm_count = DoTimer(timer_next_ms);
+    long long timer_next_ms = GetOptions().max_sleep_ms;
+    uint32_t tm_count = 0;
+    if (flags & erf_do_timer)
+        tm_count = DoTimer(timer_next_ms);
 
     // sleep wait.
-    long long sleep_next_ms = 0;
-    uint32_t sl_count = DoSleep(sleep_next_ms);
+    long long sleep_next_ms = GetOptions().max_sleep_ms;
+    uint32_t sl_count = 0;
+    if (flags & erf_do_sleeper)
+        sl_count = DoSleep(sleep_next_ms);
 
     // 下一次timer或sleeper触发的时间毫秒数, 休眠或阻塞等待IO事件触发的时间不能超过这个值
     long long next_ms = (std::min)(timer_next_ms, sleep_next_ms);
 
     // epoll
-    int wait_milliseconds = 0;
-    if (run_task_count || tm_count || sl_count)
-        wait_milliseconds = 0;
-    else {
-        wait_milliseconds = (std::min<long long>)(next_ms, GetOptions().max_sleep_ms);
-        DebugPrint(dbg_scheduler_sleep, "wait_milliseconds %d ms, next_ms=%lld", wait_milliseconds, next_ms);
-    }
-    int ep_count = DoEpoll(wait_milliseconds);
-
-    if (!run_task_count && ep_count <= 0 && !tm_count && !sl_count) {
-        if (ep_count == -1) {
-            // 此线程没有执行epoll_wait, 使用sleep降低空转时的cpu使用率
-            ++info.sleep_ms;
-            info.sleep_ms = (std::min)(info.sleep_ms, GetOptions().max_sleep_ms);
-            info.sleep_ms = (std::min<long long>)(info.sleep_ms, next_ms);
-            DebugPrint(dbg_scheduler_sleep, "sleep %d ms, next_ms=%lld", (int)info.sleep_ms, next_ms);
-            usleep(info.sleep_ms * 1000);
+    int ep_count = -1;
+    if (flags & erf_do_eventloop) {
+        int wait_milliseconds = 0;
+        if (run_task_count || tm_count || sl_count)
+            wait_milliseconds = 0;
+        else {
+            wait_milliseconds = (std::min<long long>)(next_ms, GetOptions().max_sleep_ms);
+            DebugPrint(dbg_scheduler_sleep, "wait_milliseconds %d ms, next_ms=%lld", wait_milliseconds, next_ms);
         }
-    } else {
-        info.sleep_ms = 1;
+        ep_count = DoEpoll(wait_milliseconds);
+    }
+
+    if (flags & erf_idle_cpu) {
+        if (!run_task_count && ep_count <= 0 && !tm_count && !sl_count) {
+            if (ep_count == -1) {
+                // 此线程没有执行epoll_wait, 使用sleep降低空转时的cpu使用率
+                ++info.sleep_ms;
+                info.sleep_ms = (std::min)(info.sleep_ms, GetOptions().max_sleep_ms);
+                info.sleep_ms = (std::min<long long>)(info.sleep_ms, next_ms);
+                DebugPrint(dbg_scheduler_sleep, "sleep %d ms, next_ms=%lld", (int)info.sleep_ms, next_ms);
+                usleep(info.sleep_ms * 1000);
+            }
+        } else {
+            info.sleep_ms = 1;
+        }
     }
 
     return run_task_count;
@@ -136,54 +143,38 @@ void Scheduler::RunUntilNoTask(uint32_t loop_task_count)
 }
 
 // Run函数的一部分, 处理runnable状态的协程
-uint32_t Scheduler::DoRunnable()
+uint32_t Scheduler::DoRunnable(bool allow_steal)
 {
+    ThreadLocalInfo& info = GetLocalInfo();
+
     uint32_t do_count = 0;
-    uint32_t proc_c = run_proc_list_.size();
-    for (uint32_t i = 0; i < proc_c; ++i)
-    {
-        Processer *proc = run_proc_list_.pop();
-        if (!proc) break;
-
-        // cherry-pick tasks.
-        if (!run_tasks_.empty()) {
-            uint32_t task_c = task_count_;
-            uint32_t average = task_c / proc_c + (task_c % proc_c ? 1 : 0);
-
-            uint32_t ti = proc->GetTaskCount();
-            uint32_t popn = average > ti ? (average - ti) : 0;
-            if (popn) {
-                static int sc = 0;
-                SList<Task> s(run_tasks_.pop(popn));
-                auto it = s.begin();
-                while (it != s.end()) {
-                    Task* tk = &*it;
-                    it = s.erase(it);
-                    proc->AddTaskRunnable(tk);
-                }
-                sc += s.size();
-//                printf("popn = %d, get %d coroutines, sc=%d, remain=%d\n",
-//                        (int)popn, (int)s.size(), (int)sc, (int)run_tasks_.size());
-            }
-//            for (uint32_t ti = proc->GetTaskCount(); ti < average; ++ti) {
-//                Task *tk = run_tasks_.pop();
-//                if (!tk) break;
-//                proc->AddTaskRunnable(tk);
-//            }
-        }
-
-        uint32_t done_count = 0;
-        try {
-            do_count += proc->Run(GetLocalInfo(), done_count);
-        } catch (...) {
-            task_count_ -= done_count;
-            run_proc_list_.push(proc);
-            throw ;
-        }
+    uint32_t done_count = 0;
+    try {
+        do_count += info.proc->Run(done_count);
+    } catch (...) {
         task_count_ -= done_count;
-//        printf("run %d coroutines, remain=%d\n", (int)done_count, (int)task_count_);
+        throw ;
+    }
+    task_count_ -= done_count;
+    DebugPrint(dbg_scheduler, "run %d coroutines, remain=%d\n",
+            (int)done_count, (int)task_count_);
 
-        run_proc_list_.push(proc);
+    // Steal-Work
+    if (!do_count && !done_count && allow_steal) {
+        // 没有任务了, 随机选一个线程偷取
+        std::unique_lock<LFLock> lock(proc_init_lock_);
+        std::size_t thread_count = run_proc_list_.size();
+        lock.unlock();
+
+        if (thread_count > 1) {
+            int r = rand() % thread_count;
+            if (r == info.thread_id)    // 不能选到当前线程
+                r = info.thread_id > 0 ? (info.thread_id - 1) : (info.thread_id + 1);
+            std::size_t steal_count = run_proc_list_[r]->StealHalf(*info.proc);
+            if (steal_count) {
+                return DoRunnable(false);
+            }
+        }
     }
 
     return do_count;
@@ -231,8 +222,13 @@ void Scheduler::AddTaskRunnable(Task* tk)
     DebugPrint(dbg_scheduler, "Add task(%s) to runnable list.", tk->DebugInfo());
     if (tk->proc_)
         tk->proc_->AddTaskRunnable(tk);
-    else
-        run_tasks_.push(tk);
+    else {
+        ThreadLocalInfo &info = GetLocalInfo();
+        if (info.proc)
+            info.proc->AddTaskRunnable(tk);
+        else
+            first_proc_->AddTaskRunnable(tk);
+    }
 }
 
 uint32_t Scheduler::TaskCount()
@@ -242,26 +238,26 @@ uint32_t Scheduler::TaskCount()
 
 uint64_t Scheduler::GetCurrentTaskID()
 {
-    Task* tk = GetLocalInfo().current_task;
+    Task* tk = GetCurrentTask();
     return tk ? tk->id_ : 0;
 }
 
 uint64_t Scheduler::GetCurrentTaskYieldCount()
 {
-    Task* tk = GetLocalInfo().current_task;
+    Task* tk = GetCurrentTask();
     return tk ? tk->yield_count_ : 0;
 }
 
 void Scheduler::SetCurrentTaskDebugInfo(std::string const& info)
 {
-    Task* tk = GetLocalInfo().current_task;
+    Task* tk = GetCurrentTask();
     if (!tk) return ;
     tk->SetDebugInfo(info);
 }
 
 const char* Scheduler::GetCurrentTaskDebugInfo()
 {
-    Task* tk = GetLocalInfo().current_task;
+    Task* tk = GetCurrentTask();
     return tk ? tk->DebugInfo() : "";
 }
 
@@ -281,7 +277,8 @@ uint32_t Scheduler::GetCurrentProcessID()
 
 Task* Scheduler::GetCurrentTask()
 {
-    return GetLocalInfo().current_task;
+    ThreadLocalInfo& info = GetLocalInfo();
+    return info.proc ? info.proc->GetCurrentTask() : nullptr;
 }
 
 void Scheduler::SleepSwitch(int timeout_ms)
@@ -336,6 +333,22 @@ uint32_t codebug_GetCurrentProcessID()
 uint32_t codebug_GetCurrentThreadID()
 {
     return g_Scheduler.GetCurrentThreadID();
+}
+std::string codebug_GetCurrentTime()
+{
+#ifndef _WIN32
+    struct tm local;
+    struct timeval tv;
+    gettimeofday(&tv, NULL);
+    localtime_r(&tv.tv_sec, &local);
+    char buffer[128];
+    snprintf(buffer, sizeof(buffer), "%04d-%02d-%02d %02d:%02d:%02d.%06lu",
+            local.tm_year+1900, local.tm_mon+1, local.tm_mday, 
+            local.tm_hour, local.tm_min, local.tm_sec, tv.tv_usec);
+    return std::string(buffer);
+#else
+    return std::string();
+#endif
 }
 
 } //namespace co

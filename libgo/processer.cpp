@@ -7,99 +7,74 @@ namespace co {
 
 std::atomic<uint32_t> Processer::s_id_{0};
 
-Processer::Processer(uint32_t stack_size)
+Processer::Processer()
     : id_(++s_id_)
 {
-    shared_stack_cap_ = stack_size;
-#if defined(ENABLE_SHARED_STACK)
-    shared_stack_ = new char[shared_stack_cap_];
-#endif
-}
-Processer::~Processer()
-{
-    if (shared_stack_) {
-        delete[] shared_stack_;
-        shared_stack_ = NULL;
-    }
+    runnable_list_.check_ = (void*)&s_id_;
 }
 
 void Processer::AddTaskRunnable(Task *tk)
 {
     DebugPrint(dbg_scheduler, "task(%s) add into proc(%u)", tk->DebugInfo(), id_);
-    if (tk->state_ == TaskState::init) {
-        assert(!tk->proc_);
-        tk->AddIntoProcesser(this, shared_stack_, shared_stack_cap_);
-        if (tk->state_ == TaskState::fatal) {
-            // 创建失败
-            tk->DecrementRef();
-            throw std::system_error(errno, std::system_category());
-        }
-        ++ task_count_;
-    }
-
-    assert(tk->proc_ == this);
     tk->state_ = TaskState::runnable;
     runnable_list_.push(tk);
 }
 
-uint32_t Processer::Run(ThreadLocalInfo &info, uint32_t &done_count)
+uint32_t Processer::Run(uint32_t &done_count)
 {
     ContextScopedGuard guard;
+    (void)guard;
 
-    info.current_task = NULL;
     done_count = 0;
     uint32_t c = 0;
-    SList<Task> slist(runnable_list_.pop_all());
-    uint32_t do_count = slist.size();
 
-    DebugPrint(dbg_scheduler, "Run [Proc(%d) do_count:%u] --------------------------", id_, do_count);
+    DebugPrint(dbg_scheduler, "Run [Proc(%d) do_count:%u] --------------------------",
+            id_, (uint32_t)runnable_list_.size());
 
-    SList<Task>::iterator it = slist.begin();
-    for (; it != slist.end(); ++c)
+    for (;;)
     {
-        Task* tk = &*it;
-        info.current_task = tk;
-        tk->state_ = TaskState::runnable;
+        if (c >= runnable_list_.size()) break;
+        Task *tk = runnable_list_.pop();
+        if (!tk) break;
+        ++c;
+
+        current_task_ = tk;
         DebugPrint(dbg_switch, "enter task(%s)", tk->DebugInfo());
         if (!tk->SwapIn()) {
             fprintf(stderr, "swapcontext error:%s\n", strerror(errno));
-            runnable_list_.push(std::move(slist));
+            current_task_ = nullptr;
+            runnable_list_.erase(tk);
+            tk->DecrementRef();
             ThrowError(eCoErrorCode::ec_swapcontext_failed);
         }
         DebugPrint(dbg_switch, "leave task(%s) state=%d", tk->DebugInfo(), (int)tk->state_);
-        info.current_task = NULL;
+        current_task_ = nullptr;
 
         switch (tk->state_) {
             case TaskState::runnable:
-                ++it;
+                runnable_list_.push(tk);
                 break;
 
             case TaskState::io_block:
-                it = slist.erase(it);
                 g_Scheduler.io_wait_.SchedulerSwitch(tk);
                 break;
 
             case TaskState::sleep:
-                it = slist.erase(it);
                 g_Scheduler.sleep_wait_.SchedulerSwitch(tk);
                 break;
 
             case TaskState::sys_block:
                 assert(tk->block_);
-                it = slist.erase(it);
                 if (!tk->block_->AddWaitTask(tk))
                     runnable_list_.push(tk);
                 break;
 
             case TaskState::done:
             default:
-                --task_count_;
                 ++done_count;
-                it = slist.erase(it);
                 DebugPrint(dbg_task, "task(%s) done.", tk->DebugInfo());
                 if (tk->eptr_) {
                     std::exception_ptr ep = tk->eptr_;
-                    runnable_list_.push(std::move(slist));
                     tk->DecrementRef();
                     std::rethrow_exception(ep);
                 } else
@@ -108,14 +83,14 @@ uint32_t Processer::Run(ThreadLocalInfo &info, uint32_t &done_count)
         }
     }
 
-    runnable_list_.push(std::move(slist));
     return c;
 }
 
-void Processer::CoYield(ThreadLocalInfo &info)
+void Processer::CoYield()
 {
-    Task *tk = info.current_task;
-    if (!tk) return ;
+    Task *tk = GetCurrentTask();
+    assert(tk);
+    tk->proc_ = this;
 
     DebugPrint(dbg_yield, "yield task(%s) state=%d", tk->DebugInfo(), (int)tk->state_);
     ++tk->yield_count_;
@@ -125,9 +100,21 @@ void Processer::CoYield(ThreadLocalInfo &info)
     }
 }
 
-uint32_t Processer::GetTaskCount()
+Task* Processer::GetCurrentTask()
 {
-    return task_count_;
+    return current_task_;
+}
+
+std::size_t Processer::StealHalf(Processer & other)
+{
+    std::size_t runnable_task_count = runnable_list_.size();
+    SList<Task> tasks = runnable_list_.pop_back((runnable_task_count + 1) / 2);
+    std::size_t c = tasks.size();
+    DebugPrint(dbg_scheduler, "proc[%u] steal proc[%u] work returns %d.",
+            other.id_, id_, (int)c);
+    if (!c) return 0;
+    other.runnable_list_.push(std::move(tasks));
+    return c;
 }
 
 } //namespace co
