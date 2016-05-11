@@ -45,14 +45,8 @@ struct SourceLocation
 
     friend bool operator<(SourceLocation const& lhs, SourceLocation const& rhs)
     {
-        if (!lhs.file_ && !rhs.file_) return false;
-        if (!lhs.file_) return false;
-        if (!rhs.file_) return true;
-
-        int cmp = strcmp(lhs.file_, rhs.file_);
-        if (cmp != 0) {
-            return cmp == -1 ? true : false;
-        }
+        if (lhs.file_ != rhs.file_)
+            return lhs.file_ < rhs.file_;
 
         return lhs.lineno_ < rhs.lineno_;
     }
