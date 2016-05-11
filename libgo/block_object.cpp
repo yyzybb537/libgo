@@ -112,7 +112,8 @@ bool BlockObject::Wakeup()
 
     tk->block_ = nullptr;
     if (tk->block_timer_) { // block cancel timer必须在lock之外, 因为里面会lock
-        g_Scheduler.BlockCancelTimer(tk->block_timer_);
+        if (g_Scheduler.BlockCancelTimer(tk->block_timer_))
+            tk->DecrementRef();
         tk->block_timer_.reset();
     }
     DebugPrint(dbg_syncblock, "wakeup task(%s).", tk->DebugInfo());
