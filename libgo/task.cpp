@@ -18,10 +18,13 @@ void Task::Task_CB()
 {
     if (g_Scheduler.GetOptions().exception_handle == eCoExHandle::immedaitely_throw) {
         fn_();
+        fn_ = TaskF();  // 让协程function对象的析构也在协程中执行
     } else {
         try {
             fn_();
+            fn_ = TaskF();
         } catch (std::exception& e) {
+            fn_ = TaskF();
             switch (g_Scheduler.GetOptions().exception_handle) {
                 case eCoExHandle::immedaitely_throw:
                     throw ;
@@ -38,6 +41,7 @@ void Task::Task_CB()
                     break;
             }
         } catch (...) {
+            fn_ = TaskF();
             switch (g_Scheduler.GetOptions().exception_handle) {
                 case eCoExHandle::immedaitely_throw:
                     throw ;
