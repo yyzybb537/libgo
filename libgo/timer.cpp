@@ -116,6 +116,12 @@ long long CoTimerMgr::GetExpired(std::list<CoTimerPtr> &result, uint32_t n)
     return GetNextTriggerTime();
 }
 
+std::size_t CoTimerMgr::Size()
+{
+    std::unique_lock<LFLock> lock(lock_);
+    return deadlines_.size();
+}
+
 TimePoint CoTimerMgr::Now()
 {
     return TimePoint::clock::now();

@@ -5,6 +5,7 @@
 #include <vector>
 #include <list>
 #include "task.h"
+#include "debugger.h"
 
 namespace co
 {
@@ -28,6 +29,8 @@ private:
 
     typedef TSQueue<Task> TaskList;
     TaskList wait_tasks_;
+
+    friend class CoDebugger;
 };
 
 

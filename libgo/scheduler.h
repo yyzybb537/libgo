@@ -14,6 +14,7 @@
 #include "io_wait.h"
 #include "sleep_wait.h"
 #include "processer.h"
+#include "debugger.h"
 
 namespace co {
 
@@ -236,6 +237,7 @@ class Scheduler
         friend class SleepWait;
         friend class Processer;
         friend class FileDescriptorCtx;
+        friend class CoDebugger;
 };
 
 } //namespace co

@@ -3,6 +3,7 @@
 #include "channel.h"
 #include "thread_pool.h"
 #include "co_rwmutex.h"
+#include "debugger.h"
 
 namespace co
 {
@@ -126,3 +127,7 @@ using ::co::co_timer_block_cancel;
 
 // co_main
 #define co_main(...) extern "C" int __coroutine_main_function(__VA_ARGS__)
+
+// co_debugger
+#define co_debugger ::co::CoDebugger::getInstance()
+

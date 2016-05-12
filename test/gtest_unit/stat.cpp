@@ -35,4 +35,6 @@ TEST(stat, stat)
             printf("location:%s, count:%u\n", kv.first.to_string().c_str(), kv.second);
         }
     }
+
+    printf("AllInfo:\n%s\n", co_debugger.GetAllInfo().c_str());
 }

@@ -62,6 +62,8 @@ public:
     // @returns: 下一个触发的timer时间(单位: milliseconds)
     long long GetExpired(std::list<CoTimerPtr> &result, uint32_t n = 1);
 
+    std::size_t Size();
+
     static TimePoint Now();
 
 private:

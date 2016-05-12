@@ -27,6 +27,8 @@ enum class TaskState
     fatal,
 };
 
+std::string GetTaskStateName(TaskState state);
+
 typedef std::function<void()> TaskF;
 
 class BlockObject;
@@ -108,6 +110,7 @@ struct alignas(64) Task
     static LFLock s_stat_lock;
     static std::set<Task*> s_stat_set;
     static std::map<SourceLocation, uint32_t> GetStatInfo();
+    static std::vector<std::map<SourceLocation, uint32_t>> GetStateInfo();
 };
 
 } //namespace co

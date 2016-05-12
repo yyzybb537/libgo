@@ -8,6 +8,24 @@
 namespace co
 {
 
+std::string GetTaskStateName(TaskState state)
+{
+    static const char* names[] = 
+    {
+        "init",
+        "runnable",
+        "io_block",
+        "sys_block",
+        "sleep",
+        "done",
+        "fatal",
+    };
+    if ((std::size_t)state >= sizeof(names)/sizeof(const char*))
+        return "unkown";
+
+    return names[(int)state];
+}
+
 uint64_t Task::s_id = 0;
 std::atomic<uint64_t> Task::s_task_count{0};
 
@@ -137,6 +155,20 @@ std::map<SourceLocation, uint32_t> Task::GetStatInfo()
     for (auto tk : s_stat_set)
     {
         ++result[tk->location_];
+    }
+    return result;
+}
+std::vector<std::map<SourceLocation, uint32_t>> Task::GetStateInfo()
+{
+    std::vector<std::map<SourceLocation, uint32_t>> result;
+    result.resize((int)TaskState::fatal + 1);
+    if (!Scheduler::getInstance().GetOptions().enable_coro_stat)
+        return result;
+
+    std::unique_lock<LFLock> lock(s_stat_lock);
+    for (auto tk : s_stat_set)
+    {
+        ++result[(int)tk->state_][tk->location_];
     }
     return result;
 }
