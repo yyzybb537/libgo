@@ -12,6 +12,7 @@ CoDebugger & CoDebugger::getInstance()
 std::string CoDebugger::GetAllInfo()
 {
     std::string s;
+    s += "==============================================\n";
     s += "TaskCount: " + std::to_string(TaskCount());
     s += "\nCurrentTaskID: " + std::to_string(GetCurrentTaskID());
     s += "\nCurrentTaskInfo: " + std::string(GetCurrentTaskDebugInfo());
@@ -20,7 +21,8 @@ std::string CoDebugger::GetAllInfo()
     s += "\nCurrentProcessID: " + std::to_string(GetCurrentProcessID());
     s += "\nTimerCount: " + std::to_string(GetTimerCount());
     s += "\nSleepTimerCount: " + std::to_string(GetSleepTimerCount());
-    s += "\nTask Map: ------------------";
+    s += "\n--------------------------------------------";
+    s += "\nTask Map:";
     auto vm = GetTasksStateInfo();
     for (std::size_t state = 0; state < vm.size(); ++state)
     {
@@ -30,7 +32,14 @@ std::string CoDebugger::GetAllInfo()
             s += "\n    " + std::to_string(kv.second) + " " + kv.first.to_string();
         }
     }
-    s += "\n----------------------------";
+    s += "\n--------------------------------------------";
+
+#ifndef _WIN32
+    s += "\n" + GetFdInfo();
+    s += "\nEpollWait:" + std::to_string(GetEpollWaitCount());
+    s += "\nIoSentryCount:" + std::to_string(GetIoSentryCount());
+#endif
+    s += "\n==============================================";
     return s;
 }
 uint32_t CoDebugger::TaskCount()
@@ -77,5 +86,27 @@ std::vector<std::map<SourceLocation, uint32_t>> CoDebugger::GetTasksStateInfo()
 {
     return Task::GetStateInfo();
 }
+
+#ifndef _WIN32
+/// ------------ Linux -------------
+// 获取Fd统计信息
+std::string CoDebugger::GetFdInfo()
+{
+    return FdManager::getInstance().GetDebugInfo();
+}
+
+// 获取等待epoll的协程数量
+uint32_t CoDebugger::GetEpollWaitCount()
+{
+    return g_Scheduler.io_wait_.wait_io_sentries_.size();
+}
+
+// 获取IoSentry对象的数量
+uint64_t CoDebugger::GetIoSentryCount()
+{
+    return IoSentry::s_count_;
+}
+#endif
+
 
 } //namespace co

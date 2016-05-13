@@ -9,12 +9,15 @@
 
 namespace co {
 
+std::atomic<uint64_t> IoSentry::s_count_{0};
+
 IoSentry::IoSentry(Task* tk, pollfd *fds, nfds_t nfds)
     : watch_fds_(fds, fds + nfds), task_ptr_(SharedFromThis(tk))
 {
     io_state_ = pending;
     for (auto &pfd : watch_fds_)
         pfd.revents = 0;
+    ++s_count_;
 }
 IoSentry::~IoSentry()
 {
@@ -24,6 +27,7 @@ IoSentry::~IoSentry()
         if (fd_ctx)
             fd_ctx->del_from_reactor(pfd.events, task_ptr_.get());
     }
+    --s_count_;
 }
 bool IoSentry::switch_state_to_triggered()
 {
@@ -366,6 +370,17 @@ int FileDescriptorCtx::GetEpollFd()
     }
     return epoll_fd_;
 }
+std::string FileDescriptorCtx::GetDebugInfo()
+{
+    std::unique_lock<std::mutex> lock(lock_);
+    char buf[256];
+    sprintf(buf, "fd[%d] closed(%d) is_socket(%d) user_nonblock(%d)"
+            " i_tasks(%d) o_tasks(%d) io_tasks(%d)",
+            fd_, closed(), is_socket_, user_nonblock_, (int)i_tasks_.size(),
+            (int)o_tasks_.size(), (int)io_tasks_.size()
+            );
+    return buf;
+}
 
 FdManager & FdManager::getInstance()
 {
@@ -437,6 +452,42 @@ FdCtxPtr FdManager::get(FdPair & fpair, int fd)
     (*pptr)->re_initialize();
     FdCtxPtr ptr = *pptr;
     return ptr;
+}
+
+std::string FdManager::GetDebugInfo()
+{
+    std::string s;
+    s += "---------------------------------";
+    s += "\nFile Descriptor Info(Small):";
+
+    {
+        std::unique_lock<LFLock> lock(deque_lock_);
+        for (int i = 0; i < (int)fd_deque_.size(); ++i)
+        {
+            FdPair & fd_pair = fd_deque_[i];
+            if (!fd_pair.first) continue;
+            FdCtxPtr & p = *fd_pair.first;
+            s += "\n  [" + std::to_string(i) + "] -> " + p->GetDebugInfo();
+        }
+    }
+    s += "\n---------------------------------";
+
+    s += "\n---------------------------------";
+    s += "\nFile Descriptor Info(Big):";
+
+    {
+        std::unique_lock<LFLock> lock(map_lock_);
+        for (auto &kv : big_fds_)
+        {
+            FdPair & fd_pair = kv.second;
+            if (!fd_pair.first) continue;
+            FdCtxPtr & p = *fd_pair.first;
+            s += "\n  [" + std::to_string(kv.first) + "] -> " + p->GetDebugInfo();
+        }
+    }
+
+    s += "\n---------------------------------";
+    return s;
 }
 
 } //namespace co

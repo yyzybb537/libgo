@@ -38,6 +38,7 @@ struct IoSentry : public RefObject, public TSQueueHook
     std::vector<pollfd> watch_fds_; //会被多线程并行访问, add_into_reactor后长度不能变
     CoTimerPtr timer_;
     TaskPtr task_ptr_;
+    static std::atomic<uint64_t> s_count_;
 
     explicit IoSentry(Task* tk, pollfd *fds, nfds_t nfds);
     ~IoSentry();
@@ -95,6 +96,10 @@ private:
 
     int GetEpollFd();
 
+    // debugger interface
+public:
+    std::string GetDebugInfo();
+
 private:
     std::mutex lock_;
     bool is_initialize_ = false;
@@ -134,6 +139,10 @@ private:
     FdPair & get_pair(int fd);
 
     FdCtxPtr get(FdPair & fpair, int fd);
+
+    // debugger interface
+public:
+    std::string GetDebugInfo();
 
 private:
     LFLock deque_lock_;

@@ -44,6 +44,18 @@ public:
     std::map<SourceLocation, uint32_t> GetTasksInfo();
     std::vector<std::map<SourceLocation, uint32_t>> GetTasksStateInfo();
 
+#ifndef _WIN32
+    /// ------------ Linux -------------
+    // 获取Fd统计信息
+    std::string GetFdInfo();
+
+    // 获取等待epoll的协程数量
+    uint32_t GetEpollWaitCount();
+
+    // 获取IoSentry对象的数量
+    uint64_t GetIoSentryCount();
+#endif
+
 private:
     CoDebugger() = default;
     ~CoDebugger() = default;
