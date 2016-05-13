@@ -15,6 +15,7 @@
 #include "spinlock.h"
 #include "util.h"
 #include "timer.h"
+#include "debugger.h"
 
 namespace co {
 
@@ -26,7 +27,8 @@ class FileDescriptorCtx;
 typedef std::shared_ptr<FileDescriptorCtx> FdCtxPtr;
 typedef std::weak_ptr<FileDescriptorCtx> FdCtxWeakPtr;
 
-struct IoSentry : public RefObject, public TSQueueHook
+struct IoSentry
+    : public RefObject, public TSQueueHook, public CoDebugger::DebuggerBase<IoSentry>
 {
     enum task_io_state
     {
@@ -38,7 +40,6 @@ struct IoSentry : public RefObject, public TSQueueHook
     std::vector<pollfd> watch_fds_; //会被多线程并行访问, add_into_reactor后长度不能变
     CoTimerPtr timer_;
     TaskPtr task_ptr_;
-    static std::atomic<uint64_t> s_count_;
 
     explicit IoSentry(Task* tk, pollfd *fds, nfds_t nfds);
     ~IoSentry();

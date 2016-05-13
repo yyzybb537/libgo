@@ -32,10 +32,23 @@ else()
     message ("  ENABLE_BOOST_COROUTINE: OFF")
 endif()
 
+option(ENABLE_DEBUGGER "enable debugger" OFF)
+if (ENABLE_DEBUGGER)
+    set(ENABLE_DEBUGGER 1)
+else()
+    set(ENABLE_DEBUGGER 0)
+endif()
+
 if (DISABLE_HOOK)
     message ("  DISABLE_HOOK: ON")
 else()
     message ("  DISABLE_HOOK: OFF")
+endif()
+
+if (DISABLE_DYNAMIC_LIB)
+    message ("  DISABLE_DYNAMIC_LIB: ON")
+else()
+    message ("  DISABLE_DYNAMIC_LIB: OFF")
 endif()
 
 configure_file(${PROJECT_SOURCE_DIR}/libgo/cmake_config.h.in ${PROJECT_SOURCE_DIR}/libgo/cmake_config.h)
@@ -118,16 +131,19 @@ add_library("${STATIC_T}" STATIC ${CO_SRC_LIST})
 set_target_properties("${STATIC_T}" PROPERTIES OUTPUT_NAME "${TARGET}")
 
 if (UNIX)
-    set(SHARED_T "libgo_dynamic")
-    add_library("${SHARED_T}" SHARED ${CO_SRC_LIST})
-    set_target_properties("${SHARED_T}" PROPERTIES COMPILE_FLAGS "-DCO_DYNAMIC_LINK")
-    set_target_properties("${SHARED_T}" PROPERTIES OUTPUT_NAME "${TARGET}")
-    target_link_libraries("${SHARED_T}" ${LINK_LIBS} -ldl)
-
     add_subdirectory(${PROJECT_SOURCE_DIR}/libgo/main)
 
+    if (NOT DISABLE_DYNAMIC_LIB)
+        set(SHARED_T "libgo_dynamic")
+        add_library("${SHARED_T}" SHARED ${CO_SRC_LIST})
+        set_target_properties("${SHARED_T}" PROPERTIES COMPILE_FLAGS "-DCO_DYNAMIC_LINK")
+        set_target_properties("${SHARED_T}" PROPERTIES OUTPUT_NAME "${TARGET}")
+        target_link_libraries("${SHARED_T}" ${LINK_LIBS} -ldl)
+        install(TARGETS ${SHARED_T} LIBRARY DESTINATION "lib" ARCHIVE DESTINATION "lib")
+    endif()
+
     set(CMAKE_INSTALL_PREFIX "/usr/local")
-    install(TARGETS ${STATIC_T} ${SHARED_T} LIBRARY DESTINATION "lib" ARCHIVE DESTINATION "lib")
+    install(TARGETS ${STATIC_T} LIBRARY DESTINATION "lib" ARCHIVE DESTINATION "lib")
     install(DIRECTORY ${PROJECT_SOURCE_DIR}/libgo/ DESTINATION "include/libgo"
         FILES_MATCHING
         PATTERN "linux" EXCLUDE

@@ -34,35 +34,6 @@ typedef std::function<void()> TaskF;
 class BlockObject;
 class Processer;
 
-// 创建协程的源码文件位置
-struct SourceLocation
-{
-    const char* file_ = nullptr;
-    int lineno_ = 0;
-
-    void Init(const char* file, int lineno)
-    {
-        file_ = file, lineno_ = lineno;
-    }
-
-    friend bool operator<(SourceLocation const& lhs, SourceLocation const& rhs)
-    {
-        if (lhs.file_ != rhs.file_)
-            return lhs.file_ < rhs.file_;
-
-        return lhs.lineno_ < rhs.lineno_;
-    }
-
-    std::string to_string() const
-    {
-        std::string s("{file:");
-        if (file_) s += file_;
-        s += ", line:";
-        s += std::to_string(lineno_) + "}";
-        return s;
-    }
-};
-
 struct alignas(64) Task
     : public TSQueueHook, public RefObject
 {

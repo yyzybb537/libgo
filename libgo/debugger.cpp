@@ -37,8 +37,15 @@ std::string CoDebugger::GetAllInfo()
 #ifndef _WIN32
     s += "\n" + GetFdInfo();
     s += "\nEpollWait:" + std::to_string(GetEpollWaitCount());
-    s += "\nIoSentryCount:" + std::to_string(GetIoSentryCount());
 #endif
+
+    s += "\n--------------------------------------------";
+    s += "\nObject Counter:";
+    auto objs = GetDebuggerObjectCounts();
+    for (auto &kv : objs)
+        s += "\nCount(" + kv.first + "): " + std::to_string((uint64_t)kv.second);
+    s += "\n--------------------------------------------";
+
     s += "\n==============================================";
     return s;
 }
@@ -100,13 +107,16 @@ uint32_t CoDebugger::GetEpollWaitCount()
 {
     return g_Scheduler.io_wait_.wait_io_sentries_.size();
 }
-
-// 获取IoSentry对象的数量
-uint64_t CoDebugger::GetIoSentryCount()
-{
-    return IoSentry::s_count_;
-}
 #endif
+
+CoDebugger::object_counts_result_t CoDebugger::GetDebuggerObjectCounts()
+{
+    object_counts_result_t result;
+    std::unique_lock<LFLock> lock(CoDebugger::getInstance().object_counts_spinlock_);
+    for (auto & elem : object_counts_)
+        result.push_back(std::make_pair(elem.first, (uint64_t)elem.second));
+    return result;
+}
 
 
 } //namespace co

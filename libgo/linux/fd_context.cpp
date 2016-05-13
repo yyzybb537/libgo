@@ -9,15 +9,12 @@
 
 namespace co {
 
-std::atomic<uint64_t> IoSentry::s_count_{0};
-
 IoSentry::IoSentry(Task* tk, pollfd *fds, nfds_t nfds)
     : watch_fds_(fds, fds + nfds), task_ptr_(SharedFromThis(tk))
 {
     io_state_ = pending;
     for (auto &pfd : watch_fds_)
         pfd.revents = 0;
-    ++s_count_;
 }
 IoSentry::~IoSentry()
 {
@@ -27,7 +24,6 @@ IoSentry::~IoSentry()
         if (fd_ctx)
             fd_ctx->del_from_reactor(pfd.events, task_ptr_.get());
     }
-    --s_count_;
 }
 bool IoSentry::switch_state_to_triggered()
 {
