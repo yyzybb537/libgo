@@ -15,7 +15,7 @@ namespace co
                 return ;
             }
 
-            stack_ = (char*)valloc(stack_size_);
+            stack_ = (char*)StackAllocator::get_malloc_fn()(stack_size_);
             DebugPrint(dbg_task, "valloc stack. size=%u ptr=%p",
                     stack_size_, stack_);
 
@@ -28,7 +28,7 @@ namespace co
         {
             if (stack_) {
                 DebugPrint(dbg_task, "free stack. ptr=%p", stack_);
-                free(stack_);
+                StackAllocator::get_free_fn()(stack_);
                 stack_ = NULL;
             }
         }

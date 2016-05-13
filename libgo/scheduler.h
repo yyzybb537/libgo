@@ -5,6 +5,7 @@
 #include <errno.h>
 #include <string.h>
 #include <deque>
+#include <cstdlib>
 #include "config.h"
 #include "context.h"
 #include "task.h"
@@ -66,6 +67,11 @@ struct CoroutineOptions
 
     // 是否启用协程统计功能(会有一点性能损耗, 默认不开启)
     bool enable_coro_stat = false;
+
+    // 设置栈内存管理(malloc/free)
+    // 使用fiber做协程底层时无效
+    stack_malloc_fn_t & stack_malloc_fn = StackAllocator::get_malloc_fn();
+    stack_free_fn_t & stack_free_fn = StackAllocator::get_free_fn();
 };
 ///-------------------
 
