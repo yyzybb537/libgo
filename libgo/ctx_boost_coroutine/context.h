@@ -9,7 +9,7 @@ namespace co
         {
             typedef traitsT traits_type;
 
-            void allocate(stack_context & ctx, std::size_t size = traits_type::minimum_size())
+            void allocate(boost::coroutines::stack_context & ctx, std::size_t size = traits_type::minimum_size())
             {
                 BOOST_ASSERT(traits_type::minimum_size() <= size);
                 BOOST_ASSERT(traits_type::is_unbounded() || (traits_type::maximum_size() >= size));
@@ -24,7 +24,7 @@ namespace co
 #endif
             }
 
-            void deallocate(stack_context & ctx)
+            void deallocate(boost::coroutines::stack_context & ctx)
             {
                 BOOST_ASSERT(ctx.sp);
                 BOOST_ASSERT(traits_type::minimum_size() <= ctx.size);
@@ -39,7 +39,7 @@ namespace co
             }
         };
 
-    typedef my_standard_stack_allocator<stack_traits>  my_stack_allocator;
+    typedef my_standard_stack_allocator<boost::coroutines::stack_traits>  my_stack_allocator;
 
     class Context
     {
