@@ -7,6 +7,7 @@ namespace co
 
 // 信号管理对象
 // @线程安全
+
 class BlockObject
 {
 protected:

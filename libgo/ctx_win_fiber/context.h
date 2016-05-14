@@ -1,16 +1,10 @@
-#include <context.h>
-#include <scheduler.h>
 #include <Windows.h>
 #include <algorithm>
+#include <stdio.h>
 
 namespace co
 {
-    static void*& GetTlsContext()
-    {
-        static thread_local void* native = nullptr;
-        return native;
-    }
-
+    
     struct ContextScopedGuard
     {
         ContextScopedGuard::ContextScopedGuard()
@@ -22,6 +16,11 @@ namespace co
             ConvertFiberToThread();
             GetTlsContext() = nullptr;
         }
+        static void*& GetTlsContext()
+        {
+            static thread_local void* native = nullptr;
+            return native;
+        }
     };
 
     static VOID WINAPI FiberFunc(LPVOID param)
@@ -32,10 +31,11 @@ namespace co
 
     class Context
     {
+    public:
         Context(std::size_t stack_size, std::function<void()> const& fn)
             : fn_(fn), stack_size_(stack_size)
         {
-            SIZE_T commit_size = g_Scheduler.GetOptions().init_commit_stack_size;
+            SIZE_T commit_size = 4 * 1024;
             native_ = CreateFiberEx(commit_size,
                     std::max<std::size_t>(stack_size_, commit_size), FIBER_FLAG_FLOAT_SWITCH,
                     (LPFIBER_START_ROUTINE)FiberFunc, &fn_);
@@ -60,7 +60,7 @@ namespace co
 
         inline bool SwapOut()
         {
-            SwitchToFiber(GetTlsContext());
+            SwitchToFiber(ContextScopedGuard::GetTlsContext());            
             return true;
         }
 

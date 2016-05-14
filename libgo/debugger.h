@@ -14,6 +14,8 @@
 namespace co
 {
 
+struct ThreadLocalInfo;
+
 // libgo调试工具
 class CoDebugger
 {
@@ -102,6 +104,9 @@ public:
 
     // 获取对象计数器统计信息
     object_counts_result_t GetDebuggerObjectCounts();
+
+    // 线程局部对象
+    ThreadLocalInfo& GetLocalInfo();
 
 private:
     CoDebugger() = default;

@@ -93,6 +93,10 @@ std::vector<std::map<SourceLocation, uint32_t>> CoDebugger::GetTasksStateInfo()
 {
     return Task::GetStateInfo();
 }
+ThreadLocalInfo& CoDebugger::GetLocalInfo()
+{
+    return g_Scheduler.GetLocalInfo();
+}
 
 #ifndef _WIN32
 /// ------------ Linux -------------

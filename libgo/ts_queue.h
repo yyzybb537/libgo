@@ -363,7 +363,7 @@ public:
         if (head_ == tail_) return SList<T>();
         TSQueueHook* first = head_->next;
         TSQueueHook* last = first;
-        n = std::min(n, count_);
+        n = (std::min)(n, count_);
         std::size_t next_step = n - 1;
 
         // 从跳表上查找

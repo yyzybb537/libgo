@@ -1,11 +1,11 @@
 #include <iostream>
 #include <gtest/gtest.h>
-#define private public
-#include "coroutine.h"
 #include <chrono>
 #include <boost/thread.hpp>
 #include <boost/coroutine/all.hpp>
 #include "gtest_exit.h"
+#define private public
+#include "coroutine.h"
 using namespace std;
 using namespace co;
 
@@ -81,6 +81,8 @@ void ones_loop(int tc_)
                 (*pp_ctx)->SwapOut();
             });
 
+    ContextScopedGuard scg;
+
     stdtimer st(tc_, "Switch 1 Contxt");
     for (int i = 1; i < tc_; ++i)
         (*pp_ctx)->SwapIn();
@@ -102,6 +104,7 @@ struct CtxWrap : public co::TSQueueHook
 
 uint32_t process_proc(TSQueue<CtxWrap> & ts_list)
 {
+    ContextScopedGuard scg;
     uint32_t c = 0;
     CtxWrap *pos = (CtxWrap*)ts_list.head_->next;
     while (pos) {
@@ -183,7 +186,7 @@ TEST_P(Times, boost)
 TEST_P(Times, proc)
 {
     g_Scheduler.Run();
-    auto& info = g_Scheduler.GetLocalInfo();
+    auto& info = CoDebugger::getInstance().GetLocalInfo();
 
     int rv = 0;
     for (int i = 0; i < 100; ++i)
