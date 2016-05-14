@@ -82,6 +82,7 @@ void ones_loop(int tc_)
             });
 
     ContextScopedGuard scg;
+    (void)scg;
 
     stdtimer st(tc_, "Switch 1 Contxt");
     for (int i = 1; i < tc_; ++i)
@@ -105,6 +106,8 @@ struct CtxWrap : public co::TSQueueHook
 uint32_t process_proc(TSQueue<CtxWrap> & ts_list)
 {
     ContextScopedGuard scg;
+    (void)scg;
+
     uint32_t c = 0;
     CtxWrap *pos = (CtxWrap*)ts_list.head_->next;
     while (pos) {

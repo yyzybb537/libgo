@@ -1,5 +1,7 @@
-#!/bin/sh
+#!/bin/bash
 set -e
+
+errinfo=""
 
 ulimit -c 500000
 echo '' > result
@@ -7,27 +9,28 @@ for t in `ls test/gtest_unit/*.t`
 do
     echo ''
     echo ------------ run $t -------------- | tee -a result
-    ./$t | tee -a result
+    ./$t | tee -a result | tee run_test_tmp
     if [ "$?" != "0" ]
     then
         echo $t " was FAILED."
         exit 2
     fi
     echo ---------------------------------- | tee -a result
+
+    failed=`grep "^\[\s*FAILED" run_test_tmp | wc -l`
+    if [ $failed -gt 0 ];
+    then
+        errinfo+=" -> `basename $t` run error\n"
+    fi
 done
 
-echo ------------ result --------------
-cat result | egrep \(PASSED\|FAIL\|^----------\)
-echo ----------------------------------
-
-runs=`ls test/gtest_unit/*.t | wc -l`
-runs=`expr $runs + 1`
-pass=`grep "^\[\s*PASSED" result | wc -l`
-if [ "${pass}" -eq "${runs}" ];
+if test -z "$errinfo"
 then
-    echo "all test were PASSED"
+    echo "all test were PASSED:"
+    echo -e "$errinfo"
     exit 0
 else
-    echo "some test were FAIL"
+    echo "some test were FAIL:"
+    echo -e "$errinfo"
     exit 1
 fi
