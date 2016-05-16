@@ -2,7 +2,7 @@
 
 extern "C" int __coroutine_main_function(int argc, char **argv);
 
-#ifndef _WIN32
+#if __GNUC__
 __attribute__((weak)) 
 #endif
 int main(int argc, char **argv)

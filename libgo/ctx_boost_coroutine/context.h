@@ -9,6 +9,13 @@ namespace co
         {
             typedef traitsT traits_type;
 
+            uint32_t & protect_page_;
+
+            explicit my_standard_stack_allocator(uint32_t & protect_page)
+                : protect_page_(protect_page)
+            {
+            }
+
             void allocate(boost::coroutines::stack_context & ctx, std::size_t size = traits_type::minimum_size())
             {
                 BOOST_ASSERT(traits_type::minimum_size() <= size);
@@ -18,9 +25,16 @@ namespace co
                 if ( ! limit) throw std::bad_alloc();
 
                 ctx.size = size;
-                ctx.sp = static_cast< char * >( limit) + ctx.size;
+                ctx.sp = static_cast<char *>(limit) + ctx.size;
+#if __linux__
+                uint32_t protect_page = StackAllocator::get_protect_stack_page();
+                if (protect_page)
+                    if (StackAllocator::protect_stack(limit, size, protect_page))
+                        protect_page_ = protect_page;
+#endif
+
 #if defined(BOOST_USE_VALGRIND)
-                ctx.valgrind_stack_id = VALGRIND_STACK_REGISTER( ctx.sp, limit);
+                ctx.valgrind_stack_id = VALGRIND_STACK_REGISTER(ctx.sp, limit);
 #endif
             }
 
@@ -35,6 +49,10 @@ namespace co
 #endif
 
                 void * limit = static_cast<char *>(ctx.sp) - ctx.size;
+#if __linux__
+                if (protect_page_)
+                    StackAllocator::unprotect_stack(limit, protect_page_);
+#endif
                 StackAllocator::get_free_fn()(limit);
             }
         };
@@ -45,13 +63,13 @@ namespace co
     {
         public:
             Context(std::size_t stack_size, std::function<void()> const& fn)
-                : ctx_([=](::boost::coroutines::symmetric_coroutine<void>::yield_type& yield){
+                : protect_page_(0), ctx_([=](::boost::coroutines::symmetric_coroutine<void>::yield_type& yield){
                         this->yield_ = &yield;
                         fn();
                         },
                         boost::coroutines::attributes(std::max<std::size_t>(
                                 stack_size, boost::coroutines::stack_traits::minimum_size())),
-                        my_stack_allocator()),
+                        my_stack_allocator(protect_page_)),
                 yield_(nullptr)
                 {
                     if (!ctx_) {
@@ -73,6 +91,7 @@ namespace co
             }
 
         private:
+            uint32_t protect_page_;
             ::boost::coroutines::symmetric_coroutine<void>::call_type ctx_;
             ::boost::coroutines::symmetric_coroutine<void>::yield_type *yield_ = nullptr;
     };

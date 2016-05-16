@@ -1,4 +1,4 @@
-#if !defined(_WIN32)
+#if __linux__
 #include <unistd.h>
 #include <dlfcn.h>
 #include <fcntl.h>
@@ -20,7 +20,7 @@ namespace co {
 
 } //namespace co
 
-#if !defined(_WIN32)
+#if __linux__
 
 extern "C" {
 

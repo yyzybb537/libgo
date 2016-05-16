@@ -5,7 +5,7 @@
 #include <unistd.h>
 #include "thread_pool.h"
 #include <time.h>
-#ifndef _WIN32
+#if __linux__
 #include <sys/time.h>
 #endif
 
@@ -303,7 +303,7 @@ uint32_t Scheduler::GetCurrentThreadID()
 
 uint32_t Scheduler::GetCurrentProcessID()
 {
-#ifndef _WIN32
+#if __linux__
     return getpid();
 #else
     return 0;
@@ -371,7 +371,7 @@ uint32_t codebug_GetCurrentThreadID()
 }
 std::string codebug_GetCurrentTime()
 {
-#ifndef _WIN32
+#if __linux__
     struct tm local;
     struct timeval tv;
     gettimeofday(&tv, NULL);

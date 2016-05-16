@@ -7,7 +7,7 @@
 #define thread_local __declspec(thread)
 #endif
 
-#ifndef _WIN32
+#if __linux__
 #include <unistd.h>
 #include <sys/types.h>
 #endif
@@ -36,10 +36,10 @@ static const uint64_t dbg_debugger          = 0x1 << 14;
 static const uint64_t dbg_sys_max           = dbg_debugger;
 ///-------------------
 
-#ifdef _WIN32
-	typedef std::chrono::microseconds MininumTimeDurationType;
-#else
+#if __linux__
 	typedef std::chrono::nanoseconds MininumTimeDurationType;
+#else
+	typedef std::chrono::microseconds MininumTimeDurationType;
 #endif
 
 // 将协程分派到线程中的策略

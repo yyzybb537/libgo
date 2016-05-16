@@ -36,6 +36,11 @@ public:
             object_creator_.do_nothing();
             ++Count();
         }
+        DebuggerBase(const &)
+        {
+            object_creator_.do_nothing();
+            ++Count();
+        }
         ~DebuggerBase()
         {
             --Count();
@@ -93,7 +98,7 @@ public:
     std::map<SourceLocation, uint32_t> GetTasksInfo();
     std::vector<std::map<SourceLocation, uint32_t>> GetTasksStateInfo();
 
-#ifndef _WIN32
+#if __linux__
     /// ------------ Linux -------------
     // 获取Fd统计信息
     std::string GetFdInfo();

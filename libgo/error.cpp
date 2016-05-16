@@ -35,6 +35,9 @@ std::string co_error_category::message(int v) const
 
         case (int)eCoErrorCode::ec_iocpinit_failed:
             return "iocp init failed";
+
+        case (int)eCoErrorCode::ec_protect_stack_failed:
+            return "protect stack failed";
     }
 
     return "";

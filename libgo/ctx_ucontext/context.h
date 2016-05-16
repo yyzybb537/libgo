@@ -22,12 +22,20 @@ namespace co
             ctx_.uc_stack.ss_sp = stack_;
             ctx_.uc_stack.ss_size = stack_size_;
             ctx_.uc_link = NULL;
+
             makecontext(&ctx_, (void(*)(void))&ucontext_func, 1, &fn_);
+
+            uint32_t protect_page = StackAllocator::get_protect_stack_page();
+            if (protect_page)
+                if (StackAllocator::protect_stack(stack_, stack_size_, protect_page))
+                    protect_page_ = protect_page;
         }
         ~Context()
         {
             if (stack_) {
                 DebugPrint(dbg_task, "free stack. ptr=%p", stack_);
+                if (protect_page_)
+                    StackAllocator::unprotect_stack(stack_, protect_page_);
                 StackAllocator::get_free_fn()(stack_);
                 stack_ = NULL;
             }
@@ -59,6 +67,7 @@ namespace co
         std::function<void()> fn_;
         char* stack_ = nullptr;
         uint32_t stack_size_ = 0;
+        uint32_t protect_page_ = 0;
     };
 
 } //namespace co
