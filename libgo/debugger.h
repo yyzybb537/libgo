@@ -36,7 +36,7 @@ public:
             object_creator_.do_nothing();
             ++Count();
         }
-        DebuggerBase(const &)
+        DebuggerBase(const DebuggerBase&)
         {
             object_creator_.do_nothing();
             ++Count();
