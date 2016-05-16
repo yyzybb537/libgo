@@ -26,6 +26,9 @@ static ssize_t read_write_mode(int fd, OriginF fn, const char* hook_fn_name, uin
     DebugPrint(dbg_hook, "task(%s) hook %s. %s coroutine.",
             tk ? tk->DebugInfo() : "nil", hook_fn_name, g_Scheduler.IsCoroutine() ? "In" : "Not in");
 
+    if (!tk)
+        return fn(fd, std::forward<Args>(args)...);
+
     FdCtxPtr fd_ctx = FdManager::getInstance().get_fd_ctx(fd);
     if (!fd_ctx || fd_ctx->closed()) {
         errno = EBADF;  // 已被close或无效的fd
@@ -464,7 +467,7 @@ unsigned int sleep(unsigned int seconds)
             tk ? tk->DebugInfo() : "nil", seconds,
             g_Scheduler.IsCoroutine() ? "In" : "Not in");
 
-    if (!g_Scheduler.IsCoroutine())
+    if (!tk)
         return sleep_f(seconds);
 
     int timeout_ms = seconds * 1000;
@@ -481,7 +484,7 @@ int usleep(useconds_t usec)
             tk ? tk->DebugInfo() : "nil", usec,
             g_Scheduler.IsCoroutine() ? "In" : "Not in");
 
-    if (!g_Scheduler.IsCoroutine())
+    if (!tk)
         return usleep_f(usec);
 
     int timeout_ms = usec / 1000;
@@ -500,7 +503,7 @@ int nanosleep(const struct timespec *req, struct timespec *rem)
             tk ? tk->DebugInfo() : "nil", timeout_ms,
             g_Scheduler.IsCoroutine() ? "In" : "Not in");
 
-    if (!g_Scheduler.IsCoroutine())
+    if (!tk)
         return nanosleep_f(req, rem);
 
     g_Scheduler.SleepSwitch(timeout_ms);
