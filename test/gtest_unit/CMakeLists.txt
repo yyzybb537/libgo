@@ -4,8 +4,8 @@ cmake_minimum_required(VERSION 2.8)
 project(unit_test)
 
 if (WIN32)
-    set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} /MTd")
-    set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} /MT")
+    set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} /MTd /EHsc")
+    set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} /MT /EHsc")
 endif()
 
 option(SMALL_TEST "run the test with small mem and cpu" OFF)
@@ -40,6 +40,7 @@ if (WIN32)
     list(REMOVE_ITEM SRC_LIST ${PROJECT_SOURCE_DIR}/sleep.cpp)
     list(REMOVE_ITEM SRC_LIST ${PROJECT_SOURCE_DIR}/select.cpp)
     list(REMOVE_ITEM SRC_LIST ${PROJECT_SOURCE_DIR}/fork.cpp)
+    list(REMOVE_ITEM SRC_LIST ${PROJECT_SOURCE_DIR}/protect.cpp)
 endif()
 
 foreach(var ${SRC_LIST})
