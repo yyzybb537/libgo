@@ -34,7 +34,7 @@ typedef std::function<void()> TaskF;
 class BlockObject;
 class Processer;
 
-struct alignas(64) Task
+struct Task
     : public TSQueueHook, public RefObject
 {
     uint64_t id_;

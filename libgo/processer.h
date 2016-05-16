@@ -8,7 +8,7 @@ struct ThreadLocalInfo;
 
 // 协程执行器
 //   管理一批协程的共享栈和调度, 非线程安全.
-class alignas(64) Processer
+class Processer
     : public TSQueueHook
 {
 private:
