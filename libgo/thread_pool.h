@@ -1,5 +1,7 @@
 #pragma once
 #include <functional>
+#include <condition_variable>
+#include <mutex>
 #include "channel.h"
 #include "ts_queue.h"
 
@@ -51,21 +53,32 @@ class ThreadPool
 {
     typedef TSQueue<TPElemBase> ElemList;
     ElemList elem_list_;
-    std::atomic<uint8_t> sleep_ms_{0};
+    std::mutex cond_mtx_;
+    std::condition_variable cond_;
 
 public:
     ~ThreadPool();
-
-    uint32_t Run();
     
     void RunLoop();
 
     template <typename R>
     void AsyncWait(Channel<R> const& ch, std::function<R()> const& fn)
     {
+        assert_std_thread_lib();
+
         TPElemBase *elem = new TPElem<R>(ch, fn);
+        std::unique_lock<std::mutex> lock(cond_mtx_);
         this->elem_list_.push(elem);
+        cond_.notify_one();
     }
+
+private:
+    TPElemBase* get();
+
+    void assert_std_thread_lib();
+
+    bool __assert_std_thread_lib();
 };
 
 } //namespace co
+

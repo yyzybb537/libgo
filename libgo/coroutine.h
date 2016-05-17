@@ -64,6 +64,8 @@ struct __async_wait
     R result_;
     Channel<R> ch_;
 
+    __async_wait() : ch_(1) {}
+
     template <typename F>
     inline R&& operator-(F const& fn)
     {

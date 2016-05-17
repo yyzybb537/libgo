@@ -38,6 +38,11 @@ std::string co_error_category::message(int v) const
 
         case (int)eCoErrorCode::ec_protect_stack_failed:
             return "protect stack failed";
+
+        case (int)eCoErrorCode::ec_std_thread_link_error:
+            return "std thread link error.\n"
+                "if static-link use flags: '-Wl,--whole-archive -lpthread -Wl,--no-whole-archive -static' on link step;\n"
+                "if dynamic-link use flags: '-pthread' on compile step and link step;\n";
     }
 
     return "";

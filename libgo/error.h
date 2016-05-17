@@ -16,6 +16,7 @@ enum class eCoErrorCode : int
 	ec_makecontext_failed,
     ec_iocpinit_failed,
     ec_protect_stack_failed,
+    ec_std_thread_link_error,
 };
 
 class co_error_category
