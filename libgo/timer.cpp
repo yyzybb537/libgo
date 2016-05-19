@@ -8,7 +8,7 @@ namespace co
 std::atomic<uint64_t> CoTimer::s_id{0};
 
 CoTimer::CoTimer(fn_t const& fn)
-    : id_(++s_id), fn_(fn), active_(true)
+    : id_(++s_id), fn_(fn), active_(true), token_valid_(false)
 {}
 
 uint64_t CoTimer::GetId()
@@ -54,17 +54,13 @@ CoTimerMgr::CoTimerMgr()
     zero_time_ = Now();
 }
 
-CoTimerMgr::~CoTimerMgr()
-{
-
-}
-
 CoTimerPtr CoTimerMgr::ExpireAt(TimePoint const& time_point, CoTimer::fn_t const& fn)
 {
     std::unique_lock<LFLock> lock(lock_);
     CoTimerPtr sptr(new CoTimer(fn));
     if (deadlines_.empty())
         SetNextTriggerTime(time_point);
+    sptr->token_valid_ = true;
     sptr->token_ = deadlines_.insert(std::make_pair(time_point, sptr));
     return sptr;
 }
@@ -86,6 +82,8 @@ bool CoTimerMgr::BlockCancel(CoTimerPtr co_timer_ptr)
 void CoTimerMgr::__Cancel(CoTimerPtr co_timer_ptr)
 {
     std::unique_lock<LFLock> lock(lock_);
+    if (!co_timer_ptr->token_valid_) return;
+    co_timer_ptr->token_valid_ = false;
     deadlines_.erase(co_timer_ptr->token_);
 }
 
@@ -102,6 +100,7 @@ long long CoTimerMgr::GetExpired(std::list<CoTimerPtr> &result, uint32_t n)
             break;
         }
 
+        it->second->token_valid_ = false;
         result.push_back(it->second);
     }
 

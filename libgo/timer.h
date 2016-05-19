@@ -20,9 +20,11 @@ public:
     typedef std::function<void()> fn_t;
     typedef std::multimap<TimePoint, CoTimerPtr>::iterator Token;
 
-    explicit CoTimer(fn_t const& fn);
     uint64_t GetId();
     void operator()();
+
+private:
+    explicit CoTimer(fn_t const& fn);
     bool Cancel();
     bool BlockCancel();
 
@@ -33,6 +35,7 @@ private:
     bool active_;
     LFLock fn_lock_;
     Token token_;
+    bool token_valid_;
 
     friend class CoTimerMgr;
 };
@@ -46,7 +49,6 @@ public:
     typedef std::multimap<TimePoint, CoTimerPtr> DeadLines;
 
     CoTimerMgr();
-	~CoTimerMgr();
 
     CoTimerPtr ExpireAt(TimePoint const& time_point, CoTimer::fn_t const& fn);
 
