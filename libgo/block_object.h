@@ -34,15 +34,15 @@ public:
         return CoBlockWaitTimed(std::chrono::duration_cast<MininumTimeDurationType>(duration));
     }
 
-    template <typename DeadlineType>
-    bool CoBlockWaitTimed(DeadlineType deadline)
+    template <typename Clock, typename Dur>
+    bool CoBlockWaitTimed(std::chrono::time_point<Clock, Dur> const& deadline)
     {
-        auto now = std::chrono::system_clock::now();
+        auto now = Clock::now();
         if (deadline < now)
             return CoBlockWaitTimed(MininumTimeDurationType(0));
 
         return CoBlockWaitTimed(std::chrono::duration_cast<MininumTimeDurationType>
-                (deadline - std::chrono::system_clock::now()));
+                (deadline - Clock::now()));
     }
 
     bool TryBlockWait();

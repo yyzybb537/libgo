@@ -54,11 +54,11 @@ void BlockObject::CoBlockWait()
 
 bool BlockObject::CoBlockWaitTimed(MininumTimeDurationType timeo)
 {
-    auto begin = std::chrono::high_resolution_clock::now();
+    auto begin = std::chrono::steady_clock::now();
     if (!g_Scheduler.IsCoroutine()) {
         while (!TryBlockWait() &&
 				std::chrono::duration_cast<MininumTimeDurationType>
-                (std::chrono::high_resolution_clock::now() - begin) < timeo)
+                (std::chrono::steady_clock::now() - begin) < timeo)
             usleep(10 * 1000);
         return false;
     }

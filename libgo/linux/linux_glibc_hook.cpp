@@ -44,7 +44,7 @@ static ssize_t read_write_mode(int fd, OriginF fn, const char* hook_fn_name, uin
     timeval tv;
     fd_ctx->get_time_o(timeout_so, &tv);
     int timeout_ms = tv.tv_sec * 1000 + tv.tv_usec / 1000;
-    auto start = std::chrono::system_clock::now();
+    auto start = std::chrono::steady_clock::now();
 
 retry:
     ssize_t n = fn(fd, std::forward<Args>(args)...);
@@ -54,7 +54,7 @@ retry:
             poll_timeout = -1;
         else {
             int expired = std::chrono::duration_cast<std::chrono::milliseconds>(
-                    std::chrono::system_clock::now() - start).count();
+                    std::chrono::steady_clock::now() - start).count();
             if (expired > timeout_ms) {
                 errno = EAGAIN;
                 return -1;  // 已超时
