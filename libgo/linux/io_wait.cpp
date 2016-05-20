@@ -142,7 +142,7 @@ retry:
         FdCtxPtr fd_ctx = FdManager::getInstance().get_fd_ctx(fd);
         DebugPrint(dbg_ioblock, "epoll trigger fd(%d) events(%s) has_ctx(%d)",
                 fd, EpollEvent2Str(evs[i].events).c_str(), !!fd_ctx);
-        assert(fd_ctx); // 必须有context, 否则就是close流程出问题了.
+        if (!fd_ctx) continue;
 
         // 暂存, 最后再执行Trigger, 以便于poll可以得到更多的事件触发.
         fd_ctx->reactor_trigger(EpollEvent2Poll(evs[i].events), triggers);

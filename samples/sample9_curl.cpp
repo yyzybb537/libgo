@@ -17,23 +17,27 @@ size_t curl_fwrite(const void *ptr, size_t size, size_t nmemb, FILE *stream)
     return size * nmemb;
 }
 
-void request_once(const char* url)
+void request_once(const char* url, int i)
 {
     CURL *curl = curl_easy_init();
     if (curl) {
         curl_easy_setopt(curl, CURLOPT_URL, url);
 //        curl_easy_setopt(curl, CURLOPT_TIMEOUT, 1);
         curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, curl_fwrite);
-        CURLcode res = curl_easy_perform(curl);
-//        printf("res:%d\n", res);
-        curl_easy_cleanup(curl);
-        if (CURLE_OK == res)
-            ++g_ok;
-        else
-            ++g_error;
-    }
+//        printf("[%d]start perform\n", i);
+        for (;;) {
+            CURLcode res = curl_easy_perform(curl);
+            //        printf("[%d]res:%d\n", res, i);
+            if (CURLE_OK == res)
+                ++g_ok;
+            else
+                ++g_error;
+        }
 
-    go [=]{ request_once(url); };
+        curl_easy_cleanup(curl);
+    } else {
+        go [=]{ request_once(url, i); };
+    }
 }
 
 void show_status()
@@ -52,13 +56,14 @@ int main(int argc, char** argv)
         exit(1);
     }
 
-//    co_sched.GetOptions().debug = dbg_all;
+//    co_sched.GetOptions().debug = co::dbg_scheduler | co::dbg_ioblock | co::dbg_hook;
 //    co_sched.GetOptions().debug_output = fopen("log", "w+");
+//    co_sched.GetOptions().enable_work_steal = false;
 
     int concurrency = atoi(argv[2]);
 
     for (int i = 0; i < concurrency; ++i)
-        go [=]{ request_once(argv[1]); };
+        go [=]{ request_once(argv[1], i); };
 
     co_timer_add(std::chrono::seconds(1), show_status);
 
