@@ -50,6 +50,8 @@ public:
 private:
     void CreateEpoll();
 
+    void IgnoreSigPipe();
+
     int& EpollFdRef();
     pid_t& EpollOwnerPid();
 

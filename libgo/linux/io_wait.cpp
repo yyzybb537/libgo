@@ -1,6 +1,7 @@
 #include "io_wait.h"
 #include <sys/epoll.h>
 #include "scheduler.h"
+#include <signal.h>
 
 namespace co
 {
@@ -181,14 +182,22 @@ void IoWait::CreateEpoll()
         close(epoll_fd_);
 
     epoll_fd_ = epoll_create(epoll_event_size_);
-    if (epoll_fd_ != -1)
+    if (epoll_fd_ != -1) {
         DebugPrint(dbg_ioblock, "create epoll success. epollfd=%d", epoll_fd_);
+        // 使用epoll需要忽略SIGPIPE信号
+        IgnoreSigPipe();
+    }
     else {
         fprintf(stderr,
                 "CoroutineScheduler init failed. epoll create error:%s\n",
                 strerror(errno));
         exit(1);
     }
+}
+
+void IoWait::IgnoreSigPipe()
+{
+    signal(SIGPIPE, SIG_IGN);
 }
 
 bool IoWait::IsEpollCreated()
