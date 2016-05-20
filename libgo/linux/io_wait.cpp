@@ -76,9 +76,10 @@ void IoWait::CoSwitch()
 
 void IoWait::SchedulerSwitch(Task* tk)
 {
-    wait_io_sentries_.push(tk->io_sentry_.get()); // A
-    if (tk->io_sentry_->io_state_ == IoSentry::triggered) // B
-        __IOBlockTriggered(tk->io_sentry_);
+    auto sentry = tk->io_sentry_;   // reference increment. avoid wakeup task at other thread.
+    wait_io_sentries_.push(sentry.get()); // A
+    if (sentry->io_state_ == IoSentry::triggered) // B
+        __IOBlockTriggered(sentry);
 }
 
 void IoWait::IOBlockTriggered(IoSentryPtr io_sentry)
@@ -197,7 +198,8 @@ void IoWait::CreateEpoll()
 
 void IoWait::IgnoreSigPipe()
 {
-    signal(SIGPIPE, SIG_IGN);
+    DebugPrint(dbg_ioblock, "Ignore signal SIGPIPE");
+    sigignore(SIGPIPE);
 }
 
 bool IoWait::IsEpollCreated()

@@ -56,7 +56,7 @@ int main(int argc, char** argv)
         exit(1);
     }
 
-//    co_sched.GetOptions().debug = co::dbg_scheduler | co::dbg_ioblock | co::dbg_hook;
+//    co_sched.GetOptions().debug = co::dbg_ioblock;
 //    co_sched.GetOptions().debug_output = fopen("log", "w+");
 //    co_sched.GetOptions().enable_work_steal = false;
 
