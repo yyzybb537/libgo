@@ -324,14 +324,6 @@ void Scheduler::SleepSwitch(int timeout_ms)
         sleep_wait_.CoSwitch(timeout_ms);
 }
 
-TimerId Scheduler::ExpireAt(TimePoint const& time_point,
-        CoTimer::fn_t const& fn)
-{
-    TimerId id = timer_mgr_.ExpireAt(time_point, fn);
-    DebugPrint(dbg_timer, "add timer %llu", (long long unsigned)id->GetId());
-    return id;
-}
-
 bool Scheduler::CancelTimer(TimerId timer_id)
 {
     bool ok = timer_mgr_.Cancel(timer_id);

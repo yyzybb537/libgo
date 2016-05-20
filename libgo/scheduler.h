@@ -160,12 +160,12 @@ class Scheduler
 
         /// ------------------------------------------------------------------------
         // @{ 定时器
-        TimerId ExpireAt(TimePoint const& time_point, CoTimer::fn_t const& fn);
-
-        template <typename Duration>
-        TimerId ExpireAt(Duration const& duration, CoTimer::fn_t const& fn)
+        template <typename DurationOrTimepoint>
+        TimerId ExpireAt(DurationOrTimepoint const& dur_or_tp, CoTimer::fn_t const& fn)
         {
-            return this->ExpireAt(CoTimerMgr::Now() + duration, fn);
+            TimerId id = timer_mgr_.ExpireAt(dur_or_tp, fn);
+            DebugPrint(dbg_timer, "add timer id=%llu", (long long unsigned)id->GetId());
+            return id;
         }
 
         bool CancelTimer(TimerId timer_id);

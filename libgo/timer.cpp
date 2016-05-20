@@ -8,7 +8,7 @@ namespace co
 std::atomic<uint64_t> CoTimer::s_id{0};
 
 CoTimer::CoTimer(fn_t const& fn)
-    : id_(++s_id), fn_(fn), active_(true), token_valid_(false)
+    : id_(++s_id), fn_(fn), active_(true), token_state_(e_token_state::none)
 {}
 
 uint64_t CoTimer::GetId()
@@ -49,19 +49,31 @@ bool CoTimer::BlockCancel()
 }
 
 CoTimerMgr::CoTimerMgr()
-    : next_trigger_time_{std::numeric_limits<long>::max()}
+    : system_next_trigger_time_{std::numeric_limits<long long>::max()},
+    steady_next_trigger_time_{std::numeric_limits<long long>::max()}
 {
-    zero_time_ = Now();
 }
 
-CoTimerPtr CoTimerMgr::ExpireAt(TimePoint const& time_point, CoTimer::fn_t const& fn)
+CoTimerPtr CoTimerMgr::ExpireAt(SystemTimePoint const& time_point,
+        CoTimer::fn_t const& fn)
 {
     std::unique_lock<LFLock> lock(lock_);
     CoTimerPtr sptr(new CoTimer(fn));
-    if (deadlines_.empty())
+    if (system_deadlines_.empty() && steady_deadlines_.empty())
         SetNextTriggerTime(time_point);
-    sptr->token_valid_ = true;
-    sptr->token_ = deadlines_.insert(std::make_pair(time_point, sptr));
+    sptr->token_state_ = CoTimer::e_token_state::system;
+    sptr->system_token_ = system_deadlines_.insert(std::make_pair(time_point, sptr));
+    return sptr;
+}
+CoTimerPtr CoTimerMgr::ExpireAt(SteadyTimePoint const& time_point,
+        CoTimer::fn_t const& fn)
+{
+    std::unique_lock<LFLock> lock(lock_);
+    CoTimerPtr sptr(new CoTimer(fn));
+    if (system_deadlines_.empty() && steady_deadlines_.empty())
+        SetNextTriggerTime(time_point);
+    sptr->token_state_ = CoTimer::e_token_state::steady;
+    sptr->steady_token_ = steady_deadlines_.insert(std::make_pair(time_point, sptr));
     return sptr;
 }
 
@@ -82,9 +94,21 @@ bool CoTimerMgr::BlockCancel(CoTimerPtr co_timer_ptr)
 void CoTimerMgr::__Cancel(CoTimerPtr co_timer_ptr)
 {
     std::unique_lock<LFLock> lock(lock_);
-    if (!co_timer_ptr->token_valid_) return;
-    co_timer_ptr->token_valid_ = false;
-    deadlines_.erase(co_timer_ptr->token_);
+    switch (co_timer_ptr->token_state_) {
+        case CoTimer::e_token_state::system:
+            system_deadlines_.erase(co_timer_ptr->system_token_);
+            break;
+
+        case CoTimer::e_token_state::steady:
+            steady_deadlines_.erase(co_timer_ptr->steady_token_);
+            break;
+
+        case CoTimer::e_token_state::none:
+        default:
+            return;
+    }
+
+    co_timer_ptr->token_state_ = CoTimer::e_token_state::none;
 }
 
 long long CoTimerMgr::GetExpired(std::list<CoTimerPtr> &result, uint32_t n)
@@ -92,55 +116,81 @@ long long CoTimerMgr::GetExpired(std::list<CoTimerPtr> &result, uint32_t n)
     std::unique_lock<LFLock> lock(lock_, std::defer_lock);
     if (!lock.try_lock()) return GetNextTriggerTime();
 
-    TimePoint now = Now();
-    auto it = deadlines_.begin();
-    for (; it != deadlines_.end() && n > 0; --n, ++it)
     {
-        if (it->first > now) {
-            break;
-        }
+        SystemTimePoint now = SystemNow();
+        auto it = system_deadlines_.begin();
+        for (; it != system_deadlines_.end() && n > 0; --n, ++it)
+        {
+            if (it->first > now) {
+                break;
+            }
 
-        it->second->token_valid_ = false;
-        result.push_back(it->second);
+            it->second->token_state_ = CoTimer::e_token_state::none;
+            result.push_back(it->second);
+        }
+        if (it != system_deadlines_.end())
+            SetNextTriggerTime(it->first);
+        else
+            system_next_trigger_time_ = std::numeric_limits<long long>::max();
+        system_deadlines_.erase(system_deadlines_.begin(), it);
     }
 
-    if (it != deadlines_.end()) {
-        // 还有timer需要触发
-        TimePoint const& next_tp = it->first;
-        SetNextTriggerTime(next_tp);
-    } else
-        next_trigger_time_ = std::numeric_limits<long>::max();
+    {
+        SteadyTimePoint now = SteadyNow();
+        auto it = steady_deadlines_.begin();
+        for (; it != steady_deadlines_.end() && n > 0; --n, ++it)
+        {
+            if (it->first > now) {
+                break;
+            }
 
-    deadlines_.erase(deadlines_.begin(), it);
+            it->second->token_state_ = CoTimer::e_token_state::none;
+            result.push_back(it->second);
+        }
+        if (it != steady_deadlines_.end())
+            SetNextTriggerTime(it->first);
+        else
+            steady_next_trigger_time_ = std::numeric_limits<long long>::max();
+        steady_deadlines_.erase(steady_deadlines_.begin(), it);
+    }
+
     return GetNextTriggerTime();
 }
 
 std::size_t CoTimerMgr::Size()
 {
     std::unique_lock<LFLock> lock(lock_);
-    return deadlines_.size();
+    return system_deadlines_.size() + steady_deadlines_.size();
 }
 
-TimePoint CoTimerMgr::Now()
+SystemTimePoint CoTimerMgr::SystemNow()
 {
-    return TimePoint::clock::now();
+    return SystemTimePoint::clock::now();
+}
+SteadyTimePoint CoTimerMgr::SteadyNow()
+{
+    return SteadyTimePoint::clock::now();
 }
 
 long long CoTimerMgr::GetNextTriggerTime()
 {
-    auto now_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
-            Now() - zero_time_).count();
-    if (next_trigger_time_ > now_ms)
-        return next_trigger_time_ - now_ms;
+    long long sys_now = std::chrono::time_point_cast<std::chrono::milliseconds>(SystemNow()).time_since_epoch().count();
+    long long sdy_now = std::chrono::time_point_cast<std::chrono::milliseconds>(SteadyNow()).time_since_epoch().count();
 
-    return 0;
+    long long sys_delta = (std::max)(system_next_trigger_time_ - sys_now, (long long)0);
+    long long sdy_delta = (std::max)(steady_next_trigger_time_ - sdy_now, (long long)0);
+
+    return (std::min)(sys_delta, sdy_delta);
 }
 
-void CoTimerMgr::SetNextTriggerTime(TimePoint const& tp)
+void CoTimerMgr::SetNextTriggerTime(SystemTimePoint const& sys_tp)
 {
-    auto now_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
-            tp - zero_time_).count();
-    next_trigger_time_ = now_ms;
+    system_next_trigger_time_ = std::chrono::time_point_cast<std::chrono::milliseconds>(sys_tp).time_since_epoch().count();
+}
+
+void CoTimerMgr::SetNextTriggerTime(SteadyTimePoint const& sdy_tp)
+{
+    steady_next_trigger_time_ = std::chrono::time_point_cast<std::chrono::milliseconds>(sdy_tp).time_since_epoch().count();
 }
 
 } //namespace co
