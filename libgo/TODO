@@ -1,9 +1,7 @@
 TODO:
-改进定时器, 加快cancel的速度.(方案1.使用侵入式红黑树. 方案2.保存iterator)
 支持同时等待多个Channel
 协程亲缘性
 打造类似TLS的CLS(协程局部对象)
-Work Stealing...
 HOOK select poll时, 正确处理文件等非socket句柄
 
 DONE:
@@ -36,3 +34,5 @@ WIN HOOK: send recv WSARecv** WSASend**
 HOOK close接口, 正确模拟阻塞式read/write中被close时的行为(close后唤醒等待这个fd的协程)
 优化性能, HOOK的syscall中减少syscall的调用, 使用缓存数据, 避免频繁切换内核态
 改进定时器, 从双红黑树改为单红黑树, 提升性能
+改进定时器, 加快cancel的速度.(方案1.使用侵入式红黑树. 方案2.保存iterator)
+Work Stealing...
