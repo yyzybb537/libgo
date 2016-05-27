@@ -1,6 +1,7 @@
 #include "timer.h"
 #include <mutex>
 #include <limits>
+#include <algorithm>
 
 namespace co
 {
@@ -65,6 +66,8 @@ CoTimerPtr CoTimerMgr::ExpireAt(SystemTimePoint const& time_point,
     sptr->system_token_ = system_deadlines_.insert(std::make_pair(time_point, sptr));
     return sptr;
 }
+
+#ifndef UNSUPPORT_STEADY_TIME
 CoTimerPtr CoTimerMgr::ExpireAt(SteadyTimePoint const& time_point,
         CoTimer::fn_t const& fn)
 {
@@ -76,6 +79,7 @@ CoTimerPtr CoTimerMgr::ExpireAt(SteadyTimePoint const& time_point,
     sptr->steady_token_ = steady_deadlines_.insert(std::make_pair(time_point, sptr));
     return sptr;
 }
+#endif
 
 bool CoTimerMgr::Cancel(CoTimerPtr co_timer_ptr)
 {
@@ -188,9 +192,11 @@ void CoTimerMgr::SetNextTriggerTime(SystemTimePoint const& sys_tp)
     system_next_trigger_time_ = std::chrono::time_point_cast<std::chrono::milliseconds>(sys_tp).time_since_epoch().count();
 }
 
+#ifndef UNSUPPORT_STEADY_TIME
 void CoTimerMgr::SetNextTriggerTime(SteadyTimePoint const& sdy_tp)
 {
     steady_next_trigger_time_ = std::chrono::time_point_cast<std::chrono::milliseconds>(sdy_tp).time_since_epoch().count();
 }
+#endif
 
 } //namespace co

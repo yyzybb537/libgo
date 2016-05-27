@@ -6,6 +6,7 @@
 #include <vector>
 #include <list>
 #include "spinlock.h"
+#include "config.h"
 
 namespace co
 {
@@ -13,8 +14,8 @@ namespace co
 class CoTimer;
 typedef std::shared_ptr<CoTimer> CoTimerPtr;
 
-typedef std::chrono::time_point<std::chrono::system_clock> SystemTimePoint;
-typedef std::chrono::time_point<std::chrono::steady_clock> SteadyTimePoint;
+typedef std::chrono::system_clock::time_point SystemTimePoint;
+typedef std::chrono::steady_clock::time_point SteadyTimePoint;
 
 class CoTimer
 {
@@ -64,7 +65,9 @@ public:
 
     CoTimerPtr ExpireAt(SystemTimePoint const& time_point, CoTimer::fn_t const& fn);
 
+#ifndef UNSUPPORT_STEADY_TIME
     CoTimerPtr ExpireAt(SteadyTimePoint const& time_point, CoTimer::fn_t const& fn);
+#endif
 
     template <typename Duration>
     CoTimerPtr ExpireAt(Duration const& duration, CoTimer::fn_t const& fn)
@@ -89,7 +92,10 @@ private:
     long long GetNextTriggerTime();
 
     void SetNextTriggerTime(SystemTimePoint const& sys_tp);
+
+#ifndef UNSUPPORT_STEADY_TIME
     void SetNextTriggerTime(SteadyTimePoint const& sdy_tp);
+#endif
 
 private:
     SystemDeadLines system_deadlines_;

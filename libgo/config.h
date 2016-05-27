@@ -4,7 +4,8 @@
 
 // VS2013²»Ö§³Öthread_local
 #if defined(_MSC_VER) && _MSC_VER < 1900
-#define thread_local __declspec(thread)
+# define thread_local __declspec(thread)
+# define UNSUPPORT_STEADY_TIME
 #endif
 
 #if __linux__
