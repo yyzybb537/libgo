@@ -26,9 +26,13 @@ struct stdtimer
     }
     ~stdtimer() {
         if (name_.empty() || !count_) return ;
-        float c = chrono::duration_cast<chrono::microseconds>(chrono::system_clock::now() - t_).count() - except_duration_.count();
+        auto now = chrono::system_clock::now();
+        float c = chrono::duration_cast<chrono::microseconds>(now - t_).count() - except_duration_.count();
+        double ns = chrono::duration_cast<chrono::nanoseconds>(now - t_).count() - except_duration_.count() * 1000 * 1000;
         cout << name_ << " run " << count_ << " times, cost " << (c / 1000) << " ms" << endl;
         cout << "per second op times: " << (size_t)((double)1000000  * count_ / c) << endl;
+        cout << "per op cost: " << int64_t(ns / count_) << " ns" << endl;
+        cout << "-----------------------------------------------------------" << endl;
     }
 
     chrono::microseconds expired()

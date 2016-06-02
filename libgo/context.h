@@ -16,23 +16,23 @@ namespace co
 
     struct StackAllocator
     {
-        inline static stack_malloc_fn_t& get_malloc_fn()
+        static stack_malloc_fn_t& get_malloc_fn()
         {
             static stack_malloc_fn_t stack_malloc_fn = &::std::malloc;
             return stack_malloc_fn;
         }
-        inline static stack_free_fn_t& get_free_fn()
+        static stack_free_fn_t& get_free_fn()
         {
             static stack_free_fn_t stack_free_fn = &::std::free;
             return stack_free_fn;
         }
-        inline static uint32_t& get_protect_stack_page()
+        static uint32_t& get_protect_stack_page()
         {
             static uint32_t protect_stack_page = 0;
             return protect_stack_page;
         }
 #if __linux__
-        inline static bool protect_stack(void *top, std::size_t stack_size,
+        static bool protect_stack(void *top, std::size_t stack_size,
                 uint32_t page)
         {
             if (!page) return false;
@@ -51,7 +51,7 @@ namespace co
                 return true;
             }
         }
-        inline static void unprotect_stack(void *top, uint32_t page)
+        static void unprotect_stack(void *top, uint32_t page)
         {
             if (!page) return ;
 

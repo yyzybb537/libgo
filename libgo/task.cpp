@@ -115,15 +115,6 @@ void Task::InitLocation(const char* file, int lineno)
     }
 }
 
-bool Task::SwapIn()
-{
-    return ctx_.SwapIn();
-}
-bool Task::SwapOut()
-{
-    return ctx_.SwapOut();
-}
-
 void Task::SetDebugInfo(std::string const& info)
 {
     debug_info_ = info + "(" + std::to_string(id_) + ")";

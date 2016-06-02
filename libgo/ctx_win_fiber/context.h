@@ -52,13 +52,13 @@ namespace co
             }
         }
 
-        inline bool SwapIn()
+        ALWAYS_INLINE bool SwapIn()
         {
             SwitchToFiber(native_);
             return true;
         }
 
-        inline bool SwapOut()
+        ALWAYS_INLINE bool SwapOut()
         {
             SwitchToFiber(ContextScopedGuard::GetTlsContext());            
             return true;

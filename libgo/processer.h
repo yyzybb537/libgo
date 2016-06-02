@@ -1,4 +1,5 @@
 #pragma once
+#include "config.h"
 #include "task.h"
 #include "ts_queue.h"
 

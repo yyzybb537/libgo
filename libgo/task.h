@@ -65,8 +65,14 @@ struct Task
 
     void InitLocation(const char* file, int lineno);
 
-    bool SwapIn();
-    bool SwapOut();
+    ALWAYS_INLINE bool SwapIn()
+    {
+        return ctx_.SwapIn();
+    }
+    ALWAYS_INLINE bool SwapOut()
+    {
+        return ctx_.SwapOut();
+    }
 
     void SetDebugInfo(std::string const& info);
     const char* DebugInfo();

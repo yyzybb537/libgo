@@ -41,12 +41,12 @@ namespace co
             }
         }
 
-        inline bool SwapIn()
+        ALWAYS_INLINE bool SwapIn()
         {
             return 0 == swapcontext(&GetTlsContext(), &ctx_);
         }
 
-        inline bool SwapOut()
+        ALWAYS_INLINE bool SwapOut()
         {
             return 0 == swapcontext(&ctx_, &GetTlsContext());
         }
