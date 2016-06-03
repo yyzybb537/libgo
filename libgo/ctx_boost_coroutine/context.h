@@ -78,13 +78,13 @@ namespace co
                     }
                 }
 
-            inline bool SwapIn()
+            ALWAYS_INLINE bool SwapIn()
             {
                 ctx_();
                 return true;
             }
 
-            inline bool SwapOut()
+            ALWAYS_INLINE bool SwapOut()
             {
                 (*yield_)();
                 return true;

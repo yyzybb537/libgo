@@ -43,6 +43,9 @@ std::string co_error_category::message(int v) const
             return "std thread link error.\n"
                 "if static-link use flags: '-Wl,--whole-archive -lpthread -Wl,--no-whole-archive -static' on link step;\n"
                 "if dynamic-link use flags: '-pthread' on compile step and link step;\n";
+
+        case (int)eCoErrorCode::ec_disabled_multi_thread:
+            return "Unsupport multiply threads. If you want use multiply threads, please cmake libgo without DISABLE_MULTI_THREAD option.";
     }
 
     return "";

@@ -154,7 +154,7 @@ std::string real_typename()
 
 #if ENABLE_DEBUGGER
 template <typename Drived>
-inline CoDebugger::count_t& CoDebugger::DebuggerBase<Drived>::Count()
+CoDebugger::count_t& CoDebugger::DebuggerBase<Drived>::Count()
 {
     std::size_t index = CoDebugger::getInstance().GetDebuggerDrivedIndex<Drived>();
     auto &objs = CoDebugger::getInstance().object_counts_;

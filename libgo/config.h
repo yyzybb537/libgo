@@ -1,11 +1,19 @@
 #pragma once
 #include "cmake_config.h"
 #include <chrono>
+#include <stdio.h>
+#include <string>
 
 // VS2013²»Ö§³Öthread_local
 #if defined(_MSC_VER) && _MSC_VER < 1900
 # define thread_local __declspec(thread)
 # define UNSUPPORT_STEADY_TIME
+#endif
+
+#if defined(__GNUC__) && (__GNUC__ > 3 ||(__GNUC__ == 3 && __GNUC_MINOR__ >= 1))
+# define ALWAYS_INLINE __attribute__ ((always_inline))
+#else
+# define ALWAYS_INLINE inline
 #endif
 
 #if __linux__

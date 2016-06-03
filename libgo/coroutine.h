@@ -21,7 +21,7 @@ struct __go
         : file_(file), lineno_(lineno), stack_size_(stack_size), dispatch_(dispatch) {}
 
     template <typename Arg>
-    inline void operator-(Arg const& arg)
+    ALWAYS_INLINE void operator-(Arg const& arg)
     {
         Scheduler::getInstance().CreateTask(arg, stack_size_, file_, lineno_, dispatch_);
     }
@@ -67,7 +67,7 @@ struct __async_wait
     __async_wait() : ch_(1) {}
 
     template <typename F>
-    inline R&& operator-(F const& fn)
+    ALWAYS_INLINE R&& operator-(F const& fn)
     {
         g_Scheduler.GetThreadPool().AsyncWait<R>(ch_, fn);
         ch_ >> result_;
@@ -81,7 +81,7 @@ struct __async_wait<void>
     Channel<void> ch_;
 
     template <typename F>
-    inline void operator-(F const& fn)
+    ALWAYS_INLINE void operator-(F const& fn)
     {
         g_Scheduler.GetThreadPool().AsyncWait<void>(ch_, fn);
         ch_ >> nullptr;

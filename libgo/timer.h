@@ -72,7 +72,7 @@ public:
     template <typename Duration>
     CoTimerPtr ExpireAt(Duration const& duration, CoTimer::fn_t const& fn)
     {
-        return ExpireAt(SteadyNow() + duration, fn);
+		return ExpireAt(CoTimerMgr::SteadyNow() + duration, fn);
     }
 
     bool Cancel(CoTimerPtr co_timer_ptr);
@@ -84,8 +84,8 @@ public:
     std::size_t Size();
 
 private:
-    static SystemTimePoint SystemNow();
-    static SteadyTimePoint SteadyNow();
+	inline static SystemTimePoint SystemNow() { return SystemTimePoint::clock::now(); }
+	inline static SteadyTimePoint SteadyNow() { return SteadyTimePoint::clock::now(); }
 
     void __Cancel(CoTimerPtr co_timer_ptr);
 

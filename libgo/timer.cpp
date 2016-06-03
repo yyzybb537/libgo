@@ -167,15 +167,6 @@ std::size_t CoTimerMgr::Size()
     return system_deadlines_.size() + steady_deadlines_.size();
 }
 
-SystemTimePoint CoTimerMgr::SystemNow()
-{
-    return SystemTimePoint::clock::now();
-}
-SteadyTimePoint CoTimerMgr::SteadyNow()
-{
-    return SteadyTimePoint::clock::now();
-}
-
 long long CoTimerMgr::GetNextTriggerTime()
 {
     long long sys_now = std::chrono::time_point_cast<std::chrono::milliseconds>(SystemNow()).time_since_epoch().count();
