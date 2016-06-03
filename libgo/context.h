@@ -71,6 +71,8 @@ namespace co
 
 #if USE_BOOST_COROUTINE
 # include "ctx_boost_coroutine/context.h"
+#elif USE_BOOST_CONTEXT
+# include "ctx_boost_context/context.h"
 #elif USE_UCONTEXT
 # include "ctx_ucontext/context.h"
 #elif USE_FIBER
