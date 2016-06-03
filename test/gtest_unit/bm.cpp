@@ -383,30 +383,30 @@ TEST_P(Times, testTimer)
                 });
     }
 
-    {
-        std::vector<co_timer_id> id_list;
-        id_list.reserve(tc_);
-        for (int i = 0; i < tc_; ++i)
-#ifndef _WIN32
-            id_list.push_back(co_timer_add(std::chrono::nanoseconds(i), []{}));
-#else
-			id_list.push_back(co_timer_add(std::chrono::microseconds(i / 1000), []{}));
-#endif
-
-        stdtimer st(tc_, "Delete Timer");
-        for (int i = 0; i < tc_; ++i)
-            co_timer_cancel(id_list[i]);
-    }
-
-//    g_Scheduler.GetOptions().debug = co::dbg_timer;
-    {
-        bool *flag = new bool(true);
-        auto id = co_timer_add(std::chrono::milliseconds(1), [=]{ *flag = false; });
-
-        stdtimer st(tc_, "Process Timer");
-        while (*flag)
-            g_Scheduler.Run();
-    }
+//    {
+//        std::vector<co_timer_id> id_list;
+//        id_list.reserve(tc_);
+//        for (int i = 0; i < tc_; ++i)
+//#ifndef _WIN32
+//            id_list.push_back(co_timer_add(std::chrono::nanoseconds(i), []{}));
+//#else
+//			id_list.push_back(co_timer_add(std::chrono::microseconds(i / 1000), []{}));
+//#endif
+//
+//        stdtimer st(tc_, "Delete Timer");
+//        for (int i = 0; i < tc_; ++i)
+//            co_timer_cancel(id_list[i]);
+//    }
+//
+////    g_Scheduler.GetOptions().debug = co::dbg_timer;
+//    {
+//        bool *flag = new bool(true);
+//        auto id = co_timer_add(std::chrono::milliseconds(1), [=]{ *flag = false; });
+//
+//        stdtimer st(tc_, "Process Timer");
+//        while (*flag)
+//            g_Scheduler.Run();
+//    }
 }
 
 #ifdef SMALL_TEST
