@@ -117,6 +117,9 @@ void CoTimerMgr::__Cancel(CoTimerPtr co_timer_ptr)
 
 long long CoTimerMgr::GetExpired(std::list<CoTimerPtr> &result, uint32_t n)
 {
+    if (system_deadlines_.empty() && steady_deadlines_.empty())
+        return std::numeric_limits<long long>::max();
+
     std::unique_lock<LFLock> lock(lock_, std::defer_lock);
     if (!lock.try_lock()) return GetNextTriggerTime();
 

@@ -225,28 +225,37 @@ TEST_P(Times, testCo)
 
 //    int tcs[] = {tc_ / 10, tc_, tc_ * 10};
     int tcs[] = {tc_};
+    int coro_c[] = {1, 10, 100};
 
-    for (auto tc : tcs)
+    for (auto co_c : coro_c)
     {
-        go [&] {
-            for (int i = 1; i < tc; ++i)
-                co_yield;
-        };
-        stdtimer st(tc, "Switch 1 coroutine alone");
-        for (int i = 0; i < tc; ++i)
-            g_Scheduler.Run(co::Scheduler::erf_do_coroutines);
+        for (auto tc : tcs)
+        {
+            for (int i = 0; i < co_c; ++i)
+                go [&] {
+                    for (int i = 1; i < tc; ++i)
+                        co_yield;
+                };
+            stdtimer st(tc * co_c, "Switch " + std::to_string(co_c) + " coroutine alone");
+            while (g_Scheduler.Run(co::Scheduler::erf_do_coroutines));
+        }
+
+        g_Scheduler.RunUntilNoTask();
+
+        for (auto tc : tcs)
+        {
+            for (int i = 0; i < co_c; ++i)
+                go [&] {
+                    for (int i = 1; i < tc; ++i)
+                        co_yield;
+                };
+            stdtimer st(tc * co_c, "Switch " + std::to_string(co_c) + " coroutine flags-all");
+            g_Scheduler.RunUntilNoTask();
+        }
+
+        g_Scheduler.RunUntilNoTask();
     }
 
-    for (auto tc : tcs)
-    {
-        go [&] {
-            for (int i = 1; i < tc; ++i)
-                co_yield;
-        };
-        stdtimer st(tc, "Switch 1 coroutine flags-all");
-        for (int i = 0; i < tc; ++i)
-            g_Scheduler.Run(co::Scheduler::erf_do_coroutines);
-    }
 
     for (auto tc : tcs)
     {
