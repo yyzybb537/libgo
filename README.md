@@ -39,9 +39,8 @@ libgo有以下特点：
 
 		0.CMake编译参数
 		
-			ENABLE_BOOST_CONTEXT
+			ENABLE_BOOST_CONTEXT  `这是在linux上性能最佳的编译参数`
 				libgo在Linux系统上默认使用ucontext做协程上下文切换，开启此选项将使用boost.context来替代ucontext.
-				** 这是在linux上性能最佳的编译参数 **
 				使用方式：
 					$ cmake .. -DENABLE_BOOST_CONTEXT=ON
 
@@ -55,8 +54,10 @@ libgo有以下特点：
 				协程中使用阻塞式网络io将可能真正阻塞线程，如无特殊需求请勿开启此选项.
 				使用方式：
 					$ cmake .. -DDISABLE_HOOK=ON
+					
+			不开启ENABLE_BOOST_CONTEXT和ENABLE_BOOST_COROUTINE选项时, libgo不依赖boost库，可以直接使用，仅测试代码依赖boost库。
  
-        1.如果你安装了ucorf，那么你已经使用默认的方式安装过libgo了，如果不想设置如上的选项，可以跳过第2步.
+        1.如果你安装了ucorf或libgonet，那么你已经使用默认的方式安装过libgo了，如果不想设置如上的选项，可以跳过第2步.
  
         2.使用CMake进行编译安装：
 
