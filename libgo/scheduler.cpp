@@ -148,6 +148,7 @@ uint32_t Scheduler::Run(int flags)
 
 void Scheduler::RunUntilNoTask(uint32_t loop_task_count)
 {
+    if (IsCoroutine()) return ;
     do { 
         Run();
     } while (task_count_ > loop_task_count);
@@ -225,6 +226,7 @@ uint32_t Scheduler::DoTimer(long long &next_ms)
 
 void Scheduler::RunLoop()
 {
+    if (IsCoroutine()) return ;
     for (;;) Run();
 }
 

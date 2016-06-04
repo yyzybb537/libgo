@@ -10,6 +10,9 @@ namespace co
         Context(std::size_t stack_size, std::function<void()> const& fn)
             : fn_(fn), stack_size_(stack_size)
         {
+            BOOST_ASSERT(boost::context::stack_traits::minimum_size() <= stack_size_);
+            BOOST_ASSERT(boost::context::stack_traits::is_unbounded() || (boost::context::stack_traits::maximum_size()>= stack_size_));
+
             stack_ = (char*)StackAllocator::get_malloc_fn()(stack_size_);
             DebugPrint(dbg_task, "valloc stack. size=%u ptr=%p",
                     stack_size_, stack_);
