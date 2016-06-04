@@ -1,0 +1,4 @@
+E:/github/libgo/vs_proj/vs2013/x64/libgo/main/CMakeFiles/libgo_main.dir
+E:/github/libgo/vs_proj/vs2013/x64/CMakeFiles/ALL_BUILD.dir
+E:/github/libgo/vs_proj/vs2013/x64/CMakeFiles/ZERO_CHECK.dir
+E:/github/libgo/vs_proj/vs2013/x64/CMakeFiles/libgo_static.dir

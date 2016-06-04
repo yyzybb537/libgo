@@ -1,0 +1,13 @@
+﻿<?xml version="1.0" encoding="UTF-8"?>
+<Project ToolsVersion="14.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <CustomBuild Include="E:\github\libgo\vs_proj\vs2015\x86\CMakeFiles\f1fdd3c9c2eec11adfe0e4242796b9fe\INSTALL_force.rule">
+      <Filter>CMake Rules</Filter>
+    </CustomBuild>
+  </ItemGroup>
+  <ItemGroup>
+    <Filter Include="CMake Rules">
+      <UniqueIdentifier>{80377316-13AA-4FD1-8997-FE09277774C7}</UniqueIdentifier>
+    </Filter>
+  </ItemGroup>
+</Project>
