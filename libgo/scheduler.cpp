@@ -94,6 +94,8 @@ uint32_t Scheduler::Run(int flags)
         info.proc = GetProcesser(info.thread_id);
     }
 
+    if (IsCoroutine()) return 0;
+
     uint32_t run_task_count = 0;
     if (flags & erf_do_coroutines)
         run_task_count = DoRunnable(GetOptions().enable_work_steal);
