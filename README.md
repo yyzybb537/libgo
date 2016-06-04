@@ -38,24 +38,23 @@ libgo有以下特点：
  *    Linux: 
 
 		0.CMake编译参数
+		
+			ENABLE_BOOST_CONTEXT
+				libgo在Linux系统上默认使用ucontext做协程上下文切换，开启此选项将使用boost.context来替代ucontext.
+				** 这是在linux上性能最佳的编译参数 **
+				使用方式：
+					$ cmake .. -DENABLE_BOOST_CONTEXT=ON
 
 			ENABLE_BOOST_COROUTINE
 				libgo在Linux系统上默认使用ucontext做协程上下文切换，开启此选项将使用boost.coroutine来替代ucontext.
 				使用方式：
-					$ cmake .. -DENABLE_BOOST_COROUTINE=1
-
-			ENABLE_SHARED_STACK
-				使用ucontext做协程上下文切换时可以开启此选项，开启后多个协程将共享使用同一个栈，这个选项可以大概节约4倍的内存.
-				但是会有一定的副作用，参见下面的WARNNING第四条.
-				在使用ENABLE_BOOST_COROUTINE选项时, 此选项不可开启
-				使用方式：
-					$ cmake .. -DENABLE_SHARED_STACK=1
+					$ cmake .. -DENABLE_BOOST_COROUTINE=ON
 
 			DISABLE_HOOK
 				禁止hook syscall，开启此选项后，网络io相关的syscall将恢复系统默认的行为，
 				协程中使用阻塞式网络io将可能真正阻塞线程，如无特殊需求请勿开启此选项.
 				使用方式：
-					$ cmake .. -DDISABLE_HOOK=1
+					$ cmake .. -DDISABLE_HOOK=ON
  
         1.如果你安装了ucorf，那么你已经使用默认的方式安装过libgo了，如果不想设置如上的选项，可以跳过第2步.
  
@@ -94,18 +93,12 @@ libgo有以下特点：
  *    Windows: 
 
 		0.CMake编译参数
-
-			ENABLE_BOOST_COROUTINE
-				libgo在Windows系统上默认使用fiber做协程上下文切换，开启此选项将使用boost.coroutine来替代fiber.
-				!!! 然而并不建议开启此选项, boost.coroutine在Windows系统上的稳定性不如fiber.
-				使用方式：
-					$ cmake .. -DENABLE_BOOST_COROUTINE=1
-
+		
 			DISABLE_HOOK
 				禁止hook syscall，开启此选项后，网络io相关的syscall将恢复系统默认的行为，
 				协程中使用阻塞式网络io将可能真正阻塞线程，如无特殊需求请勿开启此选项.
 				使用方式：
-					$ cmake .. -DDISABLE_HOOK=1
+					$ cmake .. -DDISABLE_HOOK=ON
  
         1.使用git submodule update --init --recursive下载Hook子模块
         
@@ -116,26 +109,25 @@ libgo有以下特点：
 
 			比如vs2015(x86)：
 			$ cmake .. -G"Visual Studio 14 2015"
+			
+			比如vs2013(x64)：
+			$ cmake .. -G"Visual Studio 12 2013 Win64"
         
         3.使用时需要添加两个include目录：src和src/windows, 或将这两个目录下的头文件拷贝出来使用
         
         4.如果想要执行测试代码, 需要依赖boost库. 且在cmake参数中设置BOOST_ROOT:
         
         		例如：
-        		$ cmake .. -DBOOST_ROOT="e:\\boost1.60"
+        		$ cmake .. -G"Visual Studio 14 2015 Win64" -DBOOST_ROOT="e:\\boost_1_61_0"
 
 ##### 注意事项(WARNING)：
 * 
 
-        1.在多线程调度模式下不要使用<线程局部变量(TLS)>。使用多线程调度时，协程的每次切换，下一次继续执行都可能处于其他线程中
+        1.在开启WorkSteal算法的多线程调度模式下不要使用<线程局部变量(TLS)>。因为协程的每次切换，下一次继续执行都可能处于其他线程中.
 
         2.不要让一个代码段耗时过长。协程的调度是协作式调度，需要协程主动让出执行权，推荐在耗时很长的循环中插入一些yield
 
-	    3.除网络IO、sleep以外的阻塞系统调用，会真正阻塞调度线程的运行，请使用co_await, 并启动几个线程去Run内置的线程池.
-
-        4.未定义行为：在Linux系统上开启了ENABLE_SHARED_STACK参数时，协程栈上的对象不可被协程外部访问。
-			由于采用共享栈的方式调度协程，协程处于非执行状态时，栈上对象会被保存到另外一块内存中，因此会失效，
-			此时通过保存的地址访问栈上对象是一种未定义行为。有共享需求的对象请将其置于堆上或使用channel。
+	3.除网络IO、sleep以外的阻塞系统调用，会真正阻塞调度线程的运行，请使用co_await, 并启动几个线程去Run内置的线程池.
 
 ##### Linux系统上Hook的系统调用列表：
 * 
