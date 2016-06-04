@@ -58,7 +58,7 @@ struct Times : public TestWithParam<int>
 
 void foo (int tc_, bool dump)
 {
-//    g_Scheduler.GetOptions().stack_size = 4096;
+//    g_Scheduler.GetOptions().stack_size = 8192;
 
     int tcs[] = {tc_ * 10, tc_, tc_ / 10};
 
@@ -80,7 +80,7 @@ void foo (int tc_, bool dump)
 void ones_loop(int tc_)
 {
     co::Context **pp_ctx = new co::Context*;
-    *pp_ctx = new co::Context(4096, [=]{
+    *pp_ctx = new co::Context(8192, [=]{
             for (int i = 1; i < tc_; ++i)
                 (*pp_ctx)->SwapOut();
             });
@@ -221,7 +221,7 @@ TEST_P(Times, testCo)
 {
 //    g_Scheduler.GetOptions().debug = dbg_scheduler;
 //    g_Scheduler.GetOptions().debug_output = fopen("log", "w");
-    g_Scheduler.GetOptions().stack_size = 4096;
+    g_Scheduler.GetOptions().stack_size = 8192;
 
 //    int tcs[] = {tc_ / 10, tc_, tc_ * 10};
     int tcs[] = {tc_};
