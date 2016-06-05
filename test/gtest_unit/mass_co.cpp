@@ -42,7 +42,7 @@ TEST_P(MassCo, LittleStack)
     c = 0;
     int n = n_;
     for (int i = 0; i < n; ++i)
-        go_stack(4096) foo;
+        go_stack(8192) foo;
 
     if (is_show_memory)
     {
