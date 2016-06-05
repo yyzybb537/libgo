@@ -20,7 +20,7 @@ else()
     include_directories(${PROJECT_SOURCE_DIR}/../src/windows)
     set(depend_libgo libgo_static libgo_main)
 endif()
-link_directories(${PROJECT_SOURCE_DIR}/../build)
+link_directories(${PROJECT_BINARY_DIR}/..)
 
 if (UNIX)
     set(LINK_ARGS libgo libgo_main boost_coroutine boost_context boost_system boost_thread pthread dl)

@@ -12,7 +12,7 @@ include(${PROJECT_SOURCE_DIR}/../../boost.cmake)
 
 include_directories(${PROJECT_SOURCE_DIR}/../../src)
 include_directories(${PROJECT_SOURCE_DIR}/../../src/linux)
-link_directories(${PROJECT_SOURCE_DIR}/../../build)
+link_directories(${PROJECT_BINARY_DIR}/../..)
 
 if (UNIX)
     set(LINK_ARGS libgo dl pthread boost_coroutine boost_context boost_system boost_thread rt pthread)

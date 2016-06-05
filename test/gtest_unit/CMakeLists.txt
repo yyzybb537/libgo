@@ -20,7 +20,7 @@ include_directories(${PROJECT_SOURCE_DIR}/../../third_party/gtest/include)
 include_directories(${PROJECT_SOURCE_DIR}/../../libgo)
 include_directories(${PROJECT_SOURCE_DIR}/../../libgo/linux)
 link_directories(${PROJECT_BINARY_DIR}/gtest)
-link_directories(${PROJECT_SOURCE_DIR}/../../build)
+link_directories(${PROJECT_BINARY_DIR}/../..)
 add_subdirectory(${PROJECT_SOURCE_DIR}/../../third_party/gtest ${PROJECT_BINARY_DIR}/gtest)
 
 if (UNIX)

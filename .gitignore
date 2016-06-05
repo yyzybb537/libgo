@@ -4,3 +4,4 @@
 *.so
 third_party/gtest/*
 libgo/cmake_config.h
+vs_proj/vs201*
