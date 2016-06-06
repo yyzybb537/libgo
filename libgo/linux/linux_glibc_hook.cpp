@@ -405,7 +405,7 @@ int select(int nfds, fd_set *readfds, fd_set *writefds,
         int event = sets[i].second;
         for (int fd = 0; fd < nfds; ++fd) {
             if (FD_ISSET(fd, fds)) {
-                pfd_map[fd] &= event;
+                pfd_map[fd] |= event;
             }
         }
         FD_ZERO(fds);
