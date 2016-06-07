@@ -249,15 +249,15 @@ if (UNIX)
         add_subdirectory("${PROJECT_SOURCE_DIR}/test/benchmark")
     endif()
 
-    add_custom_target(samples
-        COMMAND ${CMAKE_COMMAND} -DOPEN_SUBDIRECTORY_SAMPLES=ON ${CMAKE_SOURCE_DIR}
+    add_custom_target(tutorial
+        COMMAND ${CMAKE_COMMAND} -DOPEN_SUBDIRECTORY_TUTORIAL=ON ${CMAKE_SOURCE_DIR}
         COMMAND ${CMAKE_COMMAND} --build ${CMAKE_BINARY_DIR} --target all
         WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
-        COMMENT "Add subdirectory samples"
+        COMMENT "Add subdirectory tutorial"
     )
-    option(OPEN_SUBDIRECTORY_SAMPLES "" OFF)
-    if (OPEN_SUBDIRECTORY_SAMPLES)
-        add_subdirectory("${PROJECT_SOURCE_DIR}/samples")
+    option(OPEN_SUBDIRECTORY_TUTORIAL "" OFF)
+    if (OPEN_SUBDIRECTORY_TUTORIAL)
+        add_subdirectory("${PROJECT_SOURCE_DIR}/tutorial")
     endif()
 
     add_custom_target(run_test
@@ -271,7 +271,7 @@ else ()
     if (BOOST_ROOT)
         add_subdirectory("${PROJECT_SOURCE_DIR}/test/gtest_unit")
         add_subdirectory("${PROJECT_SOURCE_DIR}/test/benchmark")
-        add_subdirectory(${PROJECT_SOURCE_DIR}/samples)
+        add_subdirectory(${PROJECT_SOURCE_DIR}/tutorial)
     endif()
 endif()
 
