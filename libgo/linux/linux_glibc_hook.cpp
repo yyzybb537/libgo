@@ -926,7 +926,7 @@ int gethostbyname_r(const char *name, struct hostent *ret_h, char *buf,
         return ctx.ret;
 
     // No yet invoke callback.
-    *h_errnop = EAGAIN; // TODO
+    *h_errnop = HOST_NOT_FOUND; // TODO
     return -1;
 }
 #endif
