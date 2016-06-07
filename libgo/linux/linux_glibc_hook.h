@@ -84,6 +84,14 @@ extern dup2_t dup2_f;
 typedef int(*dup3_t)(int, int, int);
 extern dup3_t dup3_f;
 
+// DNS by libcares
+#if WITH_CARES
+typedef struct hostent* (*gethostbyname_t)(const char *name);
+typedef int (*gethostbyname_r_t)(const char *name,
+        struct hostent *ret, char *buf, size_t buflen,
+        struct hostent **result, int *h_errnop);
+#endif
+
 } //extern "C"
 
 namespace co {
