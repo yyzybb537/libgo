@@ -231,6 +231,7 @@ class Scheduler
         CoTimerMgr timer_mgr_;
 
         ThreadPool *thread_pool_;
+        LFLock thread_pool_init_;
 
         std::atomic<uint32_t> task_count_{0};
         std::atomic<uint32_t> thread_id_{0};

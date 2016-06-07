@@ -21,13 +21,14 @@ Scheduler& Scheduler::getInstance()
 extern void coroutine_hook_init();
 Scheduler::Scheduler()
 {
-    thread_pool_ = new ThreadPool;
+    thread_pool_ = nullptr;
     coroutine_hook_init();
 }
 
 Scheduler::~Scheduler()
 {
-    delete thread_pool_;
+    if (thread_pool_)
+        delete thread_pool_;
 }
 
 ThreadLocalInfo& Scheduler::GetLocalInfo()
@@ -346,6 +347,13 @@ bool Scheduler::BlockCancelTimer(TimerId timer_id)
 
 ThreadPool& Scheduler::GetThreadPool()
 {
+    if (!thread_pool_) {
+        std::unique_lock<LFLock> lock(thread_pool_init_);
+        if (!thread_pool_) {
+            thread_pool_ = new ThreadPool;
+        }
+    }
+
     return *thread_pool_;
 }
 
