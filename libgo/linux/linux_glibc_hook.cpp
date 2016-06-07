@@ -739,8 +739,10 @@ void buffer_to_hostent(char *buf, hostent* h)
     buf += sizeof(int);
 
     // h_aliases
-    h->h_aliases = &buf;
-    for (char **p = h->h_aliases; *p; ++p) ;
+    h->h_aliases = (char**)buf;
+    char **p = h->h_aliases;
+    while (*p)
+        ++p;
 
     h->h_addr_list = ++p;
 }
@@ -788,44 +790,65 @@ bool hostent_dup(hostent * src, hostent * dst, char *buf, size_t & buflen)
     buf += sizeof(int);
 
     // h_aliases & h_addr_list
-    char **aliases_array = &buf;
+    char *aliases_array = buf;
     buf += sizeof(char*) * (alias_c + 1);
 
-    char **addr_array = &buf;
+    char *addr_array = buf;
     buf += sizeof(char*) * (addr_c + 1);
 
     char *alias_buf = buf;
     for (char **p = src->h_aliases; *p; ++p) {
-        *aliases_array = alias_buf;
-        ++ aliases_array;
+        *(char**)aliases_array = alias_buf;
+        aliases_array += sizeof(char*);
         strcpy(alias_buf, *p);
         alias_buf += strlen(*p) + 1;
     }
-    *aliases_array = nullptr;
+    *(char**)aliases_array = nullptr;
     buf = alias_buf;
 
     char *addr_buf = buf;
     for (char **p = src->h_addr_list; *p; ++p) {
-        *addr_array = addr_buf;
-        ++ addr_array;
+        *(char**)addr_array = addr_buf;
+        addr_array += sizeof(char*);
         strcpy(addr_buf, *p);
         addr_buf += strlen(*p) + 1;
     }
-    *addr_array = nullptr;
+    *(char**)addr_array = nullptr;
     buf = addr_buf;
 
-    assert(buf - ori_buf == expect_length);
+    assert(buf - ori_buf == (int)expect_length);
     buffer_to_hostent(ori_buf, dst);
     return true;
 }
 struct hostent* gethostbyname(const char *name)
 {
     static char s_buffer[8192];
-    // TODO
+    static hostent h;
+    hostent *p = &h;
+
+    int err = 0;
+    int res = gethostbyname_r(name, &h, s_buffer, sizeof(s_buffer),
+            &p, &err);
+    if (res == 0) {
+        return p;
+    }
+
+    h_errno = err;
+    return nullptr;
 }
 
+struct gethostbyname_context
+{
+    bool called;
+    int *errnop;
+    int ret;
+    hostent **result;
+    char* buf;
+    size_t buflen;
+};
+
 // TODO: 错误处理
-int gethostbyname_r(const char *name, struct hostent *ret, char *buf,
+int gethostbyname_r(const char *name, struct hostent *ret_h, char *buf,
         size_t buflen, struct hostent **result, int *h_errnop)
 {
     Task* tk = g_Scheduler.GetCurrentTask();
@@ -836,47 +859,54 @@ int gethostbyname_r(const char *name, struct hostent *ret, char *buf,
     int err = 0;
     if (!h_errnop) h_errnop = &err;
 
-    bool called = false;
-    int ret = 0;
+    gethostbyname_context ctx;
+    ctx.called = false;
+    ctx.errnop = h_errnop;
+    ctx.ret = 0;
+    ctx.result = result;
+    ctx.buf = buf;
+    ctx.buflen = buflen;
+
     ares_channel c;
     ares_init(&c);
     ares_gethostbyname(c, name, AF_INET,
-            (ares_host_callback)[&](void *, int status, int timeouts, struct hostent *hostent)
+            [](void * arg, int status, int timeouts, struct hostent *hostent)
             {
-                called = true;
+                gethostbyname_context *ctx = (gethostbyname_context *)arg;
+                ctx->called = true;
                 if (status != ARES_SUCCESS) {
-                    result = nullptr;
+                    *ctx->result = nullptr;
 
                     switch (status) {
                     case ARES_ENODATA:
-                        *h_errnop = NO_DATA;
+                        *ctx->errnop = NO_DATA;
                         break;
 
                     case ARES_EBADNAME:
-                        *h_errnop = NO_RECOVERY;
+                        *ctx->errnop = NO_RECOVERY;
                         break;
 
                     case ARES_ENOTFOUND:
                     default:
-                        *h_errnop = HOST_NOT_FOUND;
+                        *ctx->errnop = HOST_NOT_FOUND;
                         break;
                     }
 
-                    ret = -1;
+                    ctx->ret = -1;
                     return ;
                 }
 
-                size_t len = buflen;
-                if (!hostent_dup(hostent, *result, buf, len)) {
-                    result = nullptr;
-                    *h_errnop = ENOEXEC;    // 奇怪的错误码.
-                    ret = -1;
+                size_t len = ctx->buflen;
+                if (!hostent_dup(hostent, *ctx->result, ctx->buf, len)) {
+                    *ctx->result = nullptr;
+                    *ctx->errnop = ENOEXEC;    // 奇怪的错误码.
+                    ctx->ret = -1;
                     return ;
                 }
 
-                *h_errnop = 0;
-                ret = 0;
-            }, nullptr);
+                *ctx->errnop = 0;
+                ctx->ret = 0;
+            }, &ctx);
 
     fd_set readers, writers;
     FD_ZERO(&readers);
@@ -892,8 +922,8 @@ int gethostbyname_r(const char *name, struct hostent *ret, char *buf,
         }
     }
 
-    if (called)
-        return ret;
+    if (ctx.called)
+        return ctx.ret;
 
     // No yet invoke callback.
     *h_errnop = EAGAIN; // TODO
