@@ -229,105 +229,28 @@ namespace co {
         ares_gethostbyname(c, name, af,
                 [](void * arg, int status, int timeouts, struct hostent *hostent)
                 {
-                cares_async_context *ctx = (cares_async_context *)arg;
-                ctx->called = true;
-                if (status != ARES_SUCCESS) {
-                *ctx->result = nullptr;
-
-                switch (status) {
-                case ARES_ENODATA:
-                *ctx->errnop = NO_DATA;
-                break;
-
-                case ARES_EBADNAME:
-                *ctx->errnop = NO_RECOVERY;
-                break;
-
-                case ARES_ENOTFOUND:
-                default:
-                *ctx->errnop = HOST_NOT_FOUND;
-                break;
-                }
-
-                ctx->ret = -1;
-                return ;
-                }
-
-                if (!hostent_dup(hostent, *ctx->result, ctx->buf, *ctx->buflen)) {
-                    *ctx->result = nullptr;
-                    *ctx->errnop = ENOEXEC;    // 奇怪的错误码.
-                    ctx->ret = -1;
-                    return ;
-                }
-
-                *ctx->errnop = 0;
-                ctx->ret = 0;
-                }, &ctx);
-
-        fd_set readers, writers;
-        FD_ZERO(&readers);
-        FD_ZERO(&writers);
-
-        int nfds = ares_fds(c, &readers, &writers);
-        if (nfds) {
-            struct timeval tv, *tvp;
-            tvp = ares_timeout(c, NULL, &tv);
-            int count = select(nfds, &readers, &writers, NULL, tvp);
-            if (count > 0) {
-                ares_process(c, &readers, &writers);
-            }
-        }
-
-        if (ctx.called)
-            return ctx.ret;
-
-        // No yet invoke callback.
-        *h_errnop = HOST_NOT_FOUND; // TODO
-        return -1;
-    }
-
-    int gethostbyaddr_with_ares(const void *addr, int addrlen, int af,
-            struct hostent *ret_h, char *buf, size_t &buflen,
-            struct hostent **result, int *h_errnop)
-    {
-        int err = 0;
-        if (!h_errnop) h_errnop = &err;
-
-        cares_async_context ctx;
-        ctx.called = false;
-        ctx.errnop = h_errnop;
-        ctx.ret = 0;
-        ctx.result = result;
-        ctx.buf = buf;
-        ctx.buflen = &buflen;
-
-        ares_channel c;
-        ares_init(&c);
-        ares_gethostbyaddr(c, addr, addrlen, af,
-                [](void * arg, int status, int timeouts, struct hostent *hostent)
-                {
                     cares_async_context *ctx = (cares_async_context *)arg;
                     ctx->called = true;
                     if (status != ARES_SUCCESS) {
-                    *ctx->result = nullptr;
+                        *ctx->result = nullptr;
 
-                    switch (status) {
-                    case ARES_ENODATA:
-                    *ctx->errnop = NO_DATA;
-                    break;
+                        switch (status) {
+                        case ARES_ENODATA:
+                            *ctx->errnop = NO_DATA;
+                            break;
 
-                    case ARES_EBADNAME:
-                    *ctx->errnop = NO_RECOVERY;
-                    break;
+                        case ARES_EBADNAME:
+                            *ctx->errnop = NO_RECOVERY;
+                            break;
 
-                    case ARES_ENOTFOUND:
-                    default:
-                    *ctx->errnop = HOST_NOT_FOUND;
-                    break;
-                    }
+                        case ARES_ENOTFOUND:
+                        default:
+                            *ctx->errnop = HOST_NOT_FOUND;
+                            break;
+                        }
 
-                    ctx->ret = -1;
-                    return ;
+                        ctx->ret = -1;
+                        return ;
                     }
 
                     if (!hostent_dup(hostent, *ctx->result, ctx->buf, *ctx->buflen)) {
@@ -359,6 +282,85 @@ namespace co {
             return ctx.ret;
 
         // No yet invoke callback.
+        *result = nullptr;
+        *h_errnop = HOST_NOT_FOUND; // TODO
+        return -1;
+    }
+
+    int gethostbyaddr_with_ares(const void *addr, int addrlen, int af,
+            struct hostent *ret_h, char *buf, size_t &buflen,
+            struct hostent **result, int *h_errnop)
+    {
+        int err = 0;
+        if (!h_errnop) h_errnop = &err;
+
+        cares_async_context ctx;
+        ctx.called = false;
+        ctx.errnop = h_errnop;
+        ctx.ret = 0;
+        ctx.result = result;
+        ctx.buf = buf;
+        ctx.buflen = &buflen;
+
+        ares_channel c;
+        ares_init(&c);
+        ares_gethostbyaddr(c, addr, addrlen, af,
+                [](void * arg, int status, int timeouts, struct hostent *hostent)
+                {
+                    cares_async_context *ctx = (cares_async_context *)arg;
+                    ctx->called = true;
+                    if (status != ARES_SUCCESS) {
+                        *ctx->result = nullptr;
+
+                        switch (status) {
+                        case ARES_ENODATA:
+                            *ctx->errnop = NO_DATA;
+                            break;
+
+                        case ARES_EBADNAME:
+                            *ctx->errnop = NO_RECOVERY;
+                            break;
+
+                        case ARES_ENOTFOUND:
+                        default:
+                            *ctx->errnop = HOST_NOT_FOUND;
+                            break;
+                        }
+
+                        ctx->ret = -1;
+                        return ;
+                    }
+
+                    if (!hostent_dup(hostent, *ctx->result, ctx->buf, *ctx->buflen)) {
+                        *ctx->result = nullptr;
+                        *ctx->errnop = ENOEXEC;    // 奇怪的错误码.
+                        ctx->ret = -1;
+                        return ;
+                    }
+
+                    *ctx->errnop = 0;
+                    ctx->ret = 0;
+                }, &ctx);
+
+        fd_set readers, writers;
+        FD_ZERO(&readers);
+        FD_ZERO(&writers);
+
+        int nfds = ares_fds(c, &readers, &writers);
+        if (nfds) {
+            struct timeval tv, *tvp;
+            tvp = ares_timeout(c, NULL, &tv);
+            int count = select(nfds, &readers, &writers, NULL, tvp);
+            if (count > 0) {
+                ares_process(c, &readers, &writers);
+            }
+        }
+
+        if (ctx.called)
+            return ctx.ret;
+
+        // No yet invoke callback.
+        *result = nullptr;
         *h_errnop = HOST_NOT_FOUND; // TODO
         return -1;
     }
