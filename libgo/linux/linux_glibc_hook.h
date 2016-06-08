@@ -85,12 +85,13 @@ typedef int(*dup3_t)(int, int, int);
 extern dup3_t dup3_f;
 
 // DNS by libcares
-#if WITH_CARES
-typedef struct hostent* (*gethostbyname_t)(const char *name);
-typedef int (*gethostbyname_r_t)(const char *name,
-        struct hostent *ret, char *buf, size_t buflen,
-        struct hostent **result, int *h_errnop);
-#endif
+// gethostent
+// gethostbyname
+// gethostbyname2
+// gethostbyname_r
+// gethostbyname2_r
+// gethostbyaddr
+// gethostbyaddr_r
 
 } //extern "C"
 

@@ -6,6 +6,7 @@
 #include <sys/socket.h>
 #include <sys/stat.h>
 #include <sys/ioctl.h>
+#include <arpa/inet.h>
 #include <netdb.h>
 #include <assert.h>
 #include <chrono>
@@ -99,6 +100,270 @@ namespace co {
     {
         FdManager::getInstance().get_fd_ctx(socketfd);
     }
+
+
+#if WITH_CARES
+
+    void buffer_to_hostent(char *buf, hostent* h)
+    {
+        assert(h);
+        assert(buf);
+
+        // h_name
+        h->h_name = buf;
+        buf += strlen(h->h_name) + 1;
+
+        // h_addrtype & h_length
+        h->h_addrtype = *(int*)buf;
+        buf += sizeof(int);
+        h->h_length = *(int*)buf;
+        buf += sizeof(int);
+
+        // h_aliases
+        h->h_aliases = (char**)buf;
+        char **p = h->h_aliases;
+        while (*p)
+            ++p;
+
+        h->h_addr_list = ++p;
+    }
+    bool hostent_dup(hostent * src, hostent * dst, char *buf, size_t & buflen)
+    {
+        assert(src);
+        assert(dst);
+        assert(buf);
+        assert(buflen);
+
+        size_t expect_length = 0;
+        expect_length += strlen(src->h_name) + 1;
+
+        expect_length += sizeof(int) * 2;
+
+        size_t alias_c = 0;
+        for (char **p = src->h_aliases; *p; ++p, ++alias_c) {
+            expect_length += strlen(*p) + 1;
+        }
+        expect_length += sizeof(char*) * (alias_c + 1);
+
+        size_t addr_c = 0;
+        for (char **p = src->h_addr_list; *p; ++p, ++addr_c) {
+            expect_length += strlen(*p) + 1;
+        }
+        expect_length += sizeof(char*) * (addr_c + 1);
+        if (buflen < expect_length) {
+            buflen = expect_length;
+            return false;
+        }
+
+        char* ori_buf = buf;
+
+        // h_name
+        strcpy(buf, src->h_name);
+        dst->h_name = buf;
+        buf += strlen(dst->h_name) + 1;
+
+        // h_addrtype
+        *(int*)buf = src->h_addrtype;
+        buf += sizeof(int);
+
+        // h_length
+        *(int*)buf = src->h_length;
+        buf += sizeof(int);
+
+        // h_aliases & h_addr_list
+        char *aliases_array = buf;
+        buf += sizeof(char*) * (alias_c + 1);
+
+        char *addr_array = buf;
+        buf += sizeof(char*) * (addr_c + 1);
+
+        char *alias_buf = buf;
+        for (char **p = src->h_aliases; *p; ++p) {
+            *(char**)aliases_array = alias_buf;
+            aliases_array += sizeof(char*);
+            strcpy(alias_buf, *p);
+            alias_buf += strlen(*p) + 1;
+        }
+        *(char**)aliases_array = nullptr;
+        buf = alias_buf;
+
+        char *addr_buf = buf;
+        for (char **p = src->h_addr_list; *p; ++p) {
+            *(char**)addr_array = addr_buf;
+            addr_array += sizeof(char*);
+            strcpy(addr_buf, *p);
+            addr_buf += strlen(*p) + 1;
+        }
+        *(char**)addr_array = nullptr;
+        buf = addr_buf;
+
+        assert(buf - ori_buf == (int)expect_length);
+        buffer_to_hostent(ori_buf, dst);
+        return true;
+    }
+    struct cares_async_context
+    {
+        bool called;
+        int *errnop;
+        int ret;
+        hostent **result;
+        char* buf;
+        size_t *buflen;
+    };
+    int gethostbyname_with_ares(const char *name, int af, struct hostent *ret_h,
+            char *buf, size_t &buflen, struct hostent **result, int *h_errnop)
+    {
+        int err = 0;
+        if (!h_errnop) h_errnop = &err;
+
+        cares_async_context ctx;
+        ctx.called = false;
+        ctx.errnop = h_errnop;
+        ctx.ret = 0;
+        ctx.result = result;
+        ctx.buf = buf;
+        ctx.buflen = &buflen;
+
+        ares_channel c;
+        ares_init(&c);
+        ares_gethostbyname(c, name, af,
+                [](void * arg, int status, int timeouts, struct hostent *hostent)
+                {
+                cares_async_context *ctx = (cares_async_context *)arg;
+                ctx->called = true;
+                if (status != ARES_SUCCESS) {
+                *ctx->result = nullptr;
+
+                switch (status) {
+                case ARES_ENODATA:
+                *ctx->errnop = NO_DATA;
+                break;
+
+                case ARES_EBADNAME:
+                *ctx->errnop = NO_RECOVERY;
+                break;
+
+                case ARES_ENOTFOUND:
+                default:
+                *ctx->errnop = HOST_NOT_FOUND;
+                break;
+                }
+
+                ctx->ret = -1;
+                return ;
+                }
+
+                if (!hostent_dup(hostent, *ctx->result, ctx->buf, *ctx->buflen)) {
+                    *ctx->result = nullptr;
+                    *ctx->errnop = ENOEXEC;    // 奇怪的错误码.
+                    ctx->ret = -1;
+                    return ;
+                }
+
+                *ctx->errnop = 0;
+                ctx->ret = 0;
+                }, &ctx);
+
+        fd_set readers, writers;
+        FD_ZERO(&readers);
+        FD_ZERO(&writers);
+
+        int nfds = ares_fds(c, &readers, &writers);
+        if (nfds) {
+            struct timeval tv, *tvp;
+            tvp = ares_timeout(c, NULL, &tv);
+            int count = select(nfds, &readers, &writers, NULL, tvp);
+            if (count > 0) {
+                ares_process(c, &readers, &writers);
+            }
+        }
+
+        if (ctx.called)
+            return ctx.ret;
+
+        // No yet invoke callback.
+        *h_errnop = HOST_NOT_FOUND; // TODO
+        return -1;
+    }
+
+    int gethostbyaddr_with_ares(const void *addr, int addrlen, int af,
+            struct hostent *ret_h, char *buf, size_t &buflen,
+            struct hostent **result, int *h_errnop)
+    {
+        int err = 0;
+        if (!h_errnop) h_errnop = &err;
+
+        cares_async_context ctx;
+        ctx.called = false;
+        ctx.errnop = h_errnop;
+        ctx.ret = 0;
+        ctx.result = result;
+        ctx.buf = buf;
+        ctx.buflen = &buflen;
+
+        ares_channel c;
+        ares_init(&c);
+        ares_gethostbyaddr(c, addr, addrlen, af,
+                [](void * arg, int status, int timeouts, struct hostent *hostent)
+                {
+                    cares_async_context *ctx = (cares_async_context *)arg;
+                    ctx->called = true;
+                    if (status != ARES_SUCCESS) {
+                    *ctx->result = nullptr;
+
+                    switch (status) {
+                    case ARES_ENODATA:
+                    *ctx->errnop = NO_DATA;
+                    break;
+
+                    case ARES_EBADNAME:
+                    *ctx->errnop = NO_RECOVERY;
+                    break;
+
+                    case ARES_ENOTFOUND:
+                    default:
+                    *ctx->errnop = HOST_NOT_FOUND;
+                    break;
+                    }
+
+                    ctx->ret = -1;
+                    return ;
+                    }
+
+                    if (!hostent_dup(hostent, *ctx->result, ctx->buf, *ctx->buflen)) {
+                        *ctx->result = nullptr;
+                        *ctx->errnop = ENOEXEC;    // 奇怪的错误码.
+                        ctx->ret = -1;
+                        return ;
+                    }
+
+                    *ctx->errnop = 0;
+                    ctx->ret = 0;
+                }, &ctx);
+
+        fd_set readers, writers;
+        FD_ZERO(&readers);
+        FD_ZERO(&writers);
+
+        int nfds = ares_fds(c, &readers, &writers);
+        if (nfds) {
+            struct timeval tv, *tvp;
+            tvp = ares_timeout(c, NULL, &tv);
+            int count = select(nfds, &readers, &writers, NULL, tvp);
+            if (count > 0) {
+                ares_process(c, &readers, &writers);
+            }
+        }
+
+        if (ctx.called)
+            return ctx.ret;
+
+        // No yet invoke callback.
+        *h_errnop = HOST_NOT_FOUND; // TODO
+        return -1;
+    }
+#endif //WITH_CARES
+
 } //namespace co
 
 extern "C" {
@@ -723,112 +988,24 @@ int dup3(int oldfd, int newfd, int flags)
 }
 
 #if WITH_CARES
-void buffer_to_hostent(char *buf, hostent* h)
+struct hostent* co_gethostbyname2(const char *name, int af)
 {
-    assert(h);
-    assert(buf);
-
-    // h_name
-    h->h_name = buf;
-    buf += strlen(h->h_name) + 1;
-
-    // h_addrtype & h_length
-    h->h_addrtype = *(int*)buf;
-    buf += sizeof(int);
-    h->h_length = *(int*)buf;
-    buf += sizeof(int);
-
-    // h_aliases
-    h->h_aliases = (char**)buf;
-    char **p = h->h_aliases;
-    while (*p)
-        ++p;
-
-    h->h_addr_list = ++p;
-}
-bool hostent_dup(hostent * src, hostent * dst, char *buf, size_t & buflen)
-{
-    assert(src);
-    assert(dst);
-    assert(buf);
-    assert(buflen);
-
-    size_t expect_length = 0;
-    expect_length += strlen(src->h_name) + 1;
-
-    expect_length += sizeof(int) * 2;
-
-    size_t alias_c = 0;
-    for (char **p = src->h_aliases; *p; ++p, ++alias_c) {
-        expect_length += strlen(*p) + 1;
-    }
-    expect_length += sizeof(char*) * (alias_c + 1);
-
-    size_t addr_c = 0;
-    for (char **p = src->h_addr_list; *p; ++p, ++addr_c) {
-        expect_length += strlen(*p) + 1;
-    }
-    expect_length += sizeof(char*) * (addr_c + 1);
-    if (buflen < expect_length) {
-        buflen = expect_length;
-        return false;
-    }
-
-    char* ori_buf = buf;
-
-    // h_name
-    strcpy(buf, src->h_name);
-    dst->h_name = buf;
-    buf += strlen(dst->h_name) + 1;
-
-    // h_addrtype
-    *(int*)buf = src->h_addrtype;
-    buf += sizeof(int);
-
-    // h_length
-    *(int*)buf = src->h_length;
-    buf += sizeof(int);
-
-    // h_aliases & h_addr_list
-    char *aliases_array = buf;
-    buf += sizeof(char*) * (alias_c + 1);
-
-    char *addr_array = buf;
-    buf += sizeof(char*) * (addr_c + 1);
-
-    char *alias_buf = buf;
-    for (char **p = src->h_aliases; *p; ++p) {
-        *(char**)aliases_array = alias_buf;
-        aliases_array += sizeof(char*);
-        strcpy(alias_buf, *p);
-        alias_buf += strlen(*p) + 1;
-    }
-    *(char**)aliases_array = nullptr;
-    buf = alias_buf;
-
-    char *addr_buf = buf;
-    for (char **p = src->h_addr_list; *p; ++p) {
-        *(char**)addr_array = addr_buf;
-        addr_array += sizeof(char*);
-        strcpy(addr_buf, *p);
-        addr_buf += strlen(*p) + 1;
-    }
-    *(char**)addr_array = nullptr;
-    buf = addr_buf;
-
-    assert(buf - ori_buf == (int)expect_length);
-    buffer_to_hostent(ori_buf, dst);
-    return true;
-}
-struct hostent* gethostbyname(const char *name)
-{
-    static char s_buffer[8192];
+    static size_t s_buflen = 8192;
+    static char *s_buffer = (char*)malloc(s_buflen);
     static hostent h;
     hostent *p = &h;
 
     int err = 0;
-    int res = gethostbyname_r(name, &h, s_buffer, sizeof(s_buffer),
+    size_t buflen = s_buflen;
+    int res = co::gethostbyname_with_ares(name, af, p, s_buffer, buflen,
             &p, &err);
+    if (res == -1 && buflen > s_buflen) {
+        s_buflen = buflen;
+        s_buffer = (char*)realloc(s_buffer, s_buflen);
+        res = co::gethostbyname_with_ares(name, af, p, s_buffer, buflen,
+                &p, &err);
+    }
+
     if (res == 0) {
         return p;
     }
@@ -837,98 +1014,94 @@ struct hostent* gethostbyname(const char *name)
     return nullptr;
 }
 
-struct gethostbyname_context
+struct hostent* gethostbyname(const char *name)
 {
-    bool called;
-    int *errnop;
-    int ret;
-    hostent **result;
-    char* buf;
-    size_t buflen;
-};
+    Task* tk = g_Scheduler.GetCurrentTask();
+    DebugPrint(dbg_hook, "task(%s) hook gethostbyname(%s). %s coroutine.",
+            tk ? tk->DebugInfo() : "nil", name ? name : "nil",
+            g_Scheduler.IsCoroutine() ? "In" : "Not in");
 
-// TODO: 错误处理
+    return co_gethostbyname2(name, AF_INET);
+}
+
+struct hostent *gethostbyname2(const char *name, int af)
+{
+    Task* tk = g_Scheduler.GetCurrentTask();
+    DebugPrint(dbg_hook, "task(%s) hook gethostbyname2(%s, %d). %s coroutine.",
+            tk ? tk->DebugInfo() : "nil", name ? name : "nil", af,
+            g_Scheduler.IsCoroutine() ? "In" : "Not in");
+
+    return co_gethostbyname2(name, af);
+}
+
 int gethostbyname_r(const char *name, struct hostent *ret_h, char *buf,
         size_t buflen, struct hostent **result, int *h_errnop)
 {
     Task* tk = g_Scheduler.GetCurrentTask();
-    DebugPrint(dbg_hook, "task(%s) hook gethostbyname_r(%s). %s coroutine.",
-            tk ? tk->DebugInfo() : "nil", name ? name : "nil",
+    DebugPrint(dbg_hook, "task(%s) hook gethostbyname_r(name=%s, buflen=%d). %s coroutine.",
+            tk ? tk->DebugInfo() : "nil", name ? name : "nil", (int)buflen,
             g_Scheduler.IsCoroutine() ? "In" : "Not in");
 
+    return co::gethostbyname_with_ares(name, AF_INET, ret_h, buf, buflen, result, h_errnop);
+}
+
+int gethostbyname2_r(const char *name, int af,
+        struct hostent *ret, char *buf, size_t buflen,
+        struct hostent **result, int *h_errnop)
+{
+    Task* tk = g_Scheduler.GetCurrentTask();
+    DebugPrint(dbg_hook, "task(%s) hook gethostbyname2_r(name=%s, af=%d, buflen=%d). %s coroutine.",
+            tk ? tk->DebugInfo() : "nil", name ? name : "nil", af, (int)buflen,
+            g_Scheduler.IsCoroutine() ? "In" : "Not in");
+
+    return co::gethostbyname_with_ares(name, af, ret, buf, buflen, result, h_errnop);
+}
+
+struct hostent *gethostbyaddr(const void *addr, socklen_t len, int type)
+{
+    Task* tk = g_Scheduler.GetCurrentTask();
+    DebugPrint(dbg_hook, "task(%s) hook gethostbyaddr_r(ip=%s, type=%d). %s coroutine.",
+            tk ? tk->DebugInfo() : "nil",
+            inet_ntoa(*(in_addr*)addr), type,
+            g_Scheduler.IsCoroutine() ? "In" : "Not in");
+
+    static size_t s_buflen = 8192;
+    static char *s_buffer = (char*)malloc(s_buflen);
+    static hostent h;
+    hostent *p = &h;
+
     int err = 0;
-    if (!h_errnop) h_errnop = &err;
-
-    gethostbyname_context ctx;
-    ctx.called = false;
-    ctx.errnop = h_errnop;
-    ctx.ret = 0;
-    ctx.result = result;
-    ctx.buf = buf;
-    ctx.buflen = buflen;
-
-    ares_channel c;
-    ares_init(&c);
-    ares_gethostbyname(c, name, AF_INET,
-            [](void * arg, int status, int timeouts, struct hostent *hostent)
-            {
-                gethostbyname_context *ctx = (gethostbyname_context *)arg;
-                ctx->called = true;
-                if (status != ARES_SUCCESS) {
-                    *ctx->result = nullptr;
-
-                    switch (status) {
-                    case ARES_ENODATA:
-                        *ctx->errnop = NO_DATA;
-                        break;
-
-                    case ARES_EBADNAME:
-                        *ctx->errnop = NO_RECOVERY;
-                        break;
-
-                    case ARES_ENOTFOUND:
-                    default:
-                        *ctx->errnop = HOST_NOT_FOUND;
-                        break;
-                    }
-
-                    ctx->ret = -1;
-                    return ;
-                }
-
-                size_t len = ctx->buflen;
-                if (!hostent_dup(hostent, *ctx->result, ctx->buf, len)) {
-                    *ctx->result = nullptr;
-                    *ctx->errnop = ENOEXEC;    // 奇怪的错误码.
-                    ctx->ret = -1;
-                    return ;
-                }
-
-                *ctx->errnop = 0;
-                ctx->ret = 0;
-            }, &ctx);
-
-    fd_set readers, writers;
-    FD_ZERO(&readers);
-    FD_ZERO(&writers);
-
-    int nfds = ares_fds(c, &readers, &writers);
-    if (nfds) {
-        struct timeval tv, *tvp;
-        tvp = ares_timeout(c, NULL, &tv);
-        int count = select(nfds, &readers, &writers, NULL, tvp);
-        if (count > 0) {
-            ares_process(c, &readers, &writers);
-        }
+    size_t buflen = s_buflen;
+    int res = co::gethostbyaddr_with_ares(addr, len, type, p, s_buffer, buflen,
+            &p, &err);
+    if (res == -1 && buflen > s_buflen) {
+        s_buflen = buflen;
+        s_buffer = (char*)realloc(s_buffer, s_buflen);
+        res = co::gethostbyaddr_with_ares(addr, len, type, p, s_buffer, buflen,
+                &p, &err);
     }
 
-    if (ctx.called)
-        return ctx.ret;
+    if (res == 0) {
+        return p;
+    }
 
-    // No yet invoke callback.
-    *h_errnop = HOST_NOT_FOUND; // TODO
-    return -1;
+    h_errno = err;
+    return nullptr;
 }
+
+int gethostbyaddr_r(const void *addr, socklen_t len, int type,
+        struct hostent *ret, char *buf, size_t buflen,
+        struct hostent **result, int *h_errnop)
+{
+    Task* tk = g_Scheduler.GetCurrentTask();
+    DebugPrint(dbg_hook, "task(%s) hook gethostbyaddr_r(ip=%s, type=%d, buflen=%d). %s coroutine.",
+            tk ? tk->DebugInfo() : "nil",
+            inet_ntoa(*(in_addr*)addr), type, (int)buflen,
+            g_Scheduler.IsCoroutine() ? "In" : "Not in");
+
+    return co::gethostbyaddr_with_ares(addr, len, type, ret, buf, buflen, result, h_errnop);
+}
+
 #endif
 
 #if !defined(CO_DYNAMIC_LINK)
