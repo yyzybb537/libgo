@@ -1,5 +1,4 @@
 TODO:
-调度器重入throw异常
 支持同时等待多个Channel
 协程亲缘性
 打造类似TLS的CLS(协程局部对象)
@@ -38,3 +37,4 @@ HOOK close接口, 正确模拟阻塞式read/write中被close时的行为(close�
 改进定时器, 加快cancel的速度.(方案1.使用侵入式红黑树. 方案2.保存iterator)
 Work Stealing...
 __attribute__ ((always_inline))
+调度器重入不再crash
