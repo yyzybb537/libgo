@@ -166,7 +166,6 @@ if (UNIX)
         install(TARGETS ${SHARED_T} LIBRARY DESTINATION "lib" ARCHIVE DESTINATION "lib")
     endif()
 
-    set(CMAKE_INSTALL_PREFIX "/usr/local")
     install(TARGETS ${STATIC_T} LIBRARY DESTINATION "lib" ARCHIVE DESTINATION "lib")
     install(DIRECTORY ${PROJECT_SOURCE_DIR}/libgo/ DESTINATION "include/libgo"
         FILES_MATCHING
@@ -177,6 +176,7 @@ if (UNIX)
         PATTERN "ctx_ucontext" EXCLUDE
         PATTERN "*.h")
     install(DIRECTORY ${PROJECT_SOURCE_DIR}/libgo/linux/ DESTINATION "include/libgo" FILES_MATCHING PATTERN "*.h")
+    file(WRITE ${PROJECT_SOURCE_DIR}/tools/libgo.conf "${CMAKE_INSTALL_PREFIX}/lib")
     install(FILES ${PROJECT_SOURCE_DIR}/tools/libgo.conf DESTINATION "/etc/ld.so.conf.d")
     if (DEPEND_BOOST)
         install(DIRECTORY ${PROJECT_SOURCE_DIR}/libgo/ctx_boost_coroutine/ DESTINATION "include/libgo/ctx_boost_coroutine" FILES_MATCHING PATTERN "*.h")
