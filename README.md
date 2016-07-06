@@ -150,6 +150,12 @@ libgo有以下特点：
 		sleep     
 		usleep    
 		nanosleep
+		gethostbyname                                                               
+		gethostbyname2                                                              
+		gethostbyname_r                                                             
+		gethostbyname2_r                                                            
+		gethostbyaddr                                                               
+		gethostbyaddr_r
 
 	以上系统调用都是可能阻塞的系统调用, 在协程中使用均不再阻塞整个线程, 阻塞等待期间CPU可以切换到其他协程执行.
 
