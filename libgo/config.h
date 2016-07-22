@@ -76,6 +76,7 @@ extern std::string codebug_GetCurrentTime();
             fprintf(::co::codebug_GetDebugOutput(), "co_dbg[%s][%08u][%04u] " fmt "\n", \
                     ::co::codebug_GetCurrentTime().c_str(),\
                     ::co::codebug_GetCurrentProcessID(), ::co::codebug_GetCurrentThreadID(), ##__VA_ARGS__); \
+            fflush(::co::codebug_GetDebugOutput()); \
         } \
     } while(0)
 
