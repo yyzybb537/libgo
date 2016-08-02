@@ -1145,6 +1145,13 @@ int __usleep(useconds_t usec)
     timespec req = {usec / 1000000, usec * 1000};
     return __nanosleep(&req, nullptr);
 }
+
+// 老版本linux中没有dup3
+__attribute__((weak))
+int __dup3(int, int, int)
+{
+    return -1;
+}
 #endif
 } // extern "C"
 
