@@ -973,6 +973,10 @@ int dup2(int oldfd, int newfd)
 int dup3(int oldfd, int newfd, int flags)
 {
     if (!dup3_f) coroutine_hook_init();
+    if (!dup3_f) {
+        errno = EPERM;
+        return -1;
+    }
 
     if (newfd < 0 || oldfd < 0 || oldfd == newfd) return dup3_f(oldfd, newfd, flags);
 
@@ -1146,12 +1150,6 @@ int __usleep(useconds_t usec)
     return __nanosleep(&req, nullptr);
 }
 
-// 老版本linux中没有dup3
-__attribute__((weak))
-int __dup3(int, int, int)
-{
-    return -1;
-}
 #endif
 } // extern "C"
 
@@ -1220,7 +1218,9 @@ void coroutine_hook_init()
     if (!connect_f || !read_f || !write_f || !readv_f || !writev_f || !send_f
             || !sendto_f || !sendmsg_f || !accept_f || !poll_f || !select_f
             || !sleep_f|| !usleep_f || !nanosleep_f || !close_f || !fcntl_f || !setsockopt_f
-            || !getsockopt_f || !dup_f || !dup2_f || !dup3_f
+            || !getsockopt_f || !dup_f || !dup2_f 
+            // 老版本linux中没有dup3, 无需校验
+            // || !dup3_f
             )
     {
         fprintf(stderr, "Hook syscall failed. Please don't remove libc.a when static-link.\n");
