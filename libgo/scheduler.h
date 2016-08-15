@@ -89,12 +89,13 @@ class Scheduler
         // Run时执行的内容
         enum eRunFlags
         {
-            erf_do_coroutines = 0x1,
-            erf_do_timer = 0x2,
-            erf_do_sleeper = 0x4,
-            erf_do_eventloop = 0x8,
-            erf_idle_cpu = 0x10,
-            erf_all = 0x7fffffff,
+            erf_do_coroutines   = 0x1,
+            erf_do_timer        = 0x2,
+            erf_do_sleeper      = 0x4,
+            erf_do_eventloop    = 0x8,
+            erf_idle_cpu        = 0x10,
+            erf_signal          = 0x20,
+            erf_all             = 0x7fffffff,
         };
 
         typedef std::deque<Processer*> ProcList;

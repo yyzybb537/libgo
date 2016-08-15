@@ -42,6 +42,7 @@ static const uint64_t dbg_sleepblock        = 0x1 << 11;
 static const uint64_t dbg_spinlock          = 0x1 << 12;
 static const uint64_t dbg_fd_ctx            = 0x1 << 13;
 static const uint64_t dbg_debugger          = 0x1 << 14;
+static const uint64_t dbg_signal            = 0x1 << 15;
 static const uint64_t dbg_sys_max           = dbg_debugger;
 ///-------------------
 

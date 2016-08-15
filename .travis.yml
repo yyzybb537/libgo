@@ -14,19 +14,12 @@ install:
     - git clone https://github.com/yyzybb537/Boost-dev-bin.git /tmp/boost-dev-bin && sudo dpkg -i /tmp/boost-dev-bin/libboost1.59-all-dev.deb
     - ls /usr/local/lib/libboost*
     - sudo ldconfig
-    #- sudo apt-get install -y -qq libboost1.58-dev
-    #- sudo apt-get install -y -qq libboost-thread1.58-dev
-    #- sudo apt-get install -y -qq libboost-coroutine1.58-dev
-    #- sudo apt-get install -y -qq libboost-context1.58-dev
-    #- sudo apt-get install -y -qq libboost-system1.58-dev
-    #- sudo apt-get install -y -qq libboost-date-time1.58-dev
-    #- sudo apt-get install -y -qq libboost-chrono1.58-dev
-    #- sudo apt-get install -y -qq libboost-regex1.58-dev
     - sudo apt-get install -y -qq cmake 
 
 script: 
     - mkdir build; pushd build;
     - cmake .. && make -j4 && sudo make install && make test_small && make tutorial && make run_test
+    - sudo rm * -rf && cmake .. -DENABLE_BOOST_COROUTINE=ON -DWITH_SAFE_SIGNAL=ON && make -j4 && sudo make install && make test_small && make tutorial && make run_test
     - sudo rm * -rf && cmake .. -DENABLE_BOOST_COROUTINE=ON && make -j4 && sudo make install && make test_small && make tutorial && make run_test
     - sudo rm * -rf && cmake .. -DENABLE_BOOST_CONTEXT=ON && make -j4 && sudo make install && make test_small && make tutorial && make run_test
     - popd;

@@ -8,6 +8,9 @@
 #if __linux__
 #include <sys/time.h>
 #endif
+#if WITH_SAFE_SIGNAL
+#include "hook_signal.h"
+#endif
 
 namespace co
 {
@@ -143,6 +146,12 @@ uint32_t Scheduler::Run(int flags)
             info.sleep_ms = 1;
         }
     }
+
+#if WITH_SAFE_SIGNAL
+    if (flags & erf_signal) {
+        HookSignal::getInstance().Run();
+    }
+#endif
 
     return run_task_count;
 }

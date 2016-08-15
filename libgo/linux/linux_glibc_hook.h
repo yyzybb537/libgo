@@ -96,6 +96,9 @@ extern dup3_t dup3_f;
 } //extern "C"
 
 namespace co {
+#if WITH_SAFE_SIGNAL
+    extern sighandler_t* get_sighandlers();
+#endif
     extern void set_connect_timeout(int milliseconds);
     extern void initialize_socket_async_methods(int socketfd);
 } //namespace co

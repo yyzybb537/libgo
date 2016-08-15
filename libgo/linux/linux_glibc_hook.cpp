@@ -15,6 +15,7 @@
 #include "scheduler.h"
 #include "fd_context.h"
 #include "linux_glibc_hook.h"
+#include "hook_signal.h"
 #if WITH_CARES
 #include <ares.h>
 #endif
@@ -1108,6 +1109,15 @@ int gethostbyaddr_r(const void *addr, socklen_t len, int type,
     return co::gethostbyaddr_with_ares(addr, len, type, ret, buf, buflen, result, h_errnop);
 }
 
+#endif
+
+
+// safe signal
+#if WITH_SAFE_SIGNAL
+sighandler_t signal(int signum, sighandler_t handler)
+{
+    return co::HookSignal::getInstance().SignalSyscall(signum, handler);
+}
 #endif
 
 #if !defined(CO_DYNAMIC_LINK)
