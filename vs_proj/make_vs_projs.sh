@@ -1,5 +1,7 @@
 #!/bin/sh
 
+git submodule update --init --recursive
+
 mkdir vs2013/x86 vs2013/x64 vs2015/x86 vs2015/x64 -p
 
 rm vs2013/x86/* -rf

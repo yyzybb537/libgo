@@ -48,6 +48,8 @@ if (WIN32)
     list(REMOVE_ITEM SRC_LIST ${PROJECT_SOURCE_DIR}/fork.cpp)
     list(REMOVE_ITEM SRC_LIST ${PROJECT_SOURCE_DIR}/protect.cpp)
     list(REMOVE_ITEM SRC_LIST ${PROJECT_SOURCE_DIR}/dns.cpp)
+    list(REMOVE_ITEM SRC_LIST ${PROJECT_SOURCE_DIR}/dup.cpp)
+    list(REMOVE_ITEM SRC_LIST ${PROJECT_SOURCE_DIR}/signal.cpp)
 endif()
 
 foreach(var ${SRC_LIST})
