@@ -11,9 +11,6 @@
 
 namespace co
 {
-    typedef void*(*stack_malloc_fn_t)(size_t size);
-    typedef void(*stack_free_fn_t)(void *ptr);
-
     struct StackAllocator
     {
         static stack_malloc_fn_t& get_malloc_fn()

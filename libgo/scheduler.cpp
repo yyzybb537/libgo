@@ -15,12 +15,6 @@
 namespace co
 {
 
-Scheduler& Scheduler::getInstance()
-{
-    static Scheduler obj;
-    return obj;
-}
-
 extern void coroutine_hook_init();
 Scheduler::Scheduler()
 {
@@ -56,12 +50,6 @@ Processer* Scheduler::GetProcesser(std::size_t index)
         run_proc_list_.push_back(new Processer);
 
     return run_proc_list_[index];
-}
-
-CoroutineOptions& Scheduler::GetOptions()
-{
-    static CoroutineOptions options;
-    return options;
 }
 
 void Scheduler::CreateTask(TaskF const& fn, std::size_t stack_size,
@@ -373,14 +361,6 @@ ThreadPool& Scheduler::GetThreadPool()
     return *thread_pool_;
 }
 
-uint64_t codebug_GetDebugOptions()
-{
-    return g_Scheduler.GetOptions().debug;
-}
-FILE* codebug_GetDebugOutput()
-{
-    return g_Scheduler.GetOptions().debug_output;
-}
 uint32_t codebug_GetCurrentProcessID()
 {
     return g_Scheduler.GetCurrentProcessID();

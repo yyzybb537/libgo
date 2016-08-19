@@ -63,8 +63,71 @@ enum e_go_dispatch
     // ...
 };
 
-extern uint64_t codebug_GetDebugOptions();
-extern FILE* codebug_GetDebugOutput();
+// 协程中抛出未捕获异常时的处理方式
+enum class eCoExHandle : uint8_t
+{
+    immedaitely_throw,  // 立即抛出
+    delay_rethrow,      // 延迟到调度器调度时抛出
+    debugger_only,      // 仅打印调试信息
+};
+
+typedef void*(*stack_malloc_fn_t)(size_t size);
+typedef void(*stack_free_fn_t)(void *ptr);
+
+///---- 配置选项
+struct CoroutineOptions
+{
+    /*********************** Debug options **********************/
+    // 调试选项, 例如: dbg_switch 或 dbg_hook|dbg_task|dbg_wait
+    uint64_t debug = 0;            
+
+    // 调试信息输出位置，改写这个配置项可以重定向输出位置
+    FILE* debug_output = stdout;   
+    /************************************************************/
+
+    /**************** Stack and Exception options ***************/
+    // 协程中抛出未捕获异常时的处理方式
+    eCoExHandle exception_handle = eCoExHandle::immedaitely_throw;
+
+    // 协程栈大小上限, 只会影响在此值设置之后新创建的P, 建议在首次Run前设置.
+    // stack_size建议设置不超过1MB
+    // Linux系统下, 设置2MB的stack_size会导致提交内存的使用量比1MB的stack_size多10倍.
+    uint32_t stack_size = 1 * 1024 * 1024; 
+
+    // 没有协程需要调度时, Run最多休眠的毫秒数(开发高实时性系统可以考虑调低这个值)
+    uint8_t max_sleep_ms = 20;
+
+    // 每个定时器每帧处理的任务数量(为0表示不限, 每帧处理当前所有可以处理的任务)
+    uint32_t timer_handle_every_cycle = 0;
+
+    // epoll每次触发的event数量(Windows下无效)
+    uint32_t epoll_event_size = 10240;
+
+    // 是否启用worksteal算法
+    bool enable_work_steal = true;
+
+    // 是否启用协程统计功能(会有一点性能损耗, 默认不开启)
+    bool enable_coro_stat = false;
+
+    // 栈顶设置保护内存段的内存页数量(仅linux下有效)(默认为0, 即:不设置)
+    // 在栈顶内存对齐后的前几页设置为protect属性.
+    // 所以开启此选项时, stack_size不能少于protect_stack_page+1页
+    uint32_t & protect_stack_page;
+
+    // 设置栈内存管理(malloc/free)
+    // 使用fiber做协程底层时无效
+    stack_malloc_fn_t & stack_malloc_fn;
+    stack_free_fn_t & stack_free_fn;
+
+    CoroutineOptions();
+
+    inline static CoroutineOptions& getInstance()
+    {
+        static CoroutineOptions obj;
+        return obj;
+    }
+};
+
 extern uint32_t codebug_GetCurrentProcessID();
 extern uint32_t codebug_GetCurrentThreadID();
 extern std::string codebug_GetCurrentTime();
@@ -73,11 +136,11 @@ extern std::string codebug_GetCurrentTime();
 
 #define DebugPrint(type, fmt, ...) \
     do { \
-        if (::co::codebug_GetDebugOptions() & (type)) { \
-            fprintf(::co::codebug_GetDebugOutput(), "co_dbg[%s][%08u][%04u] " fmt "\n", \
+        if (::co::CoroutineOptions::getInstance().debug & (type)) { \
+            fprintf(::co::CoroutineOptions::getInstance().debug_output, "co_dbg[%s][%08u][%04u] " fmt "\n", \
                     ::co::codebug_GetCurrentTime().c_str(),\
                     ::co::codebug_GetCurrentProcessID(), ::co::codebug_GetCurrentThreadID(), ##__VA_ARGS__); \
-            fflush(::co::codebug_GetDebugOutput()); \
+            fflush(::co::CoroutineOptions::getInstance().debug_output); \
         } \
     } while(0)
 
