@@ -98,6 +98,13 @@ uint32_t Scheduler::Run(int flags)
         info.proc = GetProcesser(info.thread_id);
     }
 
+#if LIBGO_SINGLE_THREAD
+    if (info.thread_id > 0) {
+        usleep(20 * 1000);
+        return 0;
+    }
+#endif
+
     if (IsCoroutine()) return 0;
 
     uint32_t run_task_count = 0;
