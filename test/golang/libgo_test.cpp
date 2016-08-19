@@ -14,18 +14,20 @@ void dump(string name, int n, T start, T end)
 //    cout << "ok. cost " << chrono::duration_cast<chrono::milliseconds>(end - start).count() << " ms" << endl;
 }
 
-void test_switch()
+void test_switch(int coro)
 {
     auto start = chrono::steady_clock::now();
-    co_chan<void> c;
-    go [=]{
-        for (int i = 0; i < N; ++i)
-            co_yield;
-        c << nullptr;
-    };
-    c >> nullptr;
+    co_chan<void> c(coro);
+    for (int i = 0; i < coro; ++i)
+        go [=]{
+            for (int i = 0; i < N / coro; ++i)
+                co_yield;
+            c << nullptr;
+        };
+    for (int i = 0; i < coro; ++i)
+        c >> nullptr;
     auto end = chrono::steady_clock::now();
-    dump("BenchmarkSwitch", N, start, end);
+    dump("BenchmarkSwitch_" + std::to_string(coro), N, start, end);
 }
 
 void test_channel(int capa, int n)
@@ -45,7 +47,13 @@ void test_channel(int capa, int n)
 
 int main()
 {
-    go &test_switch;
+    go []{ test_switch(1); };
+    co_sched.RunUntilNoTask();
+
+    go []{ test_switch(1000); };
+    co_sched.RunUntilNoTask();
+
+    go []{ test_switch(10000); };
     co_sched.RunUntilNoTask();
 
     go []{ test_channel(0, N); };
