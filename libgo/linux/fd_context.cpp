@@ -90,6 +90,14 @@ bool FileDescriptorCtx::is_socket()
 {
     return is_socket_;
 }
+bool FileDescriptorCtx::is_epoll()
+{
+    return is_epoll_;
+}
+void FileDescriptorCtx::set_is_epoll()
+{
+    is_epoll_ = true;
+}
 bool FileDescriptorCtx::closed()
 {
     return closed_;
@@ -174,12 +182,12 @@ bool FileDescriptorCtx::add_into_reactor(int poll_events, IoSentryPtr sentry)
         if (!pending_events_) {
             // 之前不再epoll中, 使用ADD添加
             if (-1 == g_Scheduler.GetIoWait().reactor_ctl(GetEpollFd(),
-                        EPOLL_CTL_ADD, fd_, events, is_socket()))
+                        EPOLL_CTL_ADD, fd_, events, is_socket() || is_epoll()))
                 return false;
         } else {
             // 之前在epoll中, 使用MOD修改关注的事件
             int res = g_Scheduler.GetIoWait().reactor_ctl(GetEpollFd(), 
-                    EPOLL_CTL_MOD, fd_, events, is_socket());
+                    EPOLL_CTL_MOD, fd_, events, is_socket() || is_epoll());
             if (res == -1) {
                 if (errno == ENOENT) {
                     assert(false);  // add和del之间有锁在控制, 不应该走到这里.
@@ -245,7 +253,7 @@ void FileDescriptorCtx::del_events(int poll_events)
     if (new_pending_event) {
         // 还有事件要监听, MOD
         if (-1 == g_Scheduler.GetIoWait().reactor_ctl(GetEpollFd(), 
-                    EPOLL_CTL_MOD, fd_, new_pending_event, is_socket()))
+                    EPOLL_CTL_MOD, fd_, new_pending_event, is_socket() || is_epoll()))
         {
             DebugPrint(dbg_fd_ctx, "fd(%p:%d) epoll_ctl_mod(events:%d) error:%s",
                     this, fd_, new_pending_event, strerror(errno));
@@ -253,7 +261,7 @@ void FileDescriptorCtx::del_events(int poll_events)
     } else {
         // 没有需要监听的事件了, 可以DEL了
         if (-1 == g_Scheduler.GetIoWait().reactor_ctl(GetEpollFd(), 
-                    EPOLL_CTL_DEL, fd_, 0, is_socket())) {
+                    EPOLL_CTL_DEL, fd_, 0, is_socket() || is_epoll())) {
             DebugPrint(dbg_fd_ctx, "fd(%p:%d) epoll_ctl_del error:%s", this, fd_,
                     strerror(errno));
         }
@@ -370,9 +378,9 @@ std::string FileDescriptorCtx::GetDebugInfo()
 {
     std::unique_lock<std::mutex> lock(lock_);
     char buf[256];
-    sprintf(buf, "fd[%d] closed(%d) is_socket(%d) user_nonblock(%d)"
+    sprintf(buf, "fd[%d] closed(%d) is_socket(%d) is_epoll(%d) user_nonblock(%d)"
             " i_tasks(%d) o_tasks(%d) io_tasks(%d)",
-            fd_, closed(), is_socket_, user_nonblock_, (int)i_tasks_.size(),
+            fd_, closed(), is_socket_, is_epoll_, user_nonblock_, (int)i_tasks_.size(),
             (int)o_tasks_.size(), (int)io_tasks_.size()
             );
     return buf;

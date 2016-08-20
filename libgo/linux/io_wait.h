@@ -40,7 +40,7 @@ public:
     * reactor相关操作, 使用类似epoll的接口屏蔽epoll/poll的区别
     * TODO: 同时支持socket-io和文件io.
     */
-    int reactor_ctl(int epollfd, int epoll_ctl_mod, int fd, uint32_t poll_events, bool is_socket);
+    int reactor_ctl(int epollfd, int epoll_ctl_mod, int fd, uint32_t poll_events, bool is_support);
     // --------------------------------------
 
     int WaitLoop(int wait_milliseconds);

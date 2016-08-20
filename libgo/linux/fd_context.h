@@ -64,6 +64,7 @@ public:
 
     bool is_initialize();
     bool is_socket();
+    bool is_epoll();
     bool closed();
     int close(bool call_syscall);
 
@@ -72,6 +73,8 @@ public:
 
     void set_sys_nonblock(bool b);
     bool sys_nonblock();
+
+    void set_is_epoll();
 
     // @type: SO_RCVTIMEO SO_SNDTIMEO
     void set_time_o(int type, timeval const& tv);
@@ -105,6 +108,7 @@ private:
     std::mutex lock_;
     bool is_initialize_ = false;
     bool is_socket_ = false;
+    bool is_epoll_ = false;
     bool sys_nonblock_ = false;
     bool user_nonblock_ = false;
     bool closed_ = false;

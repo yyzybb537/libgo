@@ -93,6 +93,10 @@ extern dup3_t dup3_f;
 // gethostbyaddr
 // gethostbyaddr_r
 
+// libgo提供的协程版epoll_wait接口
+extern int libgo_epoll_wait(int epfd, struct epoll_event *events,
+        int maxevents, int timeout);
+
 } //extern "C"
 
 namespace co {

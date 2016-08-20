@@ -98,9 +98,9 @@ void IoWait::__IOBlockTriggered(IoSentryPtr io_sentry)
     }
 }
 
-int IoWait::reactor_ctl(int epollfd, int epoll_ctl_mod, int fd, uint32_t poll_events, bool is_socket)
+int IoWait::reactor_ctl(int epollfd, int epoll_ctl_mod, int fd, uint32_t poll_events, bool is_support)
 {
-    if (is_socket) {
+    if (is_support) {
         epoll_event ev;
         ev.events = PollEvent2Epoll(poll_events);
         ev.data.fd = fd;

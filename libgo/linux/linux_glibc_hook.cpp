@@ -994,6 +994,34 @@ int dup3(int oldfd, int newfd, int flags)
     return ret;
 }
 
+int libgo_epoll_wait(int epfd, struct epoll_event *events, int maxevents, int timeout)
+{
+    Task* tk = g_Scheduler.GetCurrentTask();
+    DebugPrint(dbg_hook, "task(%s) call libgo_epoll_wait. %s coroutine.",
+            tk ? tk->DebugInfo() : "nil", g_Scheduler.IsCoroutine() ? "In" : "Not in");
+
+    if (!tk)
+        return epoll_wait(epfd, events, maxevents, timeout);
+
+    int res = epoll_wait(epfd, events, maxevents, 0);
+    if (res != 0) return res;
+
+    FdCtxPtr fd_ctx = FdManager::getInstance().get_fd_ctx(epfd);
+    if (!fd_ctx || fd_ctx->closed()) {
+        errno = EINVAL;  // 已被close或无效的fd
+        return -1;
+    }
+    fd_ctx->set_is_epoll();
+
+    pollfd pfd;
+    pfd.fd = epfd;
+    pfd.events = POLLIN | POLLOUT;
+    pfd.revents = 0;
+    res = poll(&pfd, 1, timeout);
+    if (res <= 0) return res;
+    return epoll_wait(epfd, events, maxevents, 0);
+}
+
 #if WITH_CARES
 struct hostent* co_gethostbyname2(const char *name, int af)
 {
