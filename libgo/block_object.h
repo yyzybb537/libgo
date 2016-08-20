@@ -1,6 +1,5 @@
 #pragma once
-#include "ts_queue.h"
-#include "task.h"
+#include <libgo/task.h>
 
 namespace co
 {

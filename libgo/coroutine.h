@@ -1,9 +1,12 @@
 #pragma once
-#include "scheduler.h"
-#include "channel.h"
-#include "thread_pool.h"
-#include "co_rwmutex.h"
-#include "debugger.h"
+#include <libgo/scheduler.h>
+#include <libgo/channel.h>
+#include <libgo/thread_pool.h>
+#include <libgo/co_rwmutex.h>
+#include <libgo/debugger.h>
+#if __linux__
+#include "linux_glibc_hook.h"
+#endif
 
 namespace co
 {

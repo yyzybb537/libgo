@@ -1,6 +1,6 @@
 #include "io_wait.h"
 #include <sys/epoll.h>
-#include "scheduler.h"
+#include <libgo/scheduler.h>
 #include <signal.h>
 
 namespace co
@@ -49,6 +49,7 @@ static std::string EpollEvent2Str(uint32_t events)
     if (events & EPOLLOUT) e += "POLLOUT|";
     if (events & EPOLLHUP) e += "POLLHUP|";
     if (events & EPOLLERR) e += "POLLERR|";
+    if (events & EPOLLET) e += "EPOLLET|";
     return e;
 }
 
@@ -98,11 +99,13 @@ void IoWait::__IOBlockTriggered(IoSentryPtr io_sentry)
     }
 }
 
-int IoWait::reactor_ctl(int epollfd, int epoll_ctl_mod, int fd, uint32_t poll_events, bool is_support)
+int IoWait::reactor_ctl(int epollfd, int epoll_ctl_mod, int fd,
+        uint32_t poll_events, bool is_support, bool et_mode)
 {
     if (is_support) {
         epoll_event ev;
         ev.events = PollEvent2Epoll(poll_events);
+        if (et_mode) ev.events |= EPOLLET;
         ev.data.fd = fd;
         int res = epoll_ctl(epollfd, epoll_ctl_mod, fd, &ev);
         DebugPrint(dbg_ioblock, "epoll_ctl(fd:%d, MOD:%s, events:%s) returns %d",

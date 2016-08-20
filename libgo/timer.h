@@ -1,12 +1,6 @@
 #pragma once
-#include <map>
-#include <functional>
-#include <chrono>
-#include <memory>
-#include <vector>
-#include <list>
-#include "spinlock.h"
-#include "config.h"
+#include <libgo/config.h>
+#include <libgo/spinlock.h>
 
 namespace co
 {
@@ -41,7 +35,7 @@ private:
 
 private:
     uint64_t id_;
-    static std::atomic<uint64_t> s_id;
+    static atomic_t<uint64_t> s_id;
     fn_t fn_;
     bool active_;
     LFLock fn_lock_;
@@ -105,8 +99,8 @@ private:
     // 下一个timer触发的时间
     //  单位: milliseconds
     // 这个值由GetExpired时成功lock的线程来设置, 未lock成功的线程也允许读取.
-    std::atomic<long long> system_next_trigger_time_;
-    std::atomic<long long> steady_next_trigger_time_;
+    atomic_t<long long> system_next_trigger_time_;
+    atomic_t<long long> steady_next_trigger_time_;
 };
 
 } //namespace co

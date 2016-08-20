@@ -1,5 +1,5 @@
-#include "debugger.h"
-#include "scheduler.h"
+#include <libgo/debugger.h>
+#include <libgo/scheduler.h>
 
 namespace co
 {

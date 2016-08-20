@@ -1,6 +1,6 @@
 #pragma once
 #include <stdint.h>
-#include "block_object.h"
+#include <libgo/block_object.h>
 
 
 namespace co

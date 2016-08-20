@@ -1,9 +1,9 @@
-#include "task.h"
+#include <libgo/task.h>
 #include <iostream>
 #include <string.h>
 #include <string>
 #include <algorithm>
-#include "scheduler.h"
+#include <libgo/scheduler.h>
 
 namespace co
 {
@@ -27,7 +27,7 @@ std::string GetTaskStateName(TaskState state)
 }
 
 uint64_t Task::s_id = 0;
-std::atomic<uint64_t> Task::s_task_count{0};
+atomic_t<uint64_t> Task::s_task_count{0};
 
 LFLock Task::s_stat_lock;
 std::set<Task*> Task::s_stat_set;

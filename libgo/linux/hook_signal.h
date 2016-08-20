@@ -1,6 +1,6 @@
 #pragma once
 #include <signal.h>
-#include <atomic>
+#include <libgo/config.h>
 
 namespace co
 {

@@ -1,10 +1,7 @@
 #pragma once
-#include "config.h"
-#include <mutex>
-#include <assert.h>
-#include <deque>
-#include "util.h"
-#include "spinlock.h"
+#include <libgo/config.h>
+#include <libgo/util.h>
+#include <libgo/spinlock.h>
 
 namespace co
 {

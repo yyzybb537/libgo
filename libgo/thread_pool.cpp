@@ -1,8 +1,8 @@
-#include "thread_pool.h"
+#include <libgo/thread_pool.h>
 #include <unistd.h>
 #include <thread>
-#include "scheduler.h"
-#include "error.h"
+#include <libgo/scheduler.h>
+#include <libgo/error.h>
 
 namespace co {
 

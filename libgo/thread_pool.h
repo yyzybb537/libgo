@@ -2,8 +2,8 @@
 #include <functional>
 #include <condition_variable>
 #include <mutex>
-#include "channel.h"
-#include "ts_queue.h"
+#include <libgo/channel.h>
+#include <libgo/ts_queue.h>
 
 namespace co {
 

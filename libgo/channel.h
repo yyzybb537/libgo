@@ -1,9 +1,9 @@
 #pragma once
 #include <memory>
 #include <queue>
-#include "block_object.h"
-#include "co_mutex.h"
-#include "scheduler.h"
+#include <libgo/block_object.h>
+#include <libgo/co_mutex.h>
+#include <libgo/scheduler.h>
 
 namespace co
 {

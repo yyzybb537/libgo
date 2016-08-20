@@ -1,7 +1,5 @@
 #pragma once
-#include <atomic>
-#include <assert.h>
-#include "config.h"
+#include <libgo/config.h>
 
 namespace co
 {

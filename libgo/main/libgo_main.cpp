@@ -1,4 +1,4 @@
-#include "coroutine.h"
+#include <libgo/coroutine.h>
 
 extern "C" int __coroutine_main_function(int argc, char **argv);
 

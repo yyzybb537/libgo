@@ -1,2 +1,2 @@
 #pragma once
-#include "coroutine.h"
+#include <libgo/coroutine.h>

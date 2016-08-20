@@ -1,11 +1,11 @@
-#include "processer.h"
-#include "scheduler.h"
-#include "error.h"
-#include "assert.h"
+#include <libgo/processer.h>
+#include <libgo/scheduler.h>
+#include <libgo/error.h>
+#include <assert.h>
 
 namespace co {
 
-std::atomic<uint32_t> Processer::s_id_{0};
+atomic_t<uint32_t> Processer::s_id_{0};
 
 Processer::Processer()
     : id_(++s_id_)

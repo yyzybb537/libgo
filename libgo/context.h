@@ -1,8 +1,9 @@
 #pragma once
 
+#include <libgo/config.h>
 #include <functional>
 #include <memory>
-#include "error.h"
+#include <libgo/error.h>
 #include <string.h>
 
 #if __linux__
@@ -67,13 +68,13 @@ namespace co
 } //namespace co
 
 #if USE_BOOST_COROUTINE
-# include "ctx_boost_coroutine/context.h"
+# include <libgo/ctx_boost_coroutine/context.h>
 #elif USE_BOOST_CONTEXT
-# include "ctx_boost_context/context.h"
+# include <libgo/ctx_boost_context/context.h>
 #elif USE_UCONTEXT
-# include "ctx_ucontext/context.h"
+# include <libgo/ctx_ucontext/context.h>
 #elif USE_FIBER
-# include "ctx_win_fiber/context.h"
+# include <libgo/ctx_win_fiber/context.h>
 #else
 # error "No context sets."
 #endif

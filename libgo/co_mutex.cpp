@@ -1,6 +1,6 @@
-#include "co_mutex.h"
-#include "scheduler.h"
-#include "error.h"
+#include <libgo/co_mutex.h>
+#include <libgo/scheduler.h>
+#include <libgo/error.h>
 #include <assert.h>
 
 namespace co

@@ -1,8 +1,26 @@
 #pragma once
-#include "cmake_config.h"
-#include <chrono>
+#include <libgo/cmake_config.h>
+#include <unordered_map>
+#include <list>
+#include <sys/epoll.h>
+#include <errno.h>
+#include <string.h>
+#include <cstdlib>
 #include <stdio.h>
+#include <atomic>
+#include <mutex>
+#include <assert.h>
+#include <deque>
 #include <string>
+#include <type_traits>
+#include <stddef.h>
+#include <exception>
+#include <vector>
+#include <set>
+#include <map>
+#include <functional>
+#include <chrono>
+#include <memory>
 
 // VS2013²»Ö§³Öthread_local
 #if defined(_MSC_VER) && _MSC_VER < 1900
@@ -23,6 +41,14 @@
 
 namespace co
 {
+
+#if LIBGO_SINGLE_THREAD
+    template <typename T>
+    using atomic_t = T;
+#else
+    template <typename T>
+    using atomic_t = std::atomic<T>;
+#endif
 
 ///---- debugger flags
 static const uint64_t dbg_none              = 0;
@@ -131,15 +157,17 @@ struct CoroutineOptions
 extern uint32_t codebug_GetCurrentProcessID();
 extern uint32_t codebug_GetCurrentThreadID();
 extern std::string codebug_GetCurrentTime();
+extern const char* BaseFile(const char* file);
 
 } //namespace co
 
 #define DebugPrint(type, fmt, ...) \
     do { \
         if (::co::CoroutineOptions::getInstance().debug & (type)) { \
-            fprintf(::co::CoroutineOptions::getInstance().debug_output, "co_dbg[%s][%08u][%04u] " fmt "\n", \
+            fprintf(::co::CoroutineOptions::getInstance().debug_output, "[%s][%05u][%02u]%s:%d:(%s)\t " fmt "\n", \
                     ::co::codebug_GetCurrentTime().c_str(),\
-                    ::co::codebug_GetCurrentProcessID(), ::co::codebug_GetCurrentThreadID(), ##__VA_ARGS__); \
+                    ::co::codebug_GetCurrentProcessID(), ::co::codebug_GetCurrentThreadID(), \
+                    ::co::BaseFile(__FILE__), __LINE__, __func__, ##__VA_ARGS__); \
             fflush(::co::CoroutineOptions::getInstance().debug_output); \
         } \
     } while(0)

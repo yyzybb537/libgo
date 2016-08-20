@@ -1,7 +1,7 @@
 #pragma once
-#include "config.h"
-#include "task.h"
-#include "ts_queue.h"
+#include <libgo/config.h>
+#include <libgo/task.h>
+#include <libgo/ts_queue.h>
 
 namespace co {
 
@@ -18,7 +18,7 @@ private:
     Task* current_task_ = nullptr;
     TaskList runnable_list_;
     uint32_t id_;
-    static std::atomic<uint32_t> s_id_;
+    static atomic_t<uint32_t> s_id_;
 
 public:
     explicit Processer();

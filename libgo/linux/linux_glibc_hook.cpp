@@ -1,6 +1,5 @@
 #include <dlfcn.h>
 #include <fcntl.h>
-#include <poll.h>
 #include <sys/select.h>
 #include <sys/epoll.h>
 #include <sys/socket.h>
@@ -12,87 +11,22 @@
 #include <chrono>
 #include <map>
 #include <stdarg.h>
-#include "scheduler.h"
-#include "fd_context.h"
+#include <poll.h>
 #include "linux_glibc_hook.h"
 #include "hook_signal.h"
+#include "fd_context.h"
+#include <libgo/scheduler.h>
 #if WITH_CARES
 #include <ares.h>
 #endif
 using namespace co;
 
-namespace co {
-    void coroutine_hook_init();
-}
-
-template <typename OriginF, typename ... Args>
-static ssize_t read_write_mode(int fd, OriginF fn, const char* hook_fn_name, uint32_t event, int timeout_so, Args && ... args)
-{
-    Task* tk = g_Scheduler.GetCurrentTask();
-    DebugPrint(dbg_hook, "task(%s) hook %s. %s coroutine.",
-            tk ? tk->DebugInfo() : "nil", hook_fn_name, g_Scheduler.IsCoroutine() ? "In" : "Not in");
-
-    if (!tk)
-        return fn(fd, std::forward<Args>(args)...);
-
-    FdCtxPtr fd_ctx = FdManager::getInstance().get_fd_ctx(fd);
-    if (!fd_ctx || fd_ctx->closed()) {
-        errno = EBADF;  // 已被close或无效的fd
-        return -1;
-    }
-
-    if (!fd_ctx->is_socket())   // 非socket, 暂不HOOK. 以保障文件fd读写正常
-        return fn(fd, std::forward<Args>(args)...);
-
-    if (fd_ctx->user_nonblock())
-        return fn(fd, std::forward<Args>(args)...);
-
-    timeval tv;
-    fd_ctx->get_time_o(timeout_so, &tv);
-    int timeout_ms = tv.tv_sec * 1000 + tv.tv_usec / 1000;
-    auto start = std::chrono::steady_clock::now();
-
-retry:
-    ssize_t n = fn(fd, std::forward<Args>(args)...);
-    if (n == -1 && (errno == EAGAIN || errno == EWOULDBLOCK)) {
-        int poll_timeout = 0;
-        if (!timeout_ms)
-            poll_timeout = -1;
-        else {
-            int expired = std::chrono::duration_cast<std::chrono::milliseconds>(
-                    std::chrono::steady_clock::now() - start).count();
-            if (expired > timeout_ms) {
-                errno = EAGAIN;
-                return -1;  // 已超时
-            }
-
-            // 剩余的等待时间
-            poll_timeout = timeout_ms - expired;
-        }
-
-        pollfd pfd;
-        pfd.fd = fd;
-        pfd.events = event;
-eintr:
-        int triggers = poll(&pfd, 1, poll_timeout);
-        if (-1 == triggers) {
-            if (errno == EINTR) goto eintr;
-            return -1;
-        } else if (0 == triggers) {  // poll等待超时
-            errno = EAGAIN;
-            return -1;
-        }
-
-        goto retry;     // 事件触发 OR epoll惊群效应
-    }
-
-    return n;
-}
-
 // 设置阻塞式connect超时时间(-1无限时)
 static thread_local int s_connect_timeout = -1;
 
 namespace co {
+    void coroutine_hook_init();
+
     void set_connect_timeout(int milliseconds)
     {
         s_connect_timeout = milliseconds;
@@ -100,6 +34,152 @@ namespace co {
     void initialize_socket_async_methods(int socketfd)
     {
         FdManager::getInstance().get_fd_ctx(socketfd);
+    }
+
+    int libgo_epoll_wait(int epfd, struct epoll_event *events, int maxevents, int timeout)
+    {
+        Task* tk = g_Scheduler.GetCurrentTask();
+        DebugPrint(dbg_hook, "task(%s) call libgo_epoll_wait. %s coroutine.",
+                tk ? tk->DebugInfo() : "nil", g_Scheduler.IsCoroutine() ? "In" : "Not in");
+
+        if (!tk)
+            return epoll_wait(epfd, events, maxevents, timeout);
+
+        int res = epoll_wait(epfd, events, maxevents, 0);
+        if (res != 0) return res;
+
+        FdCtxPtr fd_ctx = FdManager::getInstance().get_fd_ctx(epfd);
+        if (!fd_ctx || fd_ctx->closed()) {
+            errno = EINVAL;  // 已被close或无效的fd
+            return -1;
+        }
+        fd_ctx->set_is_epoll();
+
+        pollfd pfd;
+        pfd.fd = epfd;
+        pfd.events = POLLIN | POLLOUT;
+        pfd.revents = 0;
+        res = poll(&pfd, 1, timeout);
+        if (res <= 0) return res;
+        return epoll_wait(epfd, events, maxevents, 0);
+    }
+
+    void set_et_mode(int fd)
+    {
+        FdCtxPtr fd_ctx = FdManager::getInstance().get_fd_ctx(fd);
+        if (!fd_ctx || fd_ctx->closed()) return ;
+        fd_ctx->set_et_mode();
+    }
+
+    inline int libgo_poll(struct pollfd *fds, nfds_t nfds, int timeout, bool nonblocking_check)
+    {
+        if (!poll_f) coroutine_hook_init();
+
+        Task* tk = g_Scheduler.GetCurrentTask();
+        DebugPrint(dbg_hook, "task(%s) hook poll(nfds=%d, timeout=%d). %s coroutine.",
+                tk ? tk->DebugInfo() : "nil",
+                (int)nfds, timeout,
+                g_Scheduler.IsCoroutine() ? "In" : "Not in");
+
+        if (!tk)
+            return poll_f(fds, nfds, timeout);
+
+        if (timeout == 0)
+            return poll_f(fds, nfds, timeout);
+
+        // --------------------------------
+        // 全部是负数fd时, 等价于sleep
+        nfds_t negative_fd_n = 0;
+        for (nfds_t i = 0; i < nfds; ++i)
+            if (fds[i].fd < 0)
+                ++ negative_fd_n;
+
+        if (nfds == negative_fd_n) {
+            // co sleep
+            g_Scheduler.SleepSwitch(timeout);
+            return 0;
+        }
+        // --------------------------------
+
+        if (nonblocking_check) {
+            // 执行一次非阻塞的poll, 检测异常或无效fd.
+            int res = poll_f(fds, nfds, 0);
+            if (res != 0) {
+                DebugPrint(dbg_hook, "poll returns %d immediately.", res);
+                return res;
+            }
+        }
+
+        // create io-sentry
+        IoSentryPtr io_sentry = MakeShared<IoSentry>(tk, fds, nfds);
+
+        // add file descriptor into epoll or poll.
+        bool added = false;
+        bool triggered = false;
+        for (nfds_t i = 0; i < nfds; ++i) {
+            fds[i].revents = 0;     // clear revents
+            pollfd & pfd = io_sentry->watch_fds_[i];
+            if (pfd.fd < 0)
+                continue;
+
+            FdCtxPtr fd_ctx = FdManager::getInstance().get_fd_ctx(pfd.fd);
+            if (!fd_ctx || fd_ctx->closed()) {
+                // bad file descriptor
+                pfd.revents = POLLNVAL;
+                continue;
+            }
+
+            auto result = fd_ctx->add_into_reactor(pfd.events, io_sentry);
+            if (result == add_into_reactor_result::failed) {
+                // TODO: 兼容文件fd
+                pfd.revents = POLLNVAL;
+                continue;
+            } else if (result == add_into_reactor_result::complete) {
+                triggered = true;
+            }
+
+            added = true;
+        }
+
+        if (!added) {
+            errno = 0;
+            return nfds;
+        }
+
+        if (!triggered) {
+            // 没有立即触发, 协程切换至等待状态, 等待被epoll唤醒或超时
+            // set timer
+            if (timeout > 0)
+                io_sentry->timer_ = g_Scheduler.ExpireAt(
+                        std::chrono::milliseconds(timeout),
+                        [io_sentry]{
+                        g_Scheduler.GetIoWait().IOBlockTriggered(io_sentry);
+                        });
+
+            // save io-sentry
+            tk->io_sentry_ = io_sentry;
+
+            // yield
+            g_Scheduler.GetIoWait().CoSwitch();
+
+            // clear task->io_sentry_ reference count
+            tk->io_sentry_.reset();
+
+            if (io_sentry->timer_) {
+                g_Scheduler.CancelTimer(io_sentry->timer_);
+                io_sentry->timer_.reset();
+            }
+        } else {
+            DebugPrint(dbg_hook, "poll triggered immediately.");
+        }
+
+        int n = 0;
+        for (nfds_t i = 0; i < nfds; ++i) {
+            fds[i].revents = io_sentry->watch_fds_[i].revents;
+            if (fds[i].revents) ++n;
+        }
+        errno = 0;
+        return n;
     }
 
 
@@ -230,39 +310,39 @@ namespace co {
         ares_gethostbyname(c, name, af,
                 [](void * arg, int status, int timeouts, struct hostent *hostent)
                 {
-                    cares_async_context *ctx = (cares_async_context *)arg;
-                    ctx->called = true;
-                    if (status != ARES_SUCCESS) {
-                        *ctx->result = nullptr;
+                cares_async_context *ctx = (cares_async_context *)arg;
+                ctx->called = true;
+                if (status != ARES_SUCCESS) {
+                *ctx->result = nullptr;
 
-                        switch (status) {
-                        case ARES_ENODATA:
-                            *ctx->errnop = NO_DATA;
-                            break;
+                switch (status) {
+                case ARES_ENODATA:
+                *ctx->errnop = NO_DATA;
+                break;
 
-                        case ARES_EBADNAME:
-                            *ctx->errnop = NO_RECOVERY;
-                            break;
+                case ARES_EBADNAME:
+                *ctx->errnop = NO_RECOVERY;
+                break;
 
-                        case ARES_ENOTFOUND:
-                        default:
-                            *ctx->errnop = HOST_NOT_FOUND;
-                            break;
-                        }
+                case ARES_ENOTFOUND:
+                default:
+                *ctx->errnop = HOST_NOT_FOUND;
+                break;
+                }
 
-                        ctx->ret = -1;
-                        return ;
-                    }
+                ctx->ret = -1;
+                return ;
+                }
 
-                    if (!hostent_dup(hostent, *ctx->result, ctx->buf, *ctx->buflen)) {
-                        *ctx->result = nullptr;
-                        *ctx->errnop = ENOEXEC;    // 奇怪的错误码.
-                        ctx->ret = -1;
-                        return ;
-                    }
+                if (!hostent_dup(hostent, *ctx->result, ctx->buf, *ctx->buflen)) {
+                    *ctx->result = nullptr;
+                    *ctx->errnop = ENOEXEC;    // 奇怪的错误码.
+                    ctx->ret = -1;
+                    return ;
+                }
 
-                    *ctx->errnop = 0;
-                    ctx->ret = 0;
+                *ctx->errnop = 0;
+                ctx->ret = 0;
                 }, &ctx);
 
         fd_set readers, writers;
@@ -308,39 +388,39 @@ namespace co {
         ares_gethostbyaddr(c, addr, addrlen, af,
                 [](void * arg, int status, int timeouts, struct hostent *hostent)
                 {
-                    cares_async_context *ctx = (cares_async_context *)arg;
-                    ctx->called = true;
-                    if (status != ARES_SUCCESS) {
-                        *ctx->result = nullptr;
+                cares_async_context *ctx = (cares_async_context *)arg;
+                ctx->called = true;
+                if (status != ARES_SUCCESS) {
+                *ctx->result = nullptr;
 
-                        switch (status) {
-                        case ARES_ENODATA:
-                            *ctx->errnop = NO_DATA;
-                            break;
+                switch (status) {
+                case ARES_ENODATA:
+                *ctx->errnop = NO_DATA;
+                break;
 
-                        case ARES_EBADNAME:
-                            *ctx->errnop = NO_RECOVERY;
-                            break;
+                case ARES_EBADNAME:
+                *ctx->errnop = NO_RECOVERY;
+                break;
 
-                        case ARES_ENOTFOUND:
-                        default:
-                            *ctx->errnop = HOST_NOT_FOUND;
-                            break;
-                        }
+                case ARES_ENOTFOUND:
+                default:
+                *ctx->errnop = HOST_NOT_FOUND;
+                break;
+                }
 
-                        ctx->ret = -1;
-                        return ;
-                    }
+                ctx->ret = -1;
+                return ;
+                }
 
-                    if (!hostent_dup(hostent, *ctx->result, ctx->buf, *ctx->buflen)) {
-                        *ctx->result = nullptr;
-                        *ctx->errnop = ENOEXEC;    // 奇怪的错误码.
-                        ctx->ret = -1;
-                        return ;
-                    }
+                if (!hostent_dup(hostent, *ctx->result, ctx->buf, *ctx->buflen)) {
+                    *ctx->result = nullptr;
+                    *ctx->errnop = ENOEXEC;    // 奇怪的错误码.
+                    ctx->ret = -1;
+                    return ;
+                }
 
-                    *ctx->errnop = 0;
-                    ctx->ret = 0;
+                *ctx->errnop = 0;
+                ctx->ret = 0;
                 }, &ctx);
 
         fd_set readers, writers;
@@ -368,6 +448,123 @@ namespace co {
 #endif //WITH_CARES
 
 } //namespace co
+
+
+
+template <typename OriginF, typename ... Args>
+static ssize_t read_write_mode(int fd, OriginF fn, const char* hook_fn_name,
+        uint32_t event, int timeout_so, ssize_t buflen, Args && ... args)
+{
+    Task* tk = g_Scheduler.GetCurrentTask();
+    DebugPrint(dbg_hook, "task(%s) hook %s. %s coroutine.",
+            tk ? tk->DebugInfo() : "nil", hook_fn_name, g_Scheduler.IsCoroutine() ? "In" : "Not in");
+
+    if (!tk)
+        return fn(fd, std::forward<Args>(args)...);
+
+    FdCtxPtr fd_ctx = FdManager::getInstance().get_fd_ctx(fd);
+    if (!fd_ctx || fd_ctx->closed()) {
+        errno = EBADF;  // 已被close或无效的fd
+        return -1;
+    }
+
+    if (!fd_ctx->is_socket())   // 非socket, 暂不HOOK. 以保障文件fd读写正常
+        return fn(fd, std::forward<Args>(args)...);
+
+    if (fd_ctx->user_nonblock())
+        return fn(fd, std::forward<Args>(args)...);
+
+    timeval tv;
+    fd_ctx->get_time_o(timeout_so, &tv);
+    int timeout_ms = tv.tv_sec * 1000 + tv.tv_usec / 1000;
+    std::chrono::steady_clock::time_point start;
+    if (timeout_ms)
+        start = std::chrono::steady_clock::now();
+
+retry:
+    if ((event == POLLIN && !fd_ctx->readable()) ||
+           (event == POLLOUT && !fd_ctx->writable()))
+    {
+        DebugPrint(dbg_hook, "%s %d unreadable or unwritable. will call poll",
+                hook_fn_name, fd);
+
+        int poll_timeout = 0;
+        if (!timeout_ms)
+            poll_timeout = -1;
+        else {
+            int expired = std::chrono::duration_cast<std::chrono::milliseconds>(
+                    std::chrono::steady_clock::now() - start).count();
+            if (expired > timeout_ms) {
+                errno = EAGAIN;
+                return -1;  // 已超时
+            }
+
+            // 剩余的等待时间
+            poll_timeout = timeout_ms - expired;
+        }
+
+        pollfd pfd;
+        pfd.fd = fd;
+        pfd.events = event;
+        pfd.revents = 0;
+eintr:
+        int triggers = libgo_poll(&pfd, 1, poll_timeout, false);
+        if (-1 == triggers) {
+            if (errno == EINTR) goto eintr;
+            return -1;
+        } else if (0 == triggers) {  // poll等待超时
+            errno = EAGAIN;
+            return -1;
+        }
+
+        if (triggers == 1) {
+            if (event == POLLIN && (pfd.revents & POLLIN)) {
+                DebugPrint(dbg_hook, "poll fd=%d return 1. set readable.", fd);
+                fd_ctx->set_readable(true);
+            }
+
+            if (event == POLLOUT && (pfd.revents & POLLOUT)) {
+                DebugPrint(dbg_hook, "poll fd=%d return 1. set writable.", fd);
+                fd_ctx->set_writable(true);
+            }
+        }
+    }
+
+retry_intr_fn:
+    ssize_t n = fn(fd, std::forward<Args>(args)...);
+    if (n == -1) {
+        if (errno == EAGAIN || errno == EWOULDBLOCK) {
+            // 读空了
+            if (event == POLLIN) {
+                DebugPrint(dbg_hook, "read %d EAGAIN, buflen=%ld.",
+                        fd, buflen);
+                fd_ctx->set_readable(false);
+            } else {
+                DebugPrint(dbg_hook, "write %d returns EAGAIN, buflen=%ld.",
+                        fd, buflen);
+                fd_ctx->set_writable(false);
+            }
+            goto retry;     // 事件触发 OR epoll惊群效应
+        }
+        else if (errno == EINTR)
+            goto retry_intr_fn;
+    }
+
+    if (n >= 0 && n < buflen) {
+        // 读空了
+        if (event == POLLIN) {
+            DebugPrint(dbg_hook, "read %d returns %ld, buflen=%ld.",
+                    fd, n, buflen);
+            fd_ctx->set_readable(false);
+        } else {
+            DebugPrint(dbg_hook, "write %d returns %ld, buflen=%ld.",
+                    fd, n, buflen);
+            fd_ctx->set_writable(false);
+        }
+    }
+
+    return n;
+}
 
 extern "C" {
 
@@ -450,169 +647,88 @@ int connect(int fd, const struct sockaddr *addr, socklen_t addrlen)
 int accept(int sockfd, struct sockaddr *addr, socklen_t *addrlen)
 {
     if (!accept_f) coroutine_hook_init();
-    return read_write_mode(sockfd, accept_f, "accept", POLLIN, SO_RCVTIMEO, addr, addrlen);
+    return read_write_mode(sockfd, accept_f, "accept", POLLIN, SO_RCVTIMEO, 0, addr, addrlen);
 }
 
 ssize_t read(int fd, void *buf, size_t count)
 {
     if (!read_f) coroutine_hook_init();
-    return read_write_mode(fd, read_f, "read", POLLIN, SO_RCVTIMEO, buf, count);
+    return read_write_mode(fd, read_f, "read", POLLIN, SO_RCVTIMEO, count, buf, count);
 }
 
 ssize_t readv(int fd, const struct iovec *iov, int iovcnt)
 {
     if (!readv_f) coroutine_hook_init();
-    return read_write_mode(fd, readv_f, "readv", POLLIN, SO_RCVTIMEO, iov, iovcnt);
+    size_t buflen = 0;
+    for (int i = 0; i < iovcnt; ++i)
+        buflen += iov[i].iov_len;
+    return read_write_mode(fd, readv_f, "readv", POLLIN, SO_RCVTIMEO, buflen, iov, iovcnt);
 }
 
 ssize_t recv(int sockfd, void *buf, size_t len, int flags)
 {
     if (!recv_f) coroutine_hook_init();
-    return read_write_mode(sockfd, recv_f, "recv", POLLIN, SO_RCVTIMEO, buf, len, flags);
+    return read_write_mode(sockfd, recv_f, "recv", POLLIN, SO_RCVTIMEO, len, buf, len, flags);
 }
 
 ssize_t recvfrom(int sockfd, void *buf, size_t len, int flags,
         struct sockaddr *src_addr, socklen_t *addrlen)
 {
     if (!recvfrom_f) coroutine_hook_init();
-    return read_write_mode(sockfd, recvfrom_f, "recvfrom", POLLIN, SO_RCVTIMEO, buf, len, flags,
+    return read_write_mode(sockfd, recvfrom_f, "recvfrom", POLLIN, SO_RCVTIMEO, len, buf, len, flags,
             src_addr, addrlen);
 }
 
 ssize_t recvmsg(int sockfd, struct msghdr *msg, int flags)
 {
     if (!recvmsg_f) coroutine_hook_init();
-    return read_write_mode(sockfd, recvmsg_f, "recvmsg", POLLIN, SO_RCVTIMEO, msg, flags);
+    size_t buflen = 0;
+    for (size_t i = 0; i < msg->msg_iovlen; ++i)
+        buflen += msg->msg_iov[i].iov_len;
+    return read_write_mode(sockfd, recvmsg_f, "recvmsg", POLLIN, SO_RCVTIMEO, buflen, msg, flags);
 }
 
 ssize_t write(int fd, const void *buf, size_t count)
 {
     if (!write_f) coroutine_hook_init();
-    return read_write_mode(fd, write_f, "write", POLLOUT, SO_SNDTIMEO, buf, count);
+    return read_write_mode(fd, write_f, "write", POLLOUT, SO_SNDTIMEO, count, buf, count);
 }
 
 ssize_t writev(int fd, const struct iovec *iov, int iovcnt)
 {
     if (!writev_f) coroutine_hook_init();
-    return read_write_mode(fd, writev_f, "writev", POLLOUT, SO_SNDTIMEO, iov, iovcnt);
+    size_t buflen = 0;
+    for (int i = 0; i < iovcnt; ++i)
+        buflen += iov[i].iov_len;
+    return read_write_mode(fd, writev_f, "writev", POLLOUT, SO_SNDTIMEO, buflen, iov, iovcnt);
 }
 
 ssize_t send(int sockfd, const void *buf, size_t len, int flags)
 {
     if (!send_f) coroutine_hook_init();
-    return read_write_mode(sockfd, send_f, "send", POLLOUT, SO_SNDTIMEO, buf, len, flags);
+    return read_write_mode(sockfd, send_f, "send", POLLOUT, SO_SNDTIMEO, len, buf, len, flags);
 }
 
 ssize_t sendto(int sockfd, const void *buf, size_t len, int flags,
         const struct sockaddr *dest_addr, socklen_t addrlen)
 {
     if (!sendto_f) coroutine_hook_init();
-    return read_write_mode(sockfd, sendto_f, "sendto", POLLOUT, SO_SNDTIMEO, buf, len, flags,
+    return read_write_mode(sockfd, sendto_f, "sendto", POLLOUT, SO_SNDTIMEO, len, buf, len, flags,
             dest_addr, addrlen);
 }
 
 ssize_t sendmsg(int sockfd, const struct msghdr *msg, int flags)
 {
     if (!sendmsg_f) coroutine_hook_init();
-    return read_write_mode(sockfd, sendmsg_f, "sendmsg", POLLOUT, SO_SNDTIMEO, msg, flags);
+    size_t buflen = 0;
+    for (size_t i = 0; i < msg->msg_iovlen; ++i)
+        buflen += msg->msg_iov[i].iov_len;
+    return read_write_mode(sockfd, sendmsg_f, "sendmsg", POLLOUT, SO_SNDTIMEO, buflen, msg, flags);
 }
 
 int poll(struct pollfd *fds, nfds_t nfds, int timeout)
 {
-    if (!poll_f) coroutine_hook_init();
-
-    Task* tk = g_Scheduler.GetCurrentTask();
-    DebugPrint(dbg_hook, "task(%s) hook poll(nfds=%d, timeout=%d). %s coroutine.",
-            tk ? tk->DebugInfo() : "nil",
-            (int)nfds, timeout,
-            g_Scheduler.IsCoroutine() ? "In" : "Not in");
-
-    if (!tk)
-        return poll_f(fds, nfds, timeout);
-
-    if (timeout == 0)
-        return poll_f(fds, nfds, timeout);
-
-    // --------------------------------
-    // 全部是负数fd时, 等价于sleep
-    nfds_t negative_fd_n = 0;
-    for (nfds_t i = 0; i < nfds; ++i)
-        if (fds[i].fd < 0)
-            ++ negative_fd_n;
-
-    if (nfds == negative_fd_n) {
-        // co sleep
-        g_Scheduler.SleepSwitch(timeout);
-        return 0;
-    }
-    // --------------------------------
-
-    // 执行一次非阻塞的poll, 检测异常或无效fd.
-    int res = poll_f(fds, nfds, 0);
-    if (res != 0)
-        return res;
-
-    // create io-sentry
-    IoSentryPtr io_sentry = MakeShared<IoSentry>(tk, fds, nfds);
-
-    // add file descriptor into epoll or poll.
-    bool added = false;
-    for (nfds_t i = 0; i < nfds; ++i) {
-        fds[i].revents = 0;     // clear revents
-        pollfd & pfd = io_sentry->watch_fds_[i];
-        if (pfd.fd < 0)
-            continue;
-
-        FdCtxPtr fd_ctx = FdManager::getInstance().get_fd_ctx(pfd.fd);
-        if (!fd_ctx || fd_ctx->closed()) {
-            // bad file descriptor
-            pfd.revents = POLLNVAL;
-            continue;
-        }
-
-        if (!fd_ctx->add_into_reactor(pfd.events, io_sentry)) {
-            // TODO: 兼容文件fd
-            pfd.revents = POLLNVAL;
-            continue;
-        }
-
-        added = true;
-    }
-
-    if (!added) {
-        errno = 0;
-        return nfds;
-    }
-
-    // set timer
-    if (timeout > 0)
-        io_sentry->timer_ = g_Scheduler.ExpireAt(
-                std::chrono::milliseconds(timeout),
-                [io_sentry]{
-                    g_Scheduler.GetIoWait().IOBlockTriggered(io_sentry);
-                });
-
-    // save io-sentry
-    tk->io_sentry_ = io_sentry;
-
-    // yield
-    g_Scheduler.GetIoWait().CoSwitch();
-
-    // clear task->io_sentry_ reference count
-    tk->io_sentry_.reset();
-
-    if (io_sentry->timer_) {
-        g_Scheduler.CancelTimer(io_sentry->timer_);
-        io_sentry->timer_.reset();
-    }
-
-    int n = 0;
-    for (nfds_t i = 0; i < nfds; ++i) {
-        fds[i].revents = io_sentry->watch_fds_[i].revents;
-        if (fds[i].revents) ++n;
-    }
-    errno = 0;
-    return n;
+    return libgo_poll(fds, nfds, timeout, true);
 }
 
 int select(int nfds, fd_set *readfds, fd_set *writefds,
@@ -992,34 +1108,6 @@ int dup3(int oldfd, int newfd, int flags)
     }
 
     return ret;
-}
-
-int libgo_epoll_wait(int epfd, struct epoll_event *events, int maxevents, int timeout)
-{
-    Task* tk = g_Scheduler.GetCurrentTask();
-    DebugPrint(dbg_hook, "task(%s) call libgo_epoll_wait. %s coroutine.",
-            tk ? tk->DebugInfo() : "nil", g_Scheduler.IsCoroutine() ? "In" : "Not in");
-
-    if (!tk)
-        return epoll_wait(epfd, events, maxevents, timeout);
-
-    int res = epoll_wait(epfd, events, maxevents, 0);
-    if (res != 0) return res;
-
-    FdCtxPtr fd_ctx = FdManager::getInstance().get_fd_ctx(epfd);
-    if (!fd_ctx || fd_ctx->closed()) {
-        errno = EINVAL;  // 已被close或无效的fd
-        return -1;
-    }
-    fd_ctx->set_is_epoll();
-
-    pollfd pfd;
-    pfd.fd = epfd;
-    pfd.events = POLLIN | POLLOUT;
-    pfd.revents = 0;
-    res = poll(&pfd, 1, timeout);
-    if (res <= 0) return res;
-    return epoll_wait(epfd, events, maxevents, 0);
 }
 
 #if WITH_CARES

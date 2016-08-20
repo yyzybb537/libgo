@@ -1,6 +1,6 @@
-#include "block_object.h"
-#include "scheduler.h"
-#include "error.h"
+#include <libgo/block_object.h>
+#include <libgo/scheduler.h>
+#include <libgo/error.h>
 #include <unistd.h>
 #include <mutex>
 #include <limits>

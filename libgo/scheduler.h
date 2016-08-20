@@ -1,21 +1,14 @@
 #pragma once
-#include <unordered_map>
-#include <list>
-#include <sys/epoll.h>
-#include <errno.h>
-#include <string.h>
-#include <deque>
-#include <cstdlib>
-#include "config.h"
-#include "context.h"
-#include "task.h"
-#include "block_object.h"
-#include "co_mutex.h"
-#include "timer.h"
+#include <libgo/config.h>
+#include <libgo/context.h>
+#include <libgo/task.h>
+#include <libgo/block_object.h>
+#include <libgo/co_mutex.h>
+#include <libgo/timer.h>
+#include <libgo/sleep_wait.h>
+#include <libgo/processer.h>
+#include <libgo/debugger.h>
 #include "io_wait.h"
-#include "sleep_wait.h"
-#include "processer.h"
-#include "debugger.h"
 
 namespace co {
 
@@ -165,7 +158,7 @@ class Scheduler
         // List of Processer
         LFLock proc_init_lock_;
         ProcList run_proc_list_;
-        std::atomic<uint32_t> dispatch_robin_index_{0};
+        atomic_t<uint32_t> dispatch_robin_index_{0};
 
         // io block waiter.
         IoWait io_wait_;
@@ -179,8 +172,8 @@ class Scheduler
         ThreadPool *thread_pool_;
         LFLock thread_pool_init_;
 
-        std::atomic<uint32_t> task_count_{0};
-        std::atomic<uint32_t> thread_id_{0};
+        atomic_t<uint32_t> task_count_{0};
+        atomic_t<uint32_t> thread_id_{0};
 
     private:
         friend class CoMutex;

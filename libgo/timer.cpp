@@ -1,4 +1,4 @@
-#include "timer.h"
+#include <libgo/timer.h>
 #include <mutex>
 #include <limits>
 #include <algorithm>
@@ -6,7 +6,7 @@
 namespace co
 {
 
-std::atomic<uint64_t> CoTimer::s_id{0};
+atomic_t<uint64_t> CoTimer::s_id{0};
 
 CoTimer::CoTimer(fn_t const& fn)
     : id_(++s_id), fn_(fn), active_(true), token_state_(e_token_state::none)

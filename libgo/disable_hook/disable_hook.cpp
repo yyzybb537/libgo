@@ -9,7 +9,7 @@
 #include <sys/stat.h>
 #include <sys/ioctl.h>
 #include <time.h>
-#include "linux_glibc_hook.h"
+#include <libgo/linux_glibc_hook.h>
 #endif
 
 namespace co {

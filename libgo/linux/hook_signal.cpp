@@ -1,5 +1,5 @@
 #include "hook_signal.h"
-#include "config.h"
+#include <libgo/config.h>
 
 namespace co
 {

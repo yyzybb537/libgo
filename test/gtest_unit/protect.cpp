@@ -17,20 +17,12 @@ TEST(testProtect, testProtect)
 {
     co_sched.GetOptions().debug = co::dbg_task;
     co_sched.GetOptions().protect_stack_page = 1;
-    co_sched.GetOptions().stack_size = 1024;
+    co_sched.GetOptions().stack_size = 8192;
 
     printf("pagesize:%d\n", getpagesize());
+    printf("minimum size: %d\n", (int)boost::context::stack_traits::minimum_size());
 
     bool check = false;
-    try {
-        go []{};
-    } catch (std::exception& e) {
-        printf("stacksize:%d, catch ex:%s\n", co_sched.GetOptions().stack_size, e.what());
-        check = true;
-    }
-    EXPECT_TRUE(check);
-    check = false;
-
     co_sched.GetOptions().stack_size = 8192;
     try {
         go []{};

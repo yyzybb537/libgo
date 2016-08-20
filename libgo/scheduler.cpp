@@ -1,15 +1,15 @@
-#include "scheduler.h"
-#include "error.h"
+#include <libgo/scheduler.h>
+#include <libgo/error.h>
 #include <stdio.h>
 #include <system_error>
 #include <unistd.h>
-#include "thread_pool.h"
+#include <libgo/thread_pool.h>
 #include <time.h>
 #if __linux__
 #include <sys/time.h>
 #endif
 #if WITH_SAFE_SIGNAL
-#include "hook_signal.h"
+#include <libgo/hook_signal.h>
 #endif
 
 namespace co

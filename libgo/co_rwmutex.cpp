@@ -1,13 +1,13 @@
-#include "co_rwmutex.h"
-#include "co_mutex.h"
-#include "scheduler.h"
+#include <libgo/co_rwmutex.h>
+#include <libgo/co_mutex.h>
+#include <libgo/scheduler.h>
 
 namespace co
 {
     class CoRWMutex::CoRWMutexImpl
     {
         CoMutex mtx_;
-        std::atomic<int> readers_c_{0};
+        atomic_t<int> readers_c_{0};
 
     public:
         ReadView r_view;

@@ -6,9 +6,9 @@
 #include <vector>
 #include <list>
 #include <set>
-#include "task.h"
+#include <libgo/task.h>
 #include "fd_context.h"
-#include "debugger.h"
+#include <libgo/debugger.h>
 
 namespace co
 {
@@ -40,7 +40,8 @@ public:
     * reactor相关操作, 使用类似epoll的接口屏蔽epoll/poll的区别
     * TODO: 同时支持socket-io和文件io.
     */
-    int reactor_ctl(int epollfd, int epoll_ctl_mod, int fd, uint32_t poll_events, bool is_support);
+    int reactor_ctl(int epollfd, int epoll_ctl_mod, int fd,
+            uint32_t poll_events, bool is_support, bool et_mode);
     // --------------------------------------
 
     int WaitLoop(int wait_milliseconds);

@@ -3,7 +3,7 @@
 #include <vector>
 #include <list>
 #include <set>
-#include "task.h"
+#include <libgo/task.h>
 
 namespace co
 {

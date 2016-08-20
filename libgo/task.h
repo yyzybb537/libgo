@@ -1,17 +1,11 @@
 #pragma once
-#include <stddef.h>
-#include <functional>
-#include <exception>
-#include <vector>
-#include <list>
-#include <set>
-#include "config.h"
-#include "context.h"
-#include "ts_queue.h"
-#include "timer.h"
+#include <libgo/config.h>
+#include <libgo/context.h>
+#include <libgo/ts_queue.h>
+#include <libgo/timer.h>
 #include <string.h>
+#include <libgo/util.h>
 #include "fd_context.h"
-#include "util.h"
 
 namespace co
 {
@@ -80,7 +74,7 @@ struct Task
     void Task_CB();
 
     static uint64_t s_id;
-    static std::atomic<uint64_t> s_task_count;
+    static atomic_t<uint64_t> s_task_count;
 
     static uint64_t GetTaskCount();
 

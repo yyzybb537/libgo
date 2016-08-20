@@ -1,5 +1,5 @@
-#include "sleep_wait.h"
-#include "scheduler.h"
+#include <libgo/sleep_wait.h>
+#include <libgo/scheduler.h>
 #include <chrono>
 #include <assert.h>
 

@@ -1,8 +1,5 @@
 #pragma once
-#include <memory>
-#include <atomic>
-#include <string>
-#include <type_traits>
+#include <libgo/config.h>
 
 namespace co
 {
@@ -23,7 +20,7 @@ struct fake_lock_guard
 // 侵入式引用计数对象基类
 struct RefObject
 {
-    std::atomic<long> reference_;
+    atomic_t<long> reference_;
 
     RefObject() : reference_{1} {}
     virtual ~RefObject() {}

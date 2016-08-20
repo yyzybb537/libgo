@@ -3,8 +3,8 @@
 #include <mutex>
 #include <map>
 #include <vector>
-#include "spinlock.h"
-#include "util.h"
+#include <libgo/spinlock.h>
+#include <libgo/util.h>
 
 #if defined(__GNUC__)
 #include <cxxabi.h>
@@ -20,7 +20,7 @@ struct ThreadLocalInfo;
 class CoDebugger
 {
 public:
-    typedef std::atomic<uint64_t> count_t;
+    typedef atomic_t<uint64_t> count_t;
     typedef std::deque<std::pair<std::string, count_t>> object_counts_t;
     typedef std::deque<std::pair<std::string, uint64_t>> object_counts_result_t;
 
@@ -129,7 +129,7 @@ private:
 private:
     LFLock object_counts_spinlock_;
     object_counts_t object_counts_;
-    std::atomic<std::size_t> s_debugger_drived_type_index_{0};
+    atomic_t<std::size_t> s_debugger_drived_type_index_{0};
 };
 
 template <typename T>

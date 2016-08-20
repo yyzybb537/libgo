@@ -1,7 +1,7 @@
 #include "io_wait.h"
-#include "error.h"
+#include <libgo/error.h>
 #include <algorithm>
-#include "scheduler.h"
+#include <libgo/scheduler.h>
 
 namespace co {
 
