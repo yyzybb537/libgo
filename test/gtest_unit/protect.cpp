@@ -20,7 +20,7 @@ TEST(testProtect, testProtect)
     co_sched.GetOptions().stack_size = 8192;
 
     printf("pagesize:%d\n", getpagesize());
-    printf("minimum size: %d\n", (int)boost::context::stack_traits::minimum_size());
+//    printf("minimum size: %d\n", (int)boost::context::stack_traits::minimum_size());
 
     bool check = false;
     co_sched.GetOptions().stack_size = 8192;
