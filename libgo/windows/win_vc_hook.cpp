@@ -1,7 +1,7 @@
 #include <WinSock2.h>
 #include <Windows.h>
-#include <scheduler.h>
 #include <xhook.h>
+#include "../scheduler.h"
 
 namespace co {
 
