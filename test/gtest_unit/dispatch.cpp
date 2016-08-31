@@ -13,10 +13,10 @@ TEST(testDispatch, testDispatch)
     // dispatch local thread
     for (int i = 0; i < 10; ++i)
         go []{
-            EXPECT_EQ(co_sched.GetCurrentThreadID(), 0);
+            EXPECT_EQ(co_sched.GetCurrentThreadID(), 0u);
 
             go_dispatch(egod_local_thread) []{
-                EXPECT_EQ(co_sched.GetCurrentThreadID(), 0);
+                EXPECT_EQ(co_sched.GetCurrentThreadID(), 0u);
             };
         };
     co_sched.RunUntilNoTask();
@@ -26,10 +26,10 @@ TEST(testDispatch, testDispatch)
     // dispatch robin thread
     for (int i = 0; i < 12; ++i)
         go []{
-            EXPECT_EQ(co_sched.GetCurrentThreadID(), 0);
+            EXPECT_EQ(co_sched.GetCurrentThreadID(), 0u);
 
             go_dispatch(egod_local_thread) []{
-                EXPECT_EQ(co_sched.GetCurrentThreadID(), 0);
+                EXPECT_EQ(co_sched.GetCurrentThreadID(), 0u);
             };
         };
     co_sched.RunUntilNoTask();
@@ -37,29 +37,29 @@ TEST(testDispatch, testDispatch)
     // dispatch random thread from 0 to 0
     for (int i = 0; i < 10; ++i)
         go_dispatch(egod_random) []{
-            EXPECT_EQ(co_sched.GetCurrentThreadID(), 0);
+            EXPECT_EQ(co_sched.GetCurrentThreadID(), 0u);
         };
     co_sched.RunUntilNoTask();
 
     // dispatch robin from 0 to 0
     for (int i = 0; i < 12; ++i)
         go_dispatch(egod_robin) []{
-            EXPECT_EQ(co_sched.GetCurrentThreadID(), 0);
+            EXPECT_EQ(co_sched.GetCurrentThreadID(), 0u);
         };
     co_sched.RunUntilNoTask();
 
     // dispatch 0->3
     for (int i = 0; i < 12; ++i)
         go_dispatch(egod_robin) []{
-            EXPECT_EQ(co_sched.GetCurrentThreadID(), 0);
+            EXPECT_EQ(co_sched.GetCurrentThreadID(), 0u);
 
             go_dispatch(egod_local_thread) [=]{
-                EXPECT_EQ(co_sched.GetCurrentThreadID(), 0);
+                EXPECT_EQ(co_sched.GetCurrentThreadID(), 0u);
             };
         };
     for (int i = 0; i < 10; ++i)
         go_dispatch(i % 4) [=]{
-            int tid = i % 4;
+            size_t tid = i % 4;
             EXPECT_EQ(co_sched.GetCurrentThreadID(), tid);
 
             go_dispatch(egod_local_thread) [=]{
@@ -68,7 +68,7 @@ TEST(testDispatch, testDispatch)
         };
     for (int i = 0; i < 12; ++i)
         go_dispatch(egod_robin) [i]{
-            int tid = i % 4;
+            size_t tid = i % 4;
 //            printf("tid:%d\n", tid);
             EXPECT_EQ(co_sched.GetCurrentThreadID(), tid);
 
@@ -78,7 +78,7 @@ TEST(testDispatch, testDispatch)
         };
     for (int i = 0; i < 24; ++i)
         go_dispatch(egod_robin) [=]{
-            int tid = i % 4;
+            size_t tid = i % 4;
             EXPECT_EQ(co_sched.GetCurrentThreadID(), tid);
 
             go_dispatch(egod_local_thread) [=]{
