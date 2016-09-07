@@ -40,8 +40,8 @@ TEST_P(MassCo, LittleStack)
 //    co_sched.GetOptions().debug = dbg_task;
 
     c = 0;
-    int n = n_;
-    for (int i = 0; i < n; ++i)
+    size_t n = n_;
+    for (size_t i = 0; i < n; ++i)
         go_stack(8192) foo;
 
     if (is_show_memory)
@@ -78,7 +78,7 @@ TEST_P(MassCo, LittleStack)
     }
 
     co_sched.RunUntilNoTask();
-    EXPECT_EQ(co::Task::GetTaskCount(), 0);
+    EXPECT_EQ(co::Task::GetTaskCount(), 0u);
 }
 
 TEST_P(MassCo, CnK)
@@ -91,8 +91,8 @@ TEST_P(MassCo, CnK)
 //    for (int i = 0; i < 1024; ++i)
 //        store[i] = (char*)malloc(300 * 1024 * 1024);
 
-    int n = n_;
-    for (int i = 0; i < n; ++i)
+    size_t n = n_;
+    for (size_t i = 0; i < n; ++i)
         go foo;
 
     if (is_show_memory)
@@ -133,7 +133,7 @@ TEST_P(MassCo, CnK)
 //    co_sched.GetOptions().debug = dbg_none;
 
     co_sched.RunUntilNoTask();
-    EXPECT_EQ(co::Task::GetTaskCount(), 0);
+    EXPECT_EQ(co::Task::GetTaskCount(), 0u);
 //    printf("press anykey to continue. task_c=%u\n", (uint32_t)co::Task::GetTaskCount());
 //    getchar();
 

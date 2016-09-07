@@ -32,12 +32,12 @@ TEST(HOOK, filefd)
         char *buf = (char*)malloc(buf_len);
         ssize_t n = write(fd, buf, buf_len);
         EXPECT_EQ(n, buf_len);
-        EXPECT_EQ(co_sched.GetCurrentTaskYieldCount(), 0);
+        EXPECT_EQ(co_sched.GetCurrentTaskYieldCount(), 0u);
         close(fd);
         fd = open("/dev/zero", O_RDWR);
         n = read(fd, buf, buf_len);
         EXPECT_EQ(n, buf_len);
-        EXPECT_EQ(co_sched.GetCurrentTaskYieldCount(), 0);
+        EXPECT_EQ(co_sched.GetCurrentTaskYieldCount(), 0u);
 
         EXPECT_FALSE(is_nonblock(fd));
         EXPECT_FALSE(origin_is_nonblock(fd));

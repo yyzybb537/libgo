@@ -109,7 +109,7 @@ TEST(Poll, TimeoutIs0)
             EXPECT_EQ(pfds[1].revents, POLLIN|POLLOUT|POLLHUP);
         }
 
-        EXPECT_EQ(g_Scheduler.GetCurrentTaskYieldCount(), 0);
+        EXPECT_EQ(g_Scheduler.GetCurrentTaskYieldCount(), 0u);
 
         fds[0] = -1;
 
@@ -128,11 +128,11 @@ TEST(Poll, TimeoutIs0)
             EXPECT_EQ(pfds[1].revents, POLLIN|POLLOUT|POLLHUP);
         }
 
-        EXPECT_EQ(g_Scheduler.GetCurrentTaskYieldCount(), 0);
+        EXPECT_EQ(g_Scheduler.GetCurrentTaskYieldCount(), 0u);
         EXPECT_EQ(close(fds[1]), 0);
     };
     g_Scheduler.RunUntilNoTask();
-    EXPECT_EQ(Task::GetTaskCount(), 0);
+    EXPECT_EQ(Task::GetTaskCount(), 0u);
 }
 
 TEST(Poll, TimeoutIsNegative1)
@@ -236,7 +236,7 @@ TEST(Poll, TimeoutIsNegative1)
         }
     };
     g_Scheduler.RunUntilNoTask();
-    EXPECT_EQ(Task::GetTaskCount(), 0);
+    EXPECT_EQ(Task::GetTaskCount(), 0u);
 }
 
 TEST(Poll, TimeoutIs1)
@@ -374,7 +374,7 @@ TEST(Poll, TimeoutIs1)
         }
     };
     g_Scheduler.RunUntilNoTask();
-    EXPECT_EQ(Task::GetTaskCount(), 0);
+    EXPECT_EQ(Task::GetTaskCount(), 0u);
 }
 
 TEST(PollTrigger, MultiPollTimeout1)
@@ -417,7 +417,7 @@ TEST(PollTrigger, MultiPollTimeout1)
         };
     }
     g_Scheduler.RunUntilNoTask();
-    EXPECT_EQ(Task::GetTaskCount(), 0);
+    EXPECT_EQ(Task::GetTaskCount(), 0u);
 
     g_Scheduler.GetOptions().debug = 0;
     close(fds[0]);
@@ -448,7 +448,7 @@ TEST(PollTrigger, MultiPollTimeout2)
     }
 
     g_Scheduler.RunUntilNoTask();
-    EXPECT_EQ(Task::GetTaskCount(), 0);
+    EXPECT_EQ(Task::GetTaskCount(), 0u);
 
     res = fill_send_buffer(fds[0]);
     cout << "fill " << res << " bytes." << endl;
@@ -470,7 +470,7 @@ TEST(PollTrigger, MultiPollTimeout2)
         };
     }
     g_Scheduler.RunUntilNoTask();
-    EXPECT_EQ(Task::GetTaskCount(), 0);
+    EXPECT_EQ(Task::GetTaskCount(), 0u);
 
     g_Scheduler.GetOptions().debug = 0;
     close(fds[0]);
@@ -515,7 +515,7 @@ TEST(PollTrigger, MultiPollTrigger)
         (void)n;
     };
     g_Scheduler.RunUntilNoTask();
-    EXPECT_EQ(Task::GetTaskCount(), 0);
+    EXPECT_EQ(Task::GetTaskCount(), 0u);
 
     g_Scheduler.GetOptions().debug = 0;
     close(fds[0]);
@@ -563,7 +563,7 @@ TEST(PollTrigger, MultiPollClose)
         close(fds[0]);
     };
     g_Scheduler.RunUntilNoTask();
-    EXPECT_EQ(Task::GetTaskCount(), 0);
+    EXPECT_EQ(Task::GetTaskCount(), 0u);
 
 //    g_Scheduler.GetOptions().debug = 0;
     close(fds[0]);
@@ -602,5 +602,5 @@ TEST(Poll, MultiThreads)
     printf("coroutines run done.\n");
     if (Task::GetTaskCount()) // 可能会有一些Task还未删除，执行删除逻辑。
         g_Scheduler.RunUntilNoTask();
-    EXPECT_EQ(Task::GetTaskCount(), 0);
+    EXPECT_EQ(Task::GetTaskCount(), 0u);
 }

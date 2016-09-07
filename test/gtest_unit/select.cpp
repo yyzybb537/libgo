@@ -165,7 +165,7 @@ TEST(Select, TimeoutIs0)
         EXPECT_EQ(g_Scheduler.GetCurrentTaskYieldCount(), yield_count);
     };
     g_Scheduler.RunUntilNoTask();
-    EXPECT_EQ(Task::GetTaskCount(), 0);
+    EXPECT_EQ(Task::GetTaskCount(), 0u);
 }
 
 TEST(Select, TimeoutIsF1)
@@ -202,7 +202,7 @@ TEST(Select, TimeoutIsF1)
 
     };
     g_Scheduler.RunUntilNoTask();
-    EXPECT_EQ(Task::GetTaskCount(), 0);
+    EXPECT_EQ(Task::GetTaskCount(), 0u);
 }
 
 TEST(Select, TimeoutIs1)
@@ -228,7 +228,7 @@ TEST(Select, TimeoutIs1)
         EXPECT_EQ(g_Scheduler.GetCurrentTaskYieldCount(), yield_count);
     };
     g_Scheduler.RunUntilNoTask();
-    EXPECT_EQ(Task::GetTaskCount(), 0);
+    EXPECT_EQ(Task::GetTaskCount(), 0u);
 
     go [] {
         fd_set rd_fds;
@@ -247,13 +247,13 @@ TEST(Select, TimeoutIs1)
         EXPECT_EQ(g_Scheduler.GetCurrentTaskYieldCount(), yield_count + 1);
     };
     g_Scheduler.RunUntilNoTask();
-    EXPECT_EQ(Task::GetTaskCount(), 0);
+    EXPECT_EQ(Task::GetTaskCount(), 0u);
 }
 
 TEST(Select, Sleep)
 {
     go [] {
-        EXPECT_EQ(g_Scheduler.GetCurrentTaskYieldCount(), 0);
+        EXPECT_EQ(g_Scheduler.GetCurrentTaskYieldCount(), 0u);
         auto start = std::chrono::high_resolution_clock::now();
         int n = select(0, NULL, NULL, NULL, gc_new timeval{1, 0});
         auto end = std::chrono::high_resolution_clock::now();
@@ -261,10 +261,10 @@ TEST(Select, Sleep)
         EXPECT_EQ(n, 0);
         EXPECT_LT(c, 1050);
         EXPECT_GT(c, 950);
-        EXPECT_EQ(g_Scheduler.GetCurrentTaskYieldCount(), 1);
+        EXPECT_EQ(g_Scheduler.GetCurrentTaskYieldCount(), 1u);
     };
     g_Scheduler.RunUntilNoTask();
-    EXPECT_EQ(Task::GetTaskCount(), 0);
+    EXPECT_EQ(Task::GetTaskCount(), 0u);
 }
 
 TEST(Select, MultiThreads)
@@ -295,5 +295,5 @@ TEST(Select, MultiThreads)
     tg.join_all();
     if (Task::GetTaskCount()) // 可能会有一些Task还未删除，执行删除逻辑。
         g_Scheduler.RunUntilNoTask();
-    EXPECT_EQ(Task::GetTaskCount(), 0);
+    EXPECT_EQ(Task::GetTaskCount(), 0u);
 }
