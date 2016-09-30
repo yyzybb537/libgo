@@ -167,7 +167,7 @@ extern const char* BaseFile(const char* file);
             fprintf(::co::CoroutineOptions::getInstance().debug_output, "[%s][%05u][%02u]%s:%d:(%s)\t " fmt "\n", \
                     ::co::codebug_GetCurrentTime().c_str(),\
                     ::co::codebug_GetCurrentProcessID(), ::co::codebug_GetCurrentThreadID(), \
-                    ::co::BaseFile(__FILE__), __LINE__, __func__, ##__VA_ARGS__); \
+                    ::co::BaseFile(__FILE__), __LINE__, __FUNCTION__, ##__VA_ARGS__); \
             fflush(::co::CoroutineOptions::getInstance().debug_output); \
         } \
     } while(0)
