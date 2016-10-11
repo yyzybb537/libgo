@@ -11,3 +11,8 @@ tools/libgo.conf
 .ycm_extra_conf.pyc
 build/
 tutorial/build/
+CMakeFiles
+.idea
+cmake_install.cmake
+CMakeCache.txt
+Makefile
