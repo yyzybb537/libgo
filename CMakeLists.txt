@@ -8,6 +8,11 @@ else()
     set(CMAKE_BUILD_TYPE RELEASE)
 endif()
 
+if(LINUX)
+    set(CMAKE_C_COMPILER "/opt/rh/devtoolset-2/root/usr/bin/gcc")
+    set(CMAKE_CXX_COMPILER "/opt/rh/devtoolset-2/root/usr/bin/c++")
+endif()
+
 message("------------ Options -------------")
 message("  CMAKE_BUILD_TYPE: ${CMAKE_BUILD_TYPE}")
 
