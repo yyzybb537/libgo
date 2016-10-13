@@ -8,7 +8,8 @@ else()
     set(CMAKE_BUILD_TYPE RELEASE)
 endif()
 
-if(LINUX)
+if(APPLE)
+elseif(UNIX)
     set(CMAKE_C_COMPILER "/opt/rh/devtoolset-2/root/usr/bin/gcc")
     set(CMAKE_CXX_COMPILER "/opt/rh/devtoolset-2/root/usr/bin/c++")
 endif()
@@ -100,7 +101,10 @@ else()
     message ("  build_dynamic_lib: yes")
 endif()
 
-configure_file(${PROJECT_SOURCE_DIR}/libgo/cmake_config.h.in ${PROJECT_SOURCE_DIR}/libgo/cmake_config.h)
+if(APPLE)
+else()
+    configure_file(${PROJECT_SOURCE_DIR}/libgo/cmake_config.h.in ${PROJECT_SOURCE_DIR}/libgo/cmake_config.h)
+endif()
 message("----------------------------------")
 
 message("-------------- Env ---------------")
@@ -166,8 +170,10 @@ message("------------------------------------")
 
 include_directories(${PROJECT_SOURCE_DIR})
 
-set(TARGET "libgo")
+set(TARGET "libgo++")
 set(STATIC_T "libgo_static")
+
+set(LIBRARY_OUTPUT_PATH ../lib/release_linux/libGo)
 
 add_library("${STATIC_T}" STATIC ${CO_SRC_LIST})
 set_target_properties("${STATIC_T}" PROPERTIES OUTPUT_NAME "${TARGET}")
