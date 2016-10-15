@@ -120,6 +120,7 @@ int IoWait::reactor_ctl(int epollfd, int epoll_ctl_mod, int fd,
 }
 int IoWait::WaitLoop(int wait_milliseconds)
 {
+    int n;
     if (!IsEpollCreated())
         return -1;
 
@@ -129,7 +130,7 @@ int IoWait::WaitLoop(int wait_milliseconds)
 
     while(1)
     {
-        int n = epoll_wait(GetEpollFd(), evs, epoll_event_size_, wait_milliseconds);
+        n = epoll_wait(GetEpollFd(), evs, epoll_event_size_, wait_milliseconds);
         if (n == -1) {
             if (errno == EINTR) {
                 continue;
