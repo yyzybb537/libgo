@@ -133,6 +133,7 @@ int IoWait::WaitLoop(int wait_milliseconds)
         if (n == -1) {
             if (errno == EINTR) {
                 continue;
+            }
         }
         return 0;
     }
