@@ -135,8 +135,10 @@ int IoWait::WaitLoop(int wait_milliseconds)
             if (errno == EINTR) {
                 continue;
             }
+	    return 0;
         }
-        return 0;
+	else
+	    break;
     }
 
     DebugPrint(dbg_scheduler|dbg_scheduler_sleep, "epollwait(%d ms) returns: %d",
