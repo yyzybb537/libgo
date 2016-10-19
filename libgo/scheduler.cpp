@@ -9,7 +9,7 @@
 #include <sys/time.h>
 #endif
 #if WITH_SAFE_SIGNAL
-#include <libgo/hook_signal.h>
+#include "hook_signal.h"
 #endif
 
 namespace co
