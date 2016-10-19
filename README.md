@@ -130,6 +130,7 @@ libgo有以下特点：
 
         3.除网络IO、sleep以外的阻塞系统调用，会真正阻塞调度线程的运行，请使用co_await, 并启动几个线程去Run内置的线程池.
 	
+        4.不要使用标准库的fstream, 里面的close文件fd无法HOOK到.
 
 ##### Linux系统上Hook的系统调用列表：
 * 
