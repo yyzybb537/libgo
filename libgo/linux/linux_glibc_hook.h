@@ -84,6 +84,9 @@ extern dup2_t dup2_f;
 typedef int(*dup3_t)(int, int, int);
 extern dup3_t dup3_f;
 
+typedef int (*fclose_t)(FILE *fp);
+extern fclose_t fclose_f;
+
 // DNS by libcares
 // gethostent
 // gethostbyname

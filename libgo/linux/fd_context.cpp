@@ -137,9 +137,8 @@ bool FileDescriptorCtx::closed()
 {
     return closed_;
 }
-int FileDescriptorCtx::close(bool call_syscall)
+int FileDescriptorCtx::close_without_lock(bool call_syscall)
 {
-    std::unique_lock<mutex_t> lock(lock_);
     if (closed()) return 0;
     DebugPrint(dbg_fd_ctx, "close fd(%d) [%p] call_syscall:%d", fd_, this, (int)call_syscall);
     closed_ = true;
@@ -168,6 +167,19 @@ int FileDescriptorCtx::close(bool call_syscall)
         tasks.clear();
     }
 
+    return ret;
+
+}
+int FileDescriptorCtx::close(bool call_syscall)
+{
+    std::unique_lock<mutex_t> lock(lock_);
+    return close_without_lock(call_syscall);
+}
+int FileDescriptorCtx::fclose(FILE* fp)
+{
+    std::unique_lock<mutex_t> lock(lock_);
+    int ret = fclose_f(fp);
+    close_without_lock(false);
     return ret;
 }
 void FileDescriptorCtx::set_user_nonblock(bool b)
@@ -479,6 +491,24 @@ int FdManager::close(int fd, bool call_syscall)
     }
 
     int ret = (*pptr)->close(call_syscall);
+    delete pptr;
+    pptr = nullptr;
+    return ret;
+}
+int FdManager::fclose(FILE* fp)
+{
+    if (!fp) return 0;
+    int fd = fileno(fp);
+    if (fd < 0) return 0;
+
+    FdPair & fpair = get_pair(fd);
+    std::unique_lock<LFLock> lock(fpair.second);
+    FdCtxPtr* & pptr = fpair.first;
+    if (!pptr) {
+        return fclose_f(fp);
+    }
+
+    int ret = (*pptr)->fclose(fp);
     delete pptr;
     pptr = nullptr;
     return ret;

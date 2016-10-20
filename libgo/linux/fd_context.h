@@ -76,6 +76,7 @@ public:
     bool is_epoll();
     bool closed();
     int close(bool call_syscall);
+    int fclose(FILE* fp);
 
     void set_user_nonblock(bool b);
     bool user_nonblock();
@@ -117,6 +118,8 @@ private:
     void set_pending_events(int events);
 
     int GetEpollFd();
+
+    int close_without_lock(bool call_syscall);
 
     // debugger interface
 public:
@@ -168,6 +171,8 @@ public:
     bool dup(int src, int dst);
 
     int close(int fd, bool call_syscall = true);
+
+    int fclose(FILE* fp);
 
 private:
     FdPair & get_pair(int fd);

@@ -28,7 +28,7 @@ add_subdirectory(${PROJECT_SOURCE_DIR}/../../third_party/gtest ${PROJECT_BINARY_
 aux_source_directory(${PROJECT_SOURCE_DIR} SRC_LIST)
 
 if (UNIX)
-    set(STATIC_LINK_ARG -Wl,--whole-archive -lpthread -Wl,--no-whole-archive -static)
+    set(STATIC_LINK_ARG -Wl,--whole-archive -lpthread -Wl,--no-whole-archive -static -static-libstdc++)
     set(LINK_ARGS libgo dl gtest_main gtest boost_coroutine boost_context boost_system boost_thread)
     if (WITH_CARES)
         set(LINK_ARGS ${LINK_ARGS} cares)

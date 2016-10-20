@@ -593,6 +593,7 @@ setsockopt_t setsockopt_f = NULL;
 dup_t dup_f = NULL;
 dup2_t dup2_f = NULL;
 dup3_t dup3_f = NULL;
+fclose_t fclose_f = NULL;
 
 int connect(int fd, const struct sockaddr *addr, socklen_t addrlen)
 {
@@ -1110,6 +1111,12 @@ int dup3(int oldfd, int newfd, int flags)
     return ret;
 }
 
+int fclose(FILE* fp)
+{
+    if (!fclose_f) coroutine_hook_init();
+    return FdManager::getInstance().fclose(fp);
+}
+
 #if WITH_CARES
 struct hostent* co_gethostbyname2(const char *name, int af)
 {
@@ -1267,6 +1274,7 @@ extern int __dup(int);
 extern int __dup2(int, int);
 extern int __dup3(int, int, int);
 extern int __usleep(useconds_t usec);
+extern int __new_fclose(FILE *fp);
 
 // 某些版本libc.a中没有__usleep.
 __attribute__((weak))
@@ -1313,6 +1321,7 @@ void coroutine_hook_init()
     dup_f = (dup_t)dlsym(RTLD_NEXT, "dup");
     dup2_f = (dup2_t)dlsym(RTLD_NEXT, "dup2");
     dup3_f = (dup3_t)dlsym(RTLD_NEXT, "dup3");
+    fclose_f = (fclose_t)dlsym(RTLD_NEXT, "fclose");
 #else
     connect_f = &__connect;
     read_f = &__read;
@@ -1339,12 +1348,13 @@ void coroutine_hook_init()
     dup_f = &__dup;
     dup2_f = &__dup2;
     dup3_f = &__dup3;
+    fclose_f = &__new_fclose;
 #endif
 
     if (!connect_f || !read_f || !write_f || !readv_f || !writev_f || !send_f
             || !sendto_f || !sendmsg_f || !accept_f || !poll_f || !select_f
             || !sleep_f|| !usleep_f || !nanosleep_f || !close_f || !fcntl_f || !setsockopt_f
-            || !getsockopt_f || !dup_f || !dup2_f 
+            || !getsockopt_f || !dup_f || !dup2_f || !fclose_f
             // 老版本linux中没有dup3, 无需校验
             // || !dup3_f
             )

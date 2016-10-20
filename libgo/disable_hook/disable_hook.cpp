@@ -49,6 +49,7 @@ setsockopt_t setsockopt_f = &setsockopt;
 dup_t dup_f = &dup;
 dup2_t dup2_f = &dup2;
 dup3_t dup3_f = &dup3;
+fclose_t fclose_f = &fclose;
 
 } //extern "C"
 
