@@ -4,7 +4,7 @@
 #include <libgo/block_object.h>
 #include <libgo/co_mutex.h>
 #include <libgo/scheduler.h>
-
+using std::nullptr_t;
 namespace co
 {
 
