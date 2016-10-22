@@ -1,6 +1,6 @@
 # libgo
 
-[![Build Status](https://travis-ci.org/yyzybb537/libgo.svg?branch=master)](https://travis-ci.org/yyzybb537/libgo.svg?branch=master)
+[![Build Status](https://travis-ci.org/yyzybb537/libgo.svg?branch=master)](https://travis-ci.org/yyzybb537/libgo)
 
 ### libgo  - 协程库、并行编程库
 
