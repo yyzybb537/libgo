@@ -10,8 +10,9 @@ endif()
 
 include(${PROJECT_SOURCE_DIR}/../../boost.cmake)
 
-include_directories(${PROJECT_SOURCE_DIR}/../../src)
-include_directories(${PROJECT_SOURCE_DIR}/../../src/linux)
+include_directories(${PROJECT_SOURCE_DIR}/../../third_party/gtest/include)
+include_directories(${PROJECT_SOURCE_DIR}/../../libgo)
+include_directories(${PROJECT_SOURCE_DIR}/../../libgo/linux)
 link_directories(${PROJECT_BINARY_DIR}/../..)
 
 if (UNIX)

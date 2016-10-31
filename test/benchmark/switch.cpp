@@ -5,7 +5,7 @@
 #include <libgo/libgo.h>
 #include <cmath>
 
-#define COC 4
+#define COC 1
 static uint64_t counter[COC] = {};
 static uint64_t last_c = 0;
 static int coro = 5;
@@ -32,7 +32,8 @@ int main()
 {
     
     boost::thread_group tg;
-    for (int i = 0; i < COC; ++i)
+    co_sched.Run();
+    for (int i = 1; i < COC; ++i)
         tg.create_thread([]{ co_sched.RunLoop(); });
 
     co_sched.GetOptions().enable_work_steal = false;
@@ -46,13 +47,16 @@ int main()
     for (int i = 0; i < coro*coro; ++i)
         go [=]{ foo(i % COC); };
 
-    for (;;) {
-        for (int i = coro*coro; i < (coro+1)*(coro+1); ++i)
-            go [=]{ foo(i % COC); };
-        coro++;
-        sleep(3);
-    }
+    go []{
+        for (;;) {
+            for (int i = coro*coro; i < (coro+1)*(coro+1); ++i)
+                go [=]{ foo(i % COC); };
+            coro++;
+            sleep(3);
+        }
+    };
 
+    co_sched.RunLoop();
     return 0;
 }
 
