@@ -29,7 +29,6 @@ namespace co
             static uint32_t protect_stack_page = 0;
             return protect_stack_page;
         }
-#if __linux__
         static bool protect_stack(void *top, std::size_t stack_size,
                 uint32_t page)
         {
@@ -62,7 +61,6 @@ namespace co
                         top, protect_page_addr, page, getpagesize());
             }
         }
-#endif
     };
 
 } //namespace co

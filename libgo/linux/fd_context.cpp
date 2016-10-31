@@ -1,5 +1,10 @@
 #include "fd_context.h"
+#ifdef __linux__
 #include <sys/epoll.h>
+#endif
+#ifdef __APPLE__
+//...
+#endif
 #include <sys/stat.h>
 #include <sys/fcntl.h>
 #include <assert.h>

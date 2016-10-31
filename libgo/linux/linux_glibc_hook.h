@@ -102,11 +102,13 @@ namespace co {
     extern void set_connect_timeout(int milliseconds);
     extern void initialize_socket_async_methods(int socketfd);
 
+#ifdef __linux__
     // libgo提供的协程版epoll_wait接口
     extern int libgo_epoll_wait(int epfd, struct epoll_event *events,
             int maxevents, int timeout);
 
     // 设置ET模式
     extern void set_et_mode(int fd);
+#endif
 
 } //namespace co

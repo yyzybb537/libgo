@@ -53,7 +53,7 @@ namespace co
 
         ucontext_t& GetTlsContext()
         {
-            static thread_local ucontext_t tls_context;
+            static THREAD_TLS ucontext_t tls_context;
             return tls_context;
         }
 

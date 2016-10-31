@@ -8,6 +8,7 @@ namespace co
         static HookSignal obj;
         return obj;
     }
+#ifdef __linux__
     sighandler_t HookSignal::SignalSyscall(int signum, sighandler_t handler)
     {
         DebugPrint(dbg_signal, "SignalSyscall %d handler=%p", signum, (void*)handler);
@@ -28,6 +29,19 @@ namespace co
         sysv_signal(signum, &HookSignal::SignalHandler);
 //        DebugPrint(dbg_signal, "SignalHandler %d end", signum);
     }
+#endif
+#ifdef __APPLE__
+    sighandler_t HookSignal::SignalSyscall(int signum, sighandler_t handler)
+    {
+        //TODO...
+        return NULL;
+    }
+    void HookSignal::SignalHandler(int signum)
+    {
+        //TODO...
+    }
+#endif
+    
     void HookSignal::Run()
     {
         uint64_t ss = std::atomic_exchange(&sigset_, (uint64_t)0);

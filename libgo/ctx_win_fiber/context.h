@@ -18,7 +18,7 @@ namespace co
         }
         static void*& GetTlsContext()
         {
-            static thread_local void* native = nullptr;
+            static THREAD_TLS void* native = nullptr;
             return native;
         }
     };
