@@ -1,8 +1,9 @@
 TODO:
-支持同时等待多个Channel
-协程亲缘性
+环切(runnable状态)搭配星切, 提升协程切换性能
 打造类似TLS的CLS(协程局部对象)
-HOOK select poll时, 正确处理文件等非socket句柄
+hook __poll, 源syscall使用__libc_poll, 以支持gethostbyname系列函数
+协程亲缘性
+支持同时等待多个Channel
 
 DONE:
 支持exception
@@ -38,3 +39,4 @@ HOOK close接口, 正确模拟阻塞式read/write中被close时的行为(close�
 Work Stealing...
 __attribute__ ((always_inline))
 调度器重入不再crash
+HOOK select poll时, 正确处理文件等非socket句柄
