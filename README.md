@@ -14,7 +14,7 @@ libgo是一个使用C++11编写的协作式调度的stackful协程库,
     
     Windows (Win7、Win8、Win10 x86 and x64 使用VS2013/2015编译)
     
-    Mac (感谢 @eagle518 的贡献)
+    Mac (在mac分支上, 感谢群友 @eagle518 的贡献)
 
 
 使用libgo编写并行程序，即可以像golang、erlang这些并发语言一样开发迅速且逻辑简洁，又有C++原生的性能优势，鱼和熊掌从此可以兼得。
