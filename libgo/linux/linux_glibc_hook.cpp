@@ -1,7 +1,9 @@
 #include <dlfcn.h>
 #include <fcntl.h>
-#include <sys/select.h>
+#ifdef __linux__
 #include <sys/epoll.h>
+#endif
+#include <sys/select.h>
 #include <sys/socket.h>
 #include <sys/stat.h>
 #include <sys/ioctl.h>
@@ -22,7 +24,7 @@
 using namespace co;
 
 // 设置阻塞式connect超时时间(-1无限时)
-static thread_local int s_connect_timeout = -1;
+static THREAD_TLS int s_connect_timeout = -1;
 
 namespace co {
     void coroutine_hook_init();
@@ -35,7 +37,7 @@ namespace co {
     {
         FdManager::getInstance().get_fd_ctx(socketfd);
     }
-
+#ifdef __linux__
     int libgo_epoll_wait(int epfd, struct epoll_event *events, int maxevents, int timeout)
     {
         Task* tk = g_Scheduler.GetCurrentTask();
@@ -70,7 +72,7 @@ namespace co {
         if (!fd_ctx || fd_ctx->closed()) return ;
         fd_ctx->set_et_mode();
     }
-
+#endif
     inline int libgo_poll(struct pollfd *fds, nfds_t nfds, int timeout, bool nonblocking_check)
     {
         if (!poll_f) coroutine_hook_init();
@@ -934,9 +936,11 @@ int fcntl(int __fd, int __cmd, ...)
         // int
         case F_SETFD:
         case F_SETOWN:
+#ifdef __linux__
         case F_SETSIG:
         case F_SETLEASE:
         case F_NOTIFY:
+#endif
 #if defined(F_SETPIPE_SZ)
         case F_SETPIPE_SZ:
 #endif
@@ -973,6 +977,7 @@ int fcntl(int __fd, int __cmd, ...)
             }
 
         // struct f_owner_ex*
+#ifdef __linux__
         case F_GETOWN_EX:
         case F_SETOWN_EX:
             {
@@ -980,6 +985,7 @@ int fcntl(int __fd, int __cmd, ...)
                 va_end(va);
                 return fcntl_f(__fd, __cmd, arg);
             }
+#endif
 
         // void
         case F_GETFL:
@@ -998,8 +1004,10 @@ int fcntl(int __fd, int __cmd, ...)
         // void
         case F_GETFD:
         case F_GETOWN:
+#ifdef __linux__
         case F_GETSIG:
         case F_GETLEASE:
+#endif
 #if defined(F_GETPIPE_SZ)
         case F_GETPIPE_SZ:
 #endif
@@ -1244,6 +1252,7 @@ sighandler_t signal(int signum, sighandler_t handler)
 #endif
 
 #if !defined(CO_DYNAMIC_LINK)
+#ifdef __linux__
 extern int __connect(int fd, const struct sockaddr *addr, socklen_t addrlen);
 extern ssize_t __read(int fd, void *buf, size_t count);
 extern ssize_t __readv(int fd, const struct iovec *iov, int iovcnt);
@@ -1283,8 +1292,11 @@ int __usleep(useconds_t usec)
     timespec req = {usec / 1000000, usec * 1000};
     return __nanosleep(&req, nullptr);
 }
-
+#else //__APPLE__
+    //
 #endif
+#endif //!CO_DYNAMIC_LINK
+
 } // extern "C"
 
 namespace co
@@ -1323,6 +1335,7 @@ void coroutine_hook_init()
     dup3_f = (dup3_t)dlsym(RTLD_NEXT, "dup3");
     fclose_f = (fclose_t)dlsym(RTLD_NEXT, "fclose");
 #else
+#ifdef __linux__
     connect_f = &__connect;
     read_f = &__read;
     readv_f = &__readv;
@@ -1349,7 +1362,10 @@ void coroutine_hook_init()
     dup2_f = &__dup2;
     dup3_f = &__dup3;
     fclose_f = &__new_fclose;
+else //__APPLE__
+        //
 #endif
+#endif //!CO_DYNAMIC_LINK
 
     if (!connect_f || !read_f || !write_f || !readv_f || !writev_f || !send_f
             || !sendto_f || !sendmsg_f || !accept_f || !poll_f || !select_f

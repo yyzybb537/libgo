@@ -30,7 +30,7 @@ Scheduler::~Scheduler()
 
 ThreadLocalInfo& Scheduler::GetLocalInfo()
 {
-    static thread_local ThreadLocalInfo *info = NULL;
+    static THREAD_TLS ThreadLocalInfo *info = NULL;
     if (!info)
         info = new ThreadLocalInfo();
 

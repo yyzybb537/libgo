@@ -1,5 +1,11 @@
 #include "io_wait.h"
+#ifdef __linux__
 #include <sys/epoll.h>
+#endif
+#ifdef __APPLE__
+#include <sys/event.h>
+typedef struct kevent kevent_t;
+#endif
 #include <libgo/scheduler.h>
 #include <signal.h>
 
@@ -13,12 +19,12 @@ IoWait::IoWait()
 
 int& IoWait::EpollFdRef()
 {
-    thread_local static int epoll_fd = -1;
+    THREAD_TLS static int epoll_fd = -1;
     return epoll_fd;
 }
 pid_t& IoWait::EpollOwnerPid()
 {
-    thread_local static pid_t owner_pid = -1;
+    THREAD_TLS static pid_t owner_pid = -1;
     return owner_pid;
 }
 
@@ -49,7 +55,9 @@ static std::string EpollEvent2Str(uint32_t events)
     if (events & EPOLLOUT) e += "POLLOUT|";
     if (events & EPOLLHUP) e += "POLLHUP|";
     if (events & EPOLLERR) e += "POLLERR|";
+#ifdef __linux__
     if (events & EPOLLET) e += "EPOLLET|";
+#endif
     return e;
 }
 
@@ -99,6 +107,7 @@ void IoWait::__IOBlockTriggered(IoSentryPtr io_sentry)
     }
 }
 
+#ifdef __linux__
 int IoWait::reactor_ctl(int epollfd, int epoll_ctl_mod, int fd,
         uint32_t poll_events, bool is_support, bool et_mode)
 {
@@ -118,17 +127,64 @@ int IoWait::reactor_ctl(int epollfd, int epoll_ctl_mod, int fd,
     errno = EPERM;
     return -1;
 }
+#endif
+#ifdef __APPLE__
+int IoWait::reactor_ctl(int epollfd, int epoll_ctl_mod, int fd,
+                           uint32_t poll_events, bool is_support, bool et_mode)
+{
+	if (is_support) {
+		struct kevent ke;
+
+		if ((poll_events & EPOLLIN) && (epoll_ctl_mod != EPOLL_CTL_DEL)) {
+			EV_SET(&ke, fd, EVFILT_READ, EV_ADD, 0, 0, NULL);
+			if (kevent(epollfd, &ke, 1, NULL, 0, NULL) == -1) return -1;
+		}
+		else {
+			EV_SET(&ke, fd, EVFILT_READ, EV_DELETE, 0, 0, NULL);
+			kevent(epollfd, &ke, 1, NULL, 0, NULL);
+		}
+		if ((poll_events & EPOLLOUT) && (epoll_ctl_mod != EPOLL_CTL_DEL)) {
+			EV_SET(&ke, fd, EVFILT_WRITE, EV_ADD, 0, 0, NULL);
+			if (kevent(epollfd, &ke, 1, NULL, 0, NULL) == -1) return -1;
+		}
+		else {
+			EV_SET(&ke, fd, EVFILT_WRITE, EV_DELETE, 0, 0, NULL);
+			kevent(epollfd, &ke, 1, NULL, 0, NULL);
+		}
+
+		return 0;
+	}
+
+	// TODO: poll模拟
+	errno = EPERM;
+	return -1;
+}
+#endif
+    
 int IoWait::WaitLoop(int wait_milliseconds)
 {
     if (!IsEpollCreated())
         return -1;
 
     // TODO: epoll多线程触发, poll单线程触发.
-
-    thread_local static epoll_event *evs = new epoll_event[epoll_event_size_];
+#ifdef __linux__
+    THREAD_TLS static epoll_event *evs = new epoll_event[epoll_event_size_];
 
 retry:
     int n = epoll_wait(GetEpollFd(), evs, epoll_event_size_, wait_milliseconds);
+#endif
+#ifdef __APPLE__
+//    /*THREAD_TLS*/ static struct kevent *evs = new kevent_t[epoll_event_size_];
+    THREAD_TLS static struct kevent *evs = NULL;
+    if (!evs) evs = new kevent_t[epoll_event_size_];
+
+    struct timespec timeout;
+    timeout.tv_sec = wait_milliseconds / 1000;
+    timeout.tv_nsec = wait_milliseconds % 1000 * 1000000;
+    
+retry:
+    int n = kevent(GetEpollFd(), NULL, 0, evs, epoll_event_size_, &timeout);
+#endif
     if (n == -1) {
         if (errno == EINTR) {
             goto retry;
@@ -140,6 +196,7 @@ retry:
     DebugPrint(dbg_scheduler|dbg_scheduler_sleep, "epollwait(%d ms) returns: %d",
             wait_milliseconds, n);
 
+#ifdef __linux__
     TriggerSet triggers;
     for (int i = 0; i < n; ++i)
     {
@@ -152,6 +209,26 @@ retry:
         // 暂存, 最后再执行Trigger, 以便于poll可以得到更多的事件触发.
         fd_ctx->reactor_trigger(EpollEvent2Poll(evs[i].events), triggers);
     }
+#endif
+    
+#ifdef __APPLE__
+    TriggerSet triggers;
+    for (int i = 0; i < n; ++i)
+    {
+        int fd = evs[i].ident;
+        FdCtxPtr fd_ctx = FdManager::getInstance().get_fd_ctx(fd);
+//        DebugPrint(dbg_ioblock, "epoll trigger fd(%d) events(%s) has_ctx(%d)",
+//                   fd, EpollEvent2Str(evs[i].events).c_str(), !!fd_ctx);
+        if (!fd_ctx) continue;
+        
+        int mask = 0;
+        if (evs[i].filter == EVFILT_READ) mask |= EPOLLIN;
+        if (evs[i].filter == EVFILT_WRITE) mask |= EPOLLOUT;
+        
+        // 暂存, 最后再执行Trigger, 以便于poll可以得到更多的事件触发.
+        fd_ctx->reactor_trigger(EpollEvent2Poll(mask), triggers);
+    }
+#endif
 
     // TODO: run poll
 
@@ -185,7 +262,12 @@ void IoWait::CreateEpoll()
     if (epoll_fd_ >= 0)
         close(epoll_fd_);
 
+#ifdef __linux__
     epoll_fd_ = epoll_create(epoll_event_size_);
+#endif
+#ifdef __APPLE__
+    epoll_fd_ = kqueue();
+#endif
     if (epoll_fd_ != -1) {
         DebugPrint(dbg_ioblock, "create epoll success. epollfd=%d", epoll_fd_);
         // 使用epoll需要忽略SIGPIPE信号

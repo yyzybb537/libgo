@@ -10,7 +10,6 @@
 #include <sys/ioctl.h>
 #include <time.h>
 #include <libgo/linux_glibc_hook.h>
-#endif
 
 namespace co {
 
@@ -20,7 +19,6 @@ namespace co {
 
 } //namespace co
 
-#if __linux__
 
 extern "C" {
 

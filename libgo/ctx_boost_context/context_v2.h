@@ -24,12 +24,10 @@ namespace co
                 void * vp = StackAllocator::get_malloc_fn()(size_);
                 if (!vp) throw std::bad_alloc();
 
-#if __linux__
                 uint32_t protect_page = StackAllocator::get_protect_stack_page();
                 if (protect_page)
                     if (StackAllocator::protect_stack(vp, size_, protect_page))
                         protect_page_ = protect_page;
-#endif
 
                 boost::context::stack_context sctx;
                 sctx.size = size_;
@@ -50,10 +48,8 @@ namespace co
 #endif
 
                 void * vp = static_cast<char *>(sctx.sp) - sctx.size;
-#if __linux__
                 if (protect_page_)
                     StackAllocator::unprotect_stack(vp, protect_page_);
-#endif
                 StackAllocator::get_free_fn()(vp);
             }
     };

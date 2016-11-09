@@ -26,12 +26,11 @@ namespace co
 
                 ctx.size = size;
                 ctx.sp = static_cast<char *>(limit) + ctx.size;
-#if __linux__
+
                 uint32_t protect_page = StackAllocator::get_protect_stack_page();
                 if (protect_page)
                     if (StackAllocator::protect_stack(limit, size, protect_page))
                         protect_page_ = protect_page;
-#endif
 
 #if defined(BOOST_USE_VALGRIND)
                 ctx.valgrind_stack_id = VALGRIND_STACK_REGISTER(ctx.sp, limit);
@@ -49,10 +48,8 @@ namespace co
 #endif
 
                 void * limit = static_cast<char *>(ctx.sp) - ctx.size;
-#if __linux__
                 if (protect_page_)
                     StackAllocator::unprotect_stack(limit, protect_page_);
-#endif
                 StackAllocator::get_free_fn()(limit);
             }
         };

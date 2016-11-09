@@ -50,7 +50,7 @@ namespace co
 
         boost::context::fcontext_t& GetTlsContext()
         {
-            static thread_local boost::context::fcontext_t tls_context;
+            static THREAD_TLS boost::context::fcontext_t tls_context;
             return tls_context;
         }
 
