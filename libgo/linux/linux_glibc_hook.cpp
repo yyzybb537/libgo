@@ -71,6 +71,20 @@ namespace co {
         fd_ctx->set_et_mode();
     }
 
+    void reset_readable(int fd)
+    {
+        FdCtxPtr fd_ctx = FdManager::getInstance().get_fd_ctx(fd);
+        if (!fd_ctx || fd_ctx->closed()) return ;
+        fd_ctx->set_readable(false);
+    }
+
+    void reset_writable(int fd)
+    {
+        FdCtxPtr fd_ctx = FdManager::getInstance().get_fd_ctx(fd);
+        if (!fd_ctx || fd_ctx->closed()) return ;
+        fd_ctx->set_writable(false);
+    }
+
     inline int libgo_poll(struct pollfd *fds, nfds_t nfds, int timeout, bool nonblocking_check)
     {
         if (!poll_f) coroutine_hook_init();

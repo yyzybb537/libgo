@@ -109,4 +109,10 @@ namespace co {
     // 设置ET模式
     extern void set_et_mode(int fd);
 
+    // 重置可读/写事件状态
+    // * 绕过hook机制直接使用底层系统调用时, 可能会导致记录的可读/写事件不准确,
+    // * 需要调用相应的清理事件状态的接口.
+    extern void reset_readable(int fd);
+    extern void reset_writable(int fd);
+
 } //namespace co
