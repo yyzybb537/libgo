@@ -5,14 +5,14 @@
 
 namespace co {
 
-    typedef int (*ioctlsocket_t)(
+    typedef int (WINAPI *ioctlsocket_t)(
         _In_    SOCKET s,
         _In_    long   cmd,
         _Inout_ u_long *argp
         );
     static ioctlsocket_t ioctlsocket_f = (ioctlsocket_t)GetProcAddress(GetModuleHandleA("Ws2_32.dll"), "ioctlsocket");
 
-    static int hook_ioctlsocket(
+    static int WINAPI hook_ioctlsocket(
         _In_    SOCKET s,
         _In_    long   cmd,
         _Inout_ u_long *argp
@@ -28,7 +28,7 @@ namespace co {
         return ret;
     }
 
-    typedef int (*WSAIoctl_t)(
+    typedef int ( WINAPI *WSAIoctl_t)(
         _In_  SOCKET                             s,
         _In_  DWORD                              dwIoControlCode,
         _In_  LPVOID                             lpvInBuffer,
@@ -41,7 +41,7 @@ namespace co {
         );
     static WSAIoctl_t WSAIoctl_f = (WSAIoctl_t)GetProcAddress(GetModuleHandleA("Ws2_32.dll"), "WSAIoctl");
 
-    static int hook_WSAIoctl(
+    static int WINAPI hook_WSAIoctl(
         _In_  SOCKET                             s,
         _In_  DWORD                              dwIoControlCode,
         _In_  LPVOID                             lpvInBuffer,
@@ -80,7 +80,7 @@ namespace co {
         return !!v;
     }
 
-    typedef int (*select_t)(
+    typedef int ( WINAPI *select_t)(
         _In_    int                  nfds,
         _Inout_ fd_set               *readfds,
         _Inout_ fd_set               *writefds,
@@ -89,7 +89,7 @@ namespace co {
         );
     static select_t select_f = (select_t)GetProcAddress(GetModuleHandleA("Ws2_32.dll"), "select");
 
-    static inline int safe_select(int nfds, fd_set *readfds, fd_set *writefds, fd_set *exceptfds)
+    static inline int WINAPI safe_select(int nfds, fd_set *readfds, fd_set *writefds, fd_set *exceptfds)
     {
         //Task *tk = g_Scheduler.GetCurrentTask();
         //DebugPrint(dbg_hook, "task(%s) safe_select(nfds=%d, rfds=%p, wfds=%p, efds=%p).",
@@ -118,7 +118,7 @@ namespace co {
         return ret;
     }
 
-    static int hook_select(
+    static int WINAPI hook_select(
         _In_    int                  nfds,
         _Inout_ fd_set               *readfds,
         _Inout_ fd_set               *writefds,
@@ -226,14 +226,14 @@ namespace co {
         return 0;
     }
 
-    typedef int (*connect_t)(
+    typedef int ( WINAPI *connect_t)(
         _In_ SOCKET                s,
         _In_ const struct sockaddr *name,
         _In_ int                   namelen
         );
     static connect_t connect_f = (connect_t)GetProcAddress(GetModuleHandleA("Ws2_32.dll"), "connect");
 
-    static int hook_connect(
+    static int WINAPI hook_connect(
         _In_ SOCKET                s,
         _In_ const struct sockaddr *name,
         _In_ int                   namelen
@@ -242,7 +242,7 @@ namespace co {
         return connect_mode_hook(connect_f, "connect", s, name, namelen);
     }
 
-    typedef int (*WSAConnect_t)(
+    typedef int ( WINAPI *WSAConnect_t)(
         _In_  SOCKET                s,
         _In_  const struct sockaddr *name,
         _In_  int                   namelen,
@@ -253,7 +253,7 @@ namespace co {
         );
     static WSAConnect_t WSAConnect_f = (WSAConnect_t)GetProcAddress(GetModuleHandleA("Ws2_32.dll"), "WSAConnect");
 
-    static int hook_WSAConnect(
+    static int WINAPI hook_WSAConnect(
         _In_  SOCKET                s,
         _In_  const struct sockaddr *name,
         _In_  int                   namelen,
@@ -320,14 +320,14 @@ namespace co {
         return ret;
     }
 
-    typedef SOCKET (*accept_t)(
+    typedef SOCKET (WINAPI *accept_t)(
         _In_    SOCKET          s,
         _Out_   struct sockaddr *addr,
         _Inout_ int             *addrlen
         );
     static accept_t accept_f = (accept_t)GetProcAddress(GetModuleHandleA("Ws2_32.dll"), "accept");
 
-    static SOCKET hook_accept(
+    static SOCKET WINAPI hook_accept(
         _In_    SOCKET          s,
         _Out_   struct sockaddr *addr,
         _Inout_ int             *addrlen
@@ -336,7 +336,7 @@ namespace co {
         return read_mode_hook<SOCKET>(accept_f, "accept", e_no_timeout, s, addr, addrlen);
     }
 
-    typedef SOCKET (*WSAAccept_t)(
+    typedef SOCKET (WINAPI *WSAAccept_t)(
         _In_    SOCKET          s,
         _Out_   struct sockaddr *addr,
         _Inout_ LPINT           addrlen,
@@ -345,7 +345,7 @@ namespace co {
         );
     static WSAAccept_t WSAAccept_f = (WSAAccept_t)GetProcAddress(GetModuleHandleA("Ws2_32.dll"), "WSAAccept");
 
-    static SOCKET hook_WSAAccept(
+    static SOCKET WINAPI hook_WSAAccept(
         _In_    SOCKET          s,
         _Out_   struct sockaddr *addr,
         _Inout_ LPINT           addrlen,
@@ -356,7 +356,7 @@ namespace co {
         return read_mode_hook<SOCKET>(WSAAccept_f, "WSAAccept", e_no_timeout, s, addr, addrlen, lpfnCondition, dwCallbackData);
     }
 
-    typedef int (*WSARecv_t)(
+    typedef int ( WINAPI *WSARecv_t)(
         _In_    SOCKET                             s,
         _Inout_ LPWSABUF                           lpBuffers,
         _In_    DWORD                              dwBufferCount,
@@ -367,7 +367,7 @@ namespace co {
         );
     static WSARecv_t WSARecv_f = (WSARecv_t)GetProcAddress(GetModuleHandleA("Ws2_32.dll"), "WSARecv");
 
-    static int hook_WSARecv(
+    static int WINAPI hook_WSARecv(
         _In_    SOCKET                             s,
         _Inout_ LPWSABUF                           lpBuffers,
         _In_    DWORD                              dwBufferCount,
@@ -381,7 +381,7 @@ namespace co {
             lpBuffers, dwBufferCount, lpNumberOfBytesRecvd, lpFlags, lpOverlapped, lpCompletionRoutine);
     }
 
-    typedef int (*recv_t)(
+    typedef int ( WINAPI *recv_t)(
         _In_  SOCKET s,
         _Out_ char   *buf,
         _In_  int    len,
@@ -389,7 +389,7 @@ namespace co {
         );
     static recv_t recv_f = (recv_t)GetProcAddress(GetModuleHandleA("Ws2_32.dll"), "recv");
 
-    static int hook_recv(
+    static int WINAPI hook_recv(
         _In_  SOCKET s,
         _Out_ char   *buf,
         _In_  int    len,
@@ -399,7 +399,7 @@ namespace co {
         return read_mode_hook<int>(recv_f, "recv", 0, s, buf, len, flags);
     }
 
-    typedef int (*recvfrom_t)(
+    typedef int ( WINAPI *recvfrom_t)(
         _In_        SOCKET          s,
         _Out_       char            *buf,
         _In_        int             len,
@@ -409,7 +409,7 @@ namespace co {
         );
     static recvfrom_t recvfrom_f = (recvfrom_t)GetProcAddress(GetModuleHandleA("Ws2_32.dll"), "recvfrom");
 
-    static int hook_recvfrom(
+    static int WINAPI hook_recvfrom(
         _In_        SOCKET          s,
         _Out_       char            *buf,
         _In_        int             len,
@@ -421,7 +421,7 @@ namespace co {
         return read_mode_hook<int>(recvfrom_f, "recvfrom", 0, s, buf, len, flags, from, fromlen);
     }
 
-    typedef int (*WSARecvFrom_t)(
+    typedef int ( WINAPI *WSARecvFrom_t)(
         _In_    SOCKET                             s,
         _Inout_ LPWSABUF                           lpBuffers,
         _In_    DWORD                              dwBufferCount,
@@ -434,7 +434,7 @@ namespace co {
         );
     static WSARecvFrom_t WSARecvFrom_f = (WSARecvFrom_t)GetProcAddress(GetModuleHandleA("Ws2_32.dll"), "WSARecvFrom");
 
-    static int hook_WSARecvFrom(
+    static int WINAPI hook_WSARecvFrom(
         _In_    SOCKET                             s,
         _Inout_ LPWSABUF                           lpBuffers,
         _In_    DWORD                              dwBufferCount,
@@ -450,7 +450,7 @@ namespace co {
             s, lpBuffers, dwBufferCount, lpNumberOfBytesRecvd, lpFlags, lpFrom, lpFromlen, lpOverlapped, lpCompletionRoutine);
     }
 
-    typedef int (*WSARecvMsg_t)(
+    typedef int ( WINAPI *WSARecvMsg_t)(
         _In_    SOCKET                             s,
         _Inout_ LPWSAMSG                           lpMsg,
         _Out_   LPDWORD                            lpdwNumberOfBytesRecvd,
@@ -459,7 +459,7 @@ namespace co {
         );
     static WSARecvMsg_t WSARecvMsg_f = (WSARecvMsg_t)GetProcAddress(GetModuleHandleA("Ws2_32.dll"), "WSARecvMsg");
 
-    static int hook_WSARecvMsg(
+    static int WINAPI  hook_WSARecvMsg(
         _In_    SOCKET                             s,
         _Inout_ LPWSAMSG                           lpMsg,
         _Out_   LPDWORD                            lpdwNumberOfBytesRecvd,
@@ -519,7 +519,7 @@ namespace co {
         return ret;
     }
 
-    typedef int (*WSASend_t)(
+    typedef int ( WINAPI *WSASend_t)(
         _In_  SOCKET                             s,
         _In_  LPWSABUF                           lpBuffers,
         _In_  DWORD                              dwBufferCount,
@@ -530,7 +530,7 @@ namespace co {
         );
     static WSASend_t WSASend_f = (WSASend_t)GetProcAddress(GetModuleHandleA("Ws2_32.dll"), "WSASend");
 
-    static int hook_WSASend(
+    static int WINAPI hook_WSASend(
         _In_  SOCKET                             s,
         _In_  LPWSABUF                           lpBuffers,
         _In_  DWORD                              dwBufferCount,
@@ -544,7 +544,7 @@ namespace co {
             s, lpBuffers, dwBufferCount, lpNumberOfBytesSent, dwFlags, lpOverlapped, lpCompletionRoutine);
     }
 
-    typedef int (*send_t)(
+    typedef int ( WINAPI *send_t)(
         _In_       SOCKET s,
         _In_ const char   *buf,
         _In_       int    len,
@@ -552,7 +552,7 @@ namespace co {
         );
     static send_t send_f = (send_t)GetProcAddress(GetModuleHandleA("Ws2_32.dll"), "send");
 
-    static int hook_send(
+    static int WINAPI hook_send(
         _In_       SOCKET s,
         _In_ const char   *buf,
         _In_       int    len,
@@ -562,7 +562,7 @@ namespace co {
         return write_mode_hook<int>(send_f, "send", 0, s, buf, len, flags);
     }
 
-    typedef int (*sendto_t)(
+    typedef int ( WINAPI *sendto_t)(
         _In_       SOCKET                s,
         _In_ const char                  *buf,
         _In_       int                   len,
@@ -572,7 +572,7 @@ namespace co {
         );
     static sendto_t sendto_f = (sendto_t)GetProcAddress(GetModuleHandleA("Ws2_32.dll"), "sendto");
 
-    static int hook_sendto(
+    static int WINAPI hook_sendto(
         _In_       SOCKET                s,
         _In_ const char                  *buf,
         _In_       int                   len,
@@ -584,7 +584,7 @@ namespace co {
         return write_mode_hook<int>(sendto_f, "sendto", 0, s, buf, len, flags, to, tolen);
     }
 
-    typedef int (*WSASendTo_t)(
+    typedef int ( WINAPI *WSASendTo_t)(
         _In_  SOCKET                             s,
         _In_  LPWSABUF                           lpBuffers,
         _In_  DWORD                              dwBufferCount,
@@ -597,7 +597,7 @@ namespace co {
         );
     static WSASendTo_t WSASendTo_f = (WSASendTo_t)GetProcAddress(GetModuleHandleA("Ws2_32.dll"), "WSASendTo");
 
-    static int hook_WSASendTo(
+    static int WINAPI hook_WSASendTo(
         _In_  SOCKET                             s,
         _In_  LPWSABUF                           lpBuffers,
         _In_  DWORD                              dwBufferCount,
@@ -613,7 +613,7 @@ namespace co {
             s, lpBuffers, dwBufferCount, lpNumberOfBytesSent, dwFlags, lpTo, iToLen, lpOverlapped, lpCompletionRoutine);
     }
 
-    typedef int (*WSASendMsg_t)(
+    typedef int ( WINAPI *WSASendMsg_t)(
         _In_  SOCKET                             s,
         _In_  LPWSAMSG                           lpMsg,
         _In_  DWORD                              dwFlags,
@@ -623,7 +623,7 @@ namespace co {
         );
     static WSASendMsg_t WSASendMsg_f = (WSASendMsg_t)GetProcAddress(GetModuleHandleA("Ws2_32.dll"), "WSASendMsg");
 
-    static int hook_WSASendMsg(
+    static int WINAPI hook_WSASendMsg(
         _In_  SOCKET                             s,
         _In_  LPWSAMSG                           lpMsg,
         _In_  DWORD                              dwFlags,
