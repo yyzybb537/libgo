@@ -66,7 +66,7 @@ uint32_t Processer::Run(uint32_t &done_count)
             case TaskState::sys_block:
                 assert(tk->block_);
                 if (!tk->block_->AddWaitTask(tk))
-                    runnable_list_.push(tk);
+                    AddTaskRunnable(tk);
                 break;
 
             case TaskState::done:
