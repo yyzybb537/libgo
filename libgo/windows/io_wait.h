@@ -3,16 +3,16 @@
 #include <vector>
 #include <list>
 #include <set>
-#include <libgo/task.h>
+#include "../task.h"
 
 namespace co
 {
-    class IoWait
-    {
-    public:
-        void SchedulerSwitch(Task* tk);
+	class IoWait
+	{
+		public:
+			void SchedulerSwitch(Task* tk);
 
-        int WaitLoop(int);
-    };
+			int WaitLoop(int);
+	};
 
 } //namespace co

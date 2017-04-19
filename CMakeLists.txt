@@ -301,5 +301,16 @@ else ()
         add_subdirectory("${PROJECT_SOURCE_DIR}/test/benchmark")
         add_subdirectory(${PROJECT_SOURCE_DIR}/tutorial)
     endif()
+
+    install(TARGETS ${STATIC_T} LIBRARY DESTINATION "lib" ARCHIVE DESTINATION "lib")
+    install(DIRECTORY ${PROJECT_SOURCE_DIR}/libgo/ DESTINATION "include/libgo"
+        FILES_MATCHING
+        PATTERN "linux" EXCLUDE
+        PATTERN "main" EXCLUDE
+        #PATTERN "windows" EXCLUDE
+        PATTERN "ctx_boost_coroutine" EXCLUDE
+        PATTERN "ctx_ucontext" EXCLUDE
+        PATTERN "*.h")
+
 endif()
 
