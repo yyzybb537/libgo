@@ -120,6 +120,7 @@ int IoWait::reactor_ctl(int epollfd, int epoll_ctl_mod, int fd,
 }
 int IoWait::WaitLoop(int wait_milliseconds)
 {
+    int n;
     if (!IsEpollCreated())
         return -1;
 
@@ -127,14 +128,17 @@ int IoWait::WaitLoop(int wait_milliseconds)
 
     thread_local static epoll_event *evs = new epoll_event[epoll_event_size_];
 
-retry:
-    int n = epoll_wait(GetEpollFd(), evs, epoll_event_size_, wait_milliseconds);
-    if (n == -1) {
-        if (errno == EINTR) {
-            goto retry;
+    while(1)
+    {
+        n = epoll_wait(GetEpollFd(), evs, epoll_event_size_, wait_milliseconds);
+        if (n == -1) {
+            if (errno == EINTR) {
+                continue;
+            }
+	    return 0;
         }
-
-        return 0;
+	else
+	    break;
     }
 
     DebugPrint(dbg_scheduler|dbg_scheduler_sleep, "epollwait(%d ms) returns: %d",
