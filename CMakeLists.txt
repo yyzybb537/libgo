@@ -8,7 +8,29 @@ else()
     set(CMAKE_BUILD_TYPE RELEASE)
 endif()
 
+option(C++11_ENABLE "C++11_ENABLE" OFF)
+
+SET(CMAKE_C_COMPILER "/usr/bin/gcc")
+SET(CMAKE_CXX_COMPILER "/usr/bin/c++")
+
+IF(C++11_ENABLE)
+    IF(APPLE)
+    ELSEIF(UNIX)
+        SET(CMAKE_C_COMPILER "/opt/rh/devtoolset-2/root/usr/bin/gcc")
+        SET(CMAKE_CXX_COMPILER "/opt/rh/devtoolset-2/root/usr/bin/c++")
+    ENDIF()
+    SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11 ")
+ELSE()
+    IF(APPLE)
+    ELSEIF(UNIX)
+        SET(CMAKE_C_COMPILER "/usr/bin/gcc")
+        SET(CMAKE_CXX_COMPILER "/usr/bin/c++")
+    ENDIF()
+ENDIF()
+
 message("------------ Options -------------")
+message("  CMAKE_C_COMPILER: ${CMAKE_C_COMPILER}")
+message("  CMAKE_CXX_COMPILER: ${CMAKE_CXX_COMPILER}")
 message("  CMAKE_BUILD_TYPE: ${CMAKE_BUILD_TYPE}")
 
 aux_source_directory(libgo CO_SRC_LIST)
@@ -95,7 +117,10 @@ else()
     message ("  build_dynamic_lib: yes")
 endif()
 
-configure_file(${PROJECT_SOURCE_DIR}/libgo/cmake_config.h.in ${PROJECT_SOURCE_DIR}/libgo/cmake_config.h)
+if(APPLE)
+else()
+    configure_file(${PROJECT_SOURCE_DIR}/libgo/cmake_config.h.in ${PROJECT_SOURCE_DIR}/libgo/cmake_config.h)
+endif()
 message("----------------------------------")
 
 message("-------------- Env ---------------")
@@ -148,7 +173,7 @@ else ()
 endif()
 
 if (UNIX)
-    set(CMAKE_CXX_FLAGS "-std=c++11 -fPIC -Wall -pthread")
+    set(CMAKE_CXX_FLAGS " -fPIC -Wall -pthread")
     set(CMAKE_CXX_FLAGS_DEBUG "-g -pg ${CMAKE_CXX_FLAGS} -Werror")
     set(CMAKE_CXX_FLAGS_RELEASE "-g -O3 ${CMAKE_CXX_FLAGS} -Werror")
 else ()
@@ -167,8 +192,10 @@ message("------------------------------------")
 
 include_directories(${PROJECT_SOURCE_DIR})
 
-set(TARGET "libgo")
+set(TARGET "libgo++")
 set(STATIC_T "libgo_static")
+
+set(LIBRARY_OUTPUT_PATH ../lib/release_linux/libGo)
 
 add_library("${STATIC_T}" STATIC ${CO_SRC_LIST})
 set_target_properties("${STATIC_T}" PROPERTIES OUTPUT_NAME "${TARGET}")
