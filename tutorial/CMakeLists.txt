@@ -30,7 +30,8 @@ else()
 	include_directories(${LIBGO_SDK_DIR}/include)
 
     include_directories(${LIBGO_SDK_DIR}/include/libgo/windows)
-    set(depend_libgo libgo_static libgo_main)
+	# Not in the same solution
+    #set(depend_libgo libgo_static libgo_main)
 	link_directories(${LIBGO_SDK_DIR}/lib)
 endif()
 
