@@ -12,7 +12,7 @@ if (WIN32)
 		set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} /MT /EHsc")
     endif()
 
-	set(LIBGO_SDK_DIR "d:/libgo")
+	set(LIBGO_SDK_DIR "d:/libgo" CACHE STRING LIBGO_SDK_DIR)
 
 else ()
     set(CMAKE_CXX_FLAGS "-std=c++11 -g -Wall")
