@@ -8,7 +8,7 @@
 ************************************************/
 #include <boost/thread.hpp>
 #include <boost/asio.hpp>
-#include "coroutine.h"
+#include <libgo/coroutine.h>
 #include "win_exit.h"
 
 static const uint16_t port = 43333;

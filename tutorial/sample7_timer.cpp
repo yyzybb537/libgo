@@ -10,7 +10,7 @@
  * 调用, 会自动变为co_sleep, 协程外使用效果不变.
 ************************************************/
 #include <chrono>
-#include "coroutine.h"
+#include <libgo/coroutine.h>
 #include "win_exit.h"
 
 int main()

@@ -15,7 +15,7 @@
  * 不要在已经析构的co_mutex上进行操作
 ************************************************/
 #include <mutex>
-#include "coroutine.h"
+#include <libgo/coroutine.h>
 #include "win_exit.h"
 
 static int value = 0;

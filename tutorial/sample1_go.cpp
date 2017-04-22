@@ -1,7 +1,7 @@
 /************************************************
  * libgo sample1
 *************************************************/
-#include "coroutine.h"
+#include <libgo/coroutine.h>
 #include "win_exit.h"
 #include <stdio.h>
 #include <boost/thread.hpp>

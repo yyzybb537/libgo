@@ -21,7 +21,7 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <fcntl.h>
-#include "coroutine.h"
+#include <libgo/coroutine.h>
 #include "win_exit.h"
 
 int main()

@@ -5,7 +5,7 @@
  * 间传递数据，此时就需要用到channel。
  *
 ************************************************/
-#include "coroutine.h"
+#include <libgo/coroutine.h>
 #include "win_exit.h"
 
 struct A

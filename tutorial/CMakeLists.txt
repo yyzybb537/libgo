@@ -4,23 +4,36 @@ cmake_minimum_required(VERSION 2.8)
 project(samples)
 
 if (WIN32)
-    set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} /MTd /EHsc")
-    set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} /MT /EHsc")
+    if (NOT DISABLE_DYNAMIC_LIB)
+	    set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} /MDd")
+		set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} /MD")
+	else()
+	    set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} /MTd /EHsc")
+		set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} /MT /EHsc")
+    endif()
+
+	set(LIBGO_SDK_DIR "d:/libgo" CACHE STRING LIBGO_SDK_DIR)
+
 else ()
     set(CMAKE_CXX_FLAGS "-std=c++11 -g -Wall")
 endif()
 
 include(${PROJECT_SOURCE_DIR}/../boost.cmake)
 
-include_directories(${PROJECT_SOURCE_DIR}/../libgo)
 if (UNIX)
-    include_directories(${PROJECT_SOURCE_DIR}/../libgo/linux)
+	include_directories(${PROJECT_SOURCE_DIR}/../libgo)
+    
+	include_directories(${PROJECT_SOURCE_DIR}/../libgo/linux)
     link_directories(/usr/local/lib)
+	link_directories(${PROJECT_BINARY_DIR}/..)
 else()
-    include_directories(${PROJECT_SOURCE_DIR}/../libgo/windows)
-    set(depend_libgo libgo_static libgo_main)
+	include_directories(${LIBGO_SDK_DIR}/include)
+
+    include_directories(${LIBGO_SDK_DIR}/include/libgo/windows)
+	# Not in the same solution
+    #set(depend_libgo libgo_static libgo_main)
+	link_directories(${LIBGO_SDK_DIR}/lib)
 endif()
-link_directories(${PROJECT_BINARY_DIR}/..)
 
 if (UNIX)
     set(LINK_ARGS libgo libgo_main boost_coroutine boost_context boost_system boost_thread pthread dl)

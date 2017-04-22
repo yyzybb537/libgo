@@ -1,18 +1,19 @@
 #include "io_wait.h"
-#include <libgo/error.h>
+#include "../error.h"
 #include <algorithm>
-#include <libgo/scheduler.h>
+#include "../scheduler.h"
 
-namespace co {
-
-void IoWait::SchedulerSwitch(Task* tk)
+namespace co
 {
-	(void)tk;
-}
 
-int IoWait::WaitLoop(int)
-{
-	return -1;
-}
+	void IoWait::SchedulerSwitch(Task* tk)
+	{
+		(void)tk;
+	}
+
+	int IoWait::WaitLoop(int)
+	{
+		return -1;
+	}
 
 } //namespace co
