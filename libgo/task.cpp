@@ -26,7 +26,7 @@ std::string GetTaskStateName(TaskState state)
     return names[(int)state];
 }
 
-uint64_t Task::s_id = 0;
+atomic_t<uint64_t> Task::s_id{0};
 atomic_t<uint64_t> Task::s_task_count{0};
 
 LFLock Task::s_stat_lock;
