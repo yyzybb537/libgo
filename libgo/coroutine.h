@@ -136,3 +136,16 @@ using ::co::co_timer_block_cancel;
 // co_debugger
 #define co_debugger ::co::CoDebugger::getInstance()
 
+// co_listener
+namespace co
+{
+typedef	::co::Scheduler::TaskListener co_listener;
+}
+using ::co::co_listener;
+inline void set_co_listener(::co::co_listener* listener) {
+	g_Scheduler.SetTaskListener(listener);
+}
+
+inline ::co::co_listener* get_co_listener() {
+	return g_Scheduler.GetTaskListener();
+}

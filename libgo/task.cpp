@@ -34,48 +34,54 @@ std::set<Task*> Task::s_stat_set;
 
 void Task::Task_CB()
 {
-    if (g_Scheduler.GetOptions().exception_handle == eCoExHandle::immedaitely_throw) {
-        fn_();
-        fn_ = TaskF();  // 让协程function对象的析构也在协程中执行
-    } else {
-        try {
-            fn_();
-            fn_ = TaskF();
-        } catch (std::exception& e) {
-            fn_ = TaskF();
-            switch (g_Scheduler.GetOptions().exception_handle) {
-                case eCoExHandle::immedaitely_throw:
-                    throw ;
-                    break;
+	std::exception_ptr eptr;
+	try {
+		if (g_Scheduler.GetTaskListener()) {
+			g_Scheduler.GetTaskListener()->onStart(this->id_);
+		}
 
-                case eCoExHandle::delay_rethrow:
-                    eptr_ = std::current_exception();
-                    break;
+		this->fn_();
+		this->fn_ = TaskF(); //让协程function对象的析构也在协程中执行
 
-                default:
-                case eCoExHandle::debugger_only:
-                    DebugPrint(dbg_exception|dbg_task, "task(%s) has uncaught exception:%s",
-                            DebugInfo(), e.what());
-                    break;
-            }
-        } catch (...) {
-            fn_ = TaskF();
-            switch (g_Scheduler.GetOptions().exception_handle) {
-                case eCoExHandle::immedaitely_throw:
-                    throw ;
-                    break;
+		if (g_Scheduler.GetTaskListener()) {
+			g_Scheduler.GetTaskListener()->onCompleted(this->id_);
+		}
+	} catch (...) {
+		this->fn_ = TaskF();
 
-                case eCoExHandle::delay_rethrow:
-                    eptr_ = std::current_exception();
-                    break;
+		eptr = std::current_exception();
+		if (g_Scheduler.GetTaskListener()) {
+			g_Scheduler.GetTaskListener()->onException(this->id_, eptr);
+		}
 
-                default:
-                case eCoExHandle::debugger_only:
-                    DebugPrint(dbg_exception|dbg_task, "task(%s) has uncaught exception.", DebugInfo());
-                    break;
-            }
-        }
-    }
+		if (eptr) {
+			const auto handle = g_Scheduler.GetOptions().exception_handle;
+			if (handle == eCoExHandle::immedaitely_throw) {
+				if (g_Scheduler.GetTaskListener()) {
+					g_Scheduler.GetTaskListener()->onFinished(this->id_, eptr);
+				}
+				std::rethrow_exception(eptr);
+
+			} else if (handle == eCoExHandle::delay_rethrow) {
+				this->eptr_ = eptr;
+
+			} else /*if (handle == eCoExHandle::debugger_only)*/{
+				const auto type = (dbg_exception | dbg_task);
+				if (g_Scheduler.GetOptions().debug & type) {
+					try {
+						std::rethrow_exception(eptr);
+					} catch (std::exception& e) {
+						DebugPrint(type, "task(%s) has uncaught exception:%s", DebugInfo(), e.what());
+					} catch (...) {
+						DebugPrint(type, "task(%s) has uncaught exception.", DebugInfo());
+					}
+				}
+			}
+		}
+	}
+	if (g_Scheduler.GetTaskListener()) {
+		g_Scheduler.GetTaskListener()->onFinished(this->id_, eptr);
+	}
 
     state_ = TaskState::done;
     Scheduler::getInstance().CoYield();
