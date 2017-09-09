@@ -52,7 +52,7 @@ void SleepWait::Wakeup(Task* tk)
 {
     DebugPrint(dbg_sleepblock, "task(%s) wakeup", tk->DebugInfo());
     bool ok = wait_tasks_.erase(tk);
-    assert(ok);
+    assert(ok), (void) ok;
     g_Scheduler.AddTaskRunnable(tk);
 }
 

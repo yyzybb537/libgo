@@ -20,9 +20,8 @@ void ThreadPool::RunLoop()
     for (;;)
     {
         std::unique_ptr<TPElemBase> elem(get());
-        if (!elem)
-            continue;
-        elem->Do();
+        if (elem)
+            elem->Do();
     }
 }
 
