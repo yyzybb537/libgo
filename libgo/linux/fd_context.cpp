@@ -491,8 +491,8 @@ int FdManager::close(int fd, bool call_syscall)
     }
     int ret;
     {
-    	std::unique_ptr<FdCtxPtr> upptr(pptr);
-    	ret = (*pptr)->close(call_syscall);
+        std::unique_ptr<FdCtxPtr> upptr(pptr);
+        ret = (*pptr)->close(call_syscall);
     }
     pptr = nullptr;
     return ret;
