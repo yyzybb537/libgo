@@ -19,10 +19,10 @@ void ThreadPool::RunLoop()
     assert_std_thread_lib();
     for (;;)
     {
-        TPElemBase *elem = get();
-        if (!elem) continue;
+        std::unique_ptr<TPElemBase> elem(get());
+        if (!elem)
+            continue;
         elem->Do();
-        delete elem;
     }
 }
 

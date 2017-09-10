@@ -46,6 +46,9 @@ std::string co_error_category::message(int v) const
 
         case (int)eCoErrorCode::ec_disabled_multi_thread:
             return "Unsupport multiply threads. If you want use multiply threads, please cmake libgo without DISABLE_MULTI_THREAD option.";
+
+        case (int)eCoErrorCode::ec_use_co_local_outside_of_coroutine:
+            return "Cannot construct co_local's inner object outside of coroutine.";
     }
 
     return "";

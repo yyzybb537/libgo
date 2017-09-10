@@ -16,8 +16,9 @@ int c = 0;
 void foo()
 {
     int v = 1;
-    for (int i = 1; i < 20000000; ++i)
+    for (int i = 1; i < 20000000; ++i) {
         v *= i;
+    }
 	c += v;
 }
 
@@ -38,10 +39,11 @@ int main()
 
     // 创建8个线程去并行执行所有协程 (由worksteal算法自动做负载均衡)
     boost::thread_group tg;
-    for (int i = 0; i < 8; ++i)
+    for (int i = 0; i < 8; ++i) {
         tg.create_thread([] {
-                co_sched.RunUntilNoTask();
-                });
+           co_sched.RunUntilNoTask();
+        });
+    }
     tg.join_all();
 
     end = system_clock::now();
