@@ -18,6 +18,7 @@ enum class eCoErrorCode : int
     ec_protect_stack_failed,
     ec_std_thread_link_error,
     ec_disabled_multi_thread,
+	ec_use_co_local_outside_of_coroutine,
 };
 
 class co_error_category

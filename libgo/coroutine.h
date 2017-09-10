@@ -149,3 +149,15 @@ inline void set_co_listener(::co::co_listener* listener) {
 inline ::co::co_listener* get_co_listener() {
 	return g_Scheduler.GetTaskListener();
 }
+
+// co_local
+#define GET_CO_LOCAL_ID (((unsigned int) __LINE__ \
+						<< (sizeof(unsigned int) * 8 / 2)) \
+						| (unsigned int) __COUNTER__)
+using ::co::co_local;
+
+#define co_local_init(co_var, ...) ([&](decltype(co_var)& var) {	\
+	auto p = var.Get();												\
+	return p ? p : var.Emplace(__VA_ARGS__);						\
+}((co_var)))
+

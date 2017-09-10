@@ -83,6 +83,9 @@ void Task::Task_CB()
 		g_Scheduler.GetTaskListener()->onFinished(this->id_, eptr);
 	}
 
+	//在协程中释放协程本地变量
+	co_local_map_.clear();
+
     state_ = TaskState::done;
     Scheduler::getInstance().CoYield();
 }
@@ -168,6 +171,11 @@ std::vector<std::map<SourceLocation, uint32_t>> Task::GetStateInfo()
         ++result[(int)tk->state_][tk->location_];
     }
     return result;
+}
+
+Task* Task::GetCurrentTask()
+{
+	return Scheduler::getInstance().GetCurrentTask();
 }
 
 } //namespace co
