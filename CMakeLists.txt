@@ -148,7 +148,7 @@ else ()
 endif()
 
 if (UNIX)
-    set(CMAKE_CXX_FLAGS "-std=c++11 -fPIC -Wall -pthread")
+    set(CMAKE_CXX_FLAGS "-std=c++11 -fPIC -Wall -pthread ${CMAKE_CXX_FLAGS}")
     set(CMAKE_CXX_FLAGS_DEBUG "-g -pg ${CMAKE_CXX_FLAGS} -Werror")
     set(CMAKE_CXX_FLAGS_RELEASE "-g -O3 ${CMAKE_CXX_FLAGS} -Werror")
 else ()
