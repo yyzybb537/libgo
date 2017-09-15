@@ -73,7 +73,7 @@ struct Task
 
     void Task_CB();
 
-    static uint64_t s_id;
+    static atomic_t<uint64_t> s_id;
     static atomic_t<uint64_t> s_task_count;
 
     static uint64_t GetTaskCount();

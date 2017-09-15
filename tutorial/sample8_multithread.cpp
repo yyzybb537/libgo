@@ -16,9 +16,10 @@ int c = 0;
 void foo()
 {
     int v = 1;
-    for (int i = 1; i < 20000000; ++i)
+    for (int i = 1; i < 20000000; ++i) {
         v *= i;
-	c += v;
+    }
+    c += v;
 }
 
 int main()

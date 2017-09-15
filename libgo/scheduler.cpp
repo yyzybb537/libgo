@@ -57,7 +57,12 @@ void Scheduler::CreateTask(TaskF const& fn, std::size_t stack_size,
 {
     Task* tk = new Task(fn, stack_size ? stack_size : GetOptions().stack_size, file, lineno);
     ++task_count_;
+
     DebugPrint(dbg_task, "task(%s) created.", tk->DebugInfo());
+    if (task_listener) {
+        task_listener->onCreated(tk->id_);
+    }
+
     AddTaskRunnable(tk, dispatch);
 }
 
