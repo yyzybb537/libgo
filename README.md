@@ -47,18 +47,13 @@ libgo有以下特点：
 				使用方式：
 					$ cmake .. -DENABLE_BOOST_CONTEXT=ON
 
-			ENABLE_BOOST_COROUTINE
-				libgo在Linux系统上默认使用ucontext做协程上下文切换，开启此选项将使用boost.coroutine来替代ucontext.
-				使用方式：
-					$ cmake .. -DENABLE_BOOST_COROUTINE=ON
-
 			DISABLE_HOOK
 				禁止hook syscall，开启此选项后，网络io相关的syscall将恢复系统默认的行为，
 				协程中使用阻塞式网络io将可能真正阻塞线程，如无特殊需求请勿开启此选项.
 				使用方式：
 					$ cmake .. -DDISABLE_HOOK=ON
 					
-			不开启ENABLE_BOOST_CONTEXT和ENABLE_BOOST_COROUTINE选项时, libgo不依赖boost库，可以直接使用，仅测试代码依赖boost库。
+			不开启ENABLE_BOOST_CONTEXT选项时, libgo不依赖boost库，可以直接使用，仅测试代码依赖boost库。
  
         1.如果你安装了ucorf或libgonet，那么你已经使用默认的方式安装过libgo了，如果不想设置如上的选项，可以跳过第2步.
  
