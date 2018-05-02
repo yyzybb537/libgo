@@ -2,7 +2,7 @@
 #include <gtest/gtest.h>
 #include <chrono>
 #include <boost/thread.hpp>
-#include <boost/coroutine/all.hpp>
+#include <boost/coroutine2/all.hpp>
 #include "gtest_exit.h"
 #define private public
 #include "coroutine.h"
@@ -151,44 +151,44 @@ TEST_P(Times, context_ts)
     cout << "rv: " << rv << endl;
 }
 
-typedef ::boost::coroutines::symmetric_coroutine<void>::call_type co_t;
-typedef ::boost::coroutines::symmetric_coroutine<void>::yield_type yd_t;
-using namespace std::chrono;
-
-yd_t *pyd = nullptr;
-int c = 100000;
-int rv = 0;
-void foo()
-{
-    for (int i = 1; i < c; ++i)
-    {
-        ++rv;
-        (*pyd)();
-    }
-    ++rv;
-}
-
-void test_boost()
-{
-    co_t **pp_co = new co_t*;
-    *pp_co = new co_t([&](yd_t& yd) {
-            pyd = &yd;
-            foo();
-            }, boost::coroutines::attributes(1024 * 1024));
-
-    stdtimer st(100000, "boost.coroutines switch");
-    auto s = system_clock::now();
-    for (int i = 0; i < c; ++i)
-        (**pp_co)();
-    auto e = system_clock::now();
-    cout << duration_cast<microseconds>(e-s).count() << " us" << endl;
-    cout << "rv:" << rv << endl;
-}
-
-TEST_P(Times, boost)
-{
-    test_boost();
-}
+//typedef ::boost::coroutines2::symmetric_coroutine<void>::call_type co_t;
+//typedef ::boost::coroutines2::symmetric_coroutine<void>::yield_type yd_t;
+//using namespace std::chrono;
+//
+//yd_t *pyd = nullptr;
+//int c = 100000;
+//int rv = 0;
+//void foo()
+//{
+//    for (int i = 1; i < c; ++i)
+//    {
+//        ++rv;
+//        (*pyd)();
+//    }
+//    ++rv;
+//}
+//
+//void test_boost()
+//{
+//    co_t **pp_co = new co_t*;
+//    *pp_co = new co_t([&](yd_t& yd) {
+//            pyd = &yd;
+//            foo();
+//            }, boost::coroutines2::attributes(1024 * 1024));
+//
+//    stdtimer st(100000, "boost.coroutines switch");
+//    auto s = system_clock::now();
+//    for (int i = 0; i < c; ++i)
+//        (**pp_co)();
+//    auto e = system_clock::now();
+//    cout << duration_cast<microseconds>(e-s).count() << " us" << endl;
+//    cout << "rv:" << rv << endl;
+//}
+//
+//TEST_P(Times, boost)
+//{
+//    test_boost();
+//}
 
 TEST_P(Times, proc)
 {
