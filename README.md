@@ -38,6 +38,15 @@ libgo有以下特点：
  
 ##### libgo的编译与使用:
 
+ *    Vcpkg:
+
+        如果你已经安装了vcpkg，可以直接使用vcpkg安装：
+
+            $ vcpkg install libgo
+
+        由于boost.context库在vcpkg上编译存在bug，此版本暂时使用ucontext做上下文切换的版本，性能上会略有下降
+        待bug修复，会改为使用boost的版本，以提供更好的性能给用户
+
  *    Linux: 
 
 		0.CMake编译参数
