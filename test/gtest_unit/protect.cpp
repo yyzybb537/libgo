@@ -66,13 +66,20 @@ TEST(testProtect, testProtect)
         co_sched.GetOptions().protect_stack_page = 8;
         co_sched.GetOptions().stack_size = 4096 * 10;
         go []{
-            printf("yiled 1\n");
+            char begin = 'a';
+            printf("yiled 1\naddress=%p\n", &begin);
             hold_stack<4096>();
             printf("yiled 2\n");
             hold_stack<4096 + 2048>();
             printf("yiled 3\n");
             hold_stack<4096 * 2>();
             printf("yiled 4\n");
+            hold_stack<1024 * 1024 * 2>();
+            printf("yiled 5\n");
+            char b[1024 * 1024 * 2] = {};
+            memset(b, 1, sizeof(b));
+//            char end = 'a';
+            printf("yiled 6\naddress=%p\n", &b[sizeof(b)-1]);
         };
         printf("create task ok, will run it.\n");
         co_sched.RunUntilNoTask();

@@ -413,7 +413,6 @@ TEST(PollTrigger, MultiPollTimeout1)
             EXPECT_GT(c, 499);
             EXPECT_EQ(n, 0);
             EXPECT_EQ(pfds[0].revents, 0);
-            EXPECT_EQ(pfds[1].revents, 0);
         };
     }
     g_Scheduler.RunUntilNoTask();
