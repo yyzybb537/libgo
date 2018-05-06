@@ -2,7 +2,6 @@
 #include <gtest/gtest.h>
 #include <chrono>
 #include <boost/thread.hpp>
-#include <boost/coroutine2/all.hpp>
 #include "gtest_exit.h"
 #define private public
 #include "coroutine.h"
