@@ -1,9 +1,10 @@
 TODO:
-环切(runnable状态)搭配星切, 提升协程切换性能
 打造类似TLS的CLS(协程局部对象)
 hook __poll, 源syscall使用__libc_poll, 以支持gethostbyname系列函数
 协程亲缘性
 支持同时等待多个Channel
+环切(runnable状态)搭配星切, 提升协程切换性能
+mac分支合并到master中
 
 DONE:
 支持exception
