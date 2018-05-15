@@ -1,5 +1,6 @@
 TODO:
 打造类似TLS的CLS(协程局部对象)
+hook pthread_key_create相关的4个函数，解决第三方库、glibc++使用tls的隐患
 hook __poll, 源syscall使用__libc_poll, 以支持gethostbyname系列函数
 协程亲缘性
 支持同时等待多个Channel
