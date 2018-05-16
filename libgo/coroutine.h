@@ -4,6 +4,7 @@
 #include <libgo/thread_pool.h>
 #include <libgo/co_rwmutex.h>
 #include <libgo/debugger.h>
+#include <libgo/co_local_storage.h>
 #if __linux__
 #include "linux_glibc_hook.h"
 #endif
@@ -135,6 +136,10 @@ using ::co::co_timer_block_cancel;
 
 // co_debugger
 #define co_debugger ::co::CoDebugger::getInstance()
+
+// coroutine local storage
+#define co_cls(type, ...) CLS(type, ##__VA_ARGS__)
+#define co_cls_ref(type) CLS_REF(type)
 
 // co_listener
 namespace co

@@ -5,6 +5,7 @@
 #include <libgo/timer.h>
 #include <string.h>
 #include <libgo/util.h>
+#include <libgo/co_local_storage_fwd.h>
 #include "fd_context.h"
 
 namespace co
@@ -52,6 +53,7 @@ struct Task
     bool is_block_timeout_ = false;     // sys_block的等待是否超时
 
     int sleep_ms_ = 0;                  // 睡眠时间
+    CLSMap cls_map_;
 
     explicit Task(TaskF const& fn, std::size_t stack_size,
             const char* file, int lineno);
@@ -70,6 +72,8 @@ struct Task
 
     void SetDebugInfo(std::string const& info);
     const char* DebugInfo();
+
+    inline CLSMap* GetCLSMap() { return &cls_map_; }
 
     void Task_CB();
 
