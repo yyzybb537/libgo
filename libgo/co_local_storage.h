@@ -44,7 +44,7 @@ CLSRef<T> MakeCLSRef(CLSLocation loc, Args && ... args) {
 }
 
 #define GetCLSLocation() \
-    co::CLSLocation{__LINE__, __COUNTER__, __FILE__, __func__}
+    co::CLSLocation{__LINE__, __COUNTER__, (std::size_t)__FILE__, (std::size_t)__func__}
 
 #define CLS(type, ...) \
     co::MakeCLSRef<type>(GetCLSLocation(), ##__VA_ARGS__)
