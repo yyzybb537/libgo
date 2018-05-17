@@ -15,7 +15,10 @@
 #include "linux_glibc_hook.h"
 #include "hook_signal.h"
 #include "fd_context.h"
+#include <resolv.h>
 #include <libgo/scheduler.h>
+#include <libgo/co_local_storage.h>
+#include <netdb.h>
 #if WITH_CARES
 #include <ares.h>
 #endif
@@ -87,14 +90,7 @@ namespace co {
 
     inline int libgo_poll(struct pollfd *fds, nfds_t nfds, int timeout, bool nonblocking_check)
     {
-        if (!poll_f) coroutine_hook_init();
-
         Task* tk = g_Scheduler.GetCurrentTask();
-        DebugPrint(dbg_hook, "task(%s) hook poll(nfds=%d, timeout=%d). %s coroutine.",
-                tk ? tk->DebugInfo() : "nil",
-                (int)nfds, timeout,
-                g_Scheduler.IsCoroutine() ? "In" : "Not in");
-
         if (!tk)
             return poll_f(fds, nfds, timeout);
 
@@ -499,8 +495,8 @@ retry:
     if ((event == POLLIN && !fd_ctx->readable()) ||
            (event == POLLOUT && !fd_ctx->writable()))
     {
-        DebugPrint(dbg_hook, "%s %d unreadable or unwritable. will call poll",
-                hook_fn_name, fd);
+        DebugPrint(dbg_hook, "task(%s) %s %d unreadable or unwritable. will call poll",
+                tk ? tk->DebugInfo() : "nil", hook_fn_name, fd);
 
         int poll_timeout = 0;
         if (!timeout_ms)
@@ -533,12 +529,14 @@ eintr:
 
         if (triggers == 1) {
             if (event == POLLIN && (pfd.revents & POLLIN)) {
-                DebugPrint(dbg_hook, "poll fd=%d return 1. set readable.", fd);
+                DebugPrint(dbg_hook, "task(%s) poll fd=%d return 1. set readable.",
+                        tk ? tk->DebugInfo() : "nil", fd);
                 fd_ctx->set_readable(true);
             }
 
             if (event == POLLOUT && (pfd.revents & POLLOUT)) {
-                DebugPrint(dbg_hook, "poll fd=%d return 1. set writable.", fd);
+                DebugPrint(dbg_hook, "task(%s) poll fd=%d return 1. set writable.",
+                        tk ? tk->DebugInfo() : "nil", fd);
                 fd_ctx->set_writable(true);
             }
         }
@@ -743,8 +741,79 @@ ssize_t sendmsg(int sockfd, const struct msghdr *msg, int flags)
 
 int poll(struct pollfd *fds, nfds_t nfds, int timeout)
 {
+    if (!poll_f) coroutine_hook_init();
+
+    Task* tk = g_Scheduler.GetCurrentTask();
+    DebugPrint(dbg_hook, "task(%s) hook poll(first-fd=%d, nfds=%d, timeout=%d). %s coroutine.",
+            tk ? tk->DebugInfo() : "nil",
+            nfds > 0 ? fds[0].fd : -1,
+            (int)nfds, timeout,
+            g_Scheduler.IsCoroutine() ? "In" : "Not in");
+
     return libgo_poll(fds, nfds, timeout, true);
 }
+
+// ---------------------------------------------------------------------------
+// ------ for dns syscall
+int __poll(struct pollfd *fds, nfds_t nfds, int timeout)
+{
+    if (!poll_f) coroutine_hook_init();
+
+    Task* tk = g_Scheduler.GetCurrentTask();
+    DebugPrint(dbg_hook, "task(%s) hook __poll(first-fd=%d, nfds=%d, timeout=%d). %s coroutine.",
+            tk ? tk->DebugInfo() : "nil",
+            nfds > 0 ? fds[0].fd : -1,
+            (int)nfds, timeout,
+            g_Scheduler.IsCoroutine() ? "In" : "Not in");
+
+    return libgo_poll(fds, nfds, timeout, true);
+}
+
+res_state __res_state()
+{
+    struct __res_state& s = CLS(struct __res_state);
+    Task* tk = g_Scheduler.GetCurrentTask();
+    DebugPrint(dbg_hook, "task(%s) hook __res_state() return:%p. %s coroutine.",
+            tk ? tk->DebugInfo() : "nil",
+            &s,
+            g_Scheduler.IsCoroutine() ? "In" : "Not in");
+    return &s;
+}
+
+struct hostent* gethostbyname(const char* name)
+{
+    Task* tk = g_Scheduler.GetCurrentTask();
+    DebugPrint(dbg_hook, "task(%s) hook gethostbyname(name=%s).",
+            tk ? tk->DebugInfo() : "nil", name ? name : "");
+
+    if (!name) return nullptr;
+    std::vector<char> & buf = CLS(std::vector<char>, 64);
+    if (buf.capacity() > 1024) {
+        buf.resize(1024);
+        buf.shrink_to_fit();
+    }
+
+    struct hostent & refh = CLS(struct hostent);
+    struct hostent * host = &refh;
+	struct hostent * result = nullptr;
+    int & host_errno = CLS(int);
+
+	int ret = -1;
+	while (ret = gethostbyname_r(name, host, &buf[0], 
+				buf.size(), &result, &host_errno) == ERANGE && 
+				host_errno == NETDB_INTERNAL )
+	{
+        buf.resize(buf.size() * 2);
+	}
+
+	if (ret == 0 && (host == result)) 
+	{
+		return host;
+	}
+
+    return nullptr;
+}
+// ---------------------------------------------------------------------------
 
 int select(int nfds, fd_set *readfds, fd_set *writefds,
         fd_set *exceptfds, struct timeval *timeout)
@@ -1272,7 +1341,7 @@ extern ssize_t __sendto(int sockfd, const void *buf, size_t len, int flags,
         const struct sockaddr *dest_addr, socklen_t addrlen);
 extern ssize_t __sendmsg(int sockfd, const struct msghdr *msg, int flags);
 extern int __libc_accept(int sockfd, struct sockaddr *addr, socklen_t *addrlen);
-extern int __poll(struct pollfd *fds, nfds_t nfds, int timeout);
+extern int __libc_poll(struct pollfd *fds, nfds_t nfds, int timeout);
 extern int __select(int nfds, fd_set *readfds, fd_set *writefds,
                           fd_set *exceptfds, struct timeval *timeout);
 extern unsigned int __sleep(unsigned int seconds);
@@ -1349,7 +1418,7 @@ void coroutine_hook_init()
     sendto_f = &__sendto;
     sendmsg_f = &__sendmsg;
     accept_f = &__libc_accept;
-    poll_f = &__poll;
+    poll_f = &__libc_poll;
     select_f = &__select;
     sleep_f = &__sleep;
     usleep_f = &__usleep;
