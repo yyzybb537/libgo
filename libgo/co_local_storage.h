@@ -28,7 +28,10 @@ template <typename T>
 class CLSRef {
     CLSLocation loc_;
 public:
-    CLSRef(CLSLocation loc) : loc_(loc) {}
+    template <typename ... Args>
+    CLSRef(CLSLocation loc, Args && ... args) : loc_(loc) {
+        (void)GetSpecific<T>(loc_, std::forward<Args>(args)...);
+    }
 
     operator T&() const {
         return GetSpecific<T>(loc_);
@@ -37,14 +40,11 @@ public:
 
 template <typename T, typename ... Args>
 CLSRef<T> MakeCLSRef(CLSLocation loc, Args && ... args) {
-    CLSRef<T> ref(loc);
-    T& obj = ref;
-    (void)obj;
-    return ref;
+    return CLSRef<T>(loc, std::forward<Args>(args)...);
 }
 
 #define GetCLSLocation() \
-    co::CLSLocation{__FILE__, __LINE__, __func__}
+    co::CLSLocation{__LINE__, __COUNTER__, __FILE__, __func__}
 
 #define CLS(type, ...) \
     co::MakeCLSRef<type>(GetCLSLocation(), ##__VA_ARGS__)

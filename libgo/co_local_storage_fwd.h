@@ -8,8 +8,9 @@
 namespace co {
 
 struct CLSLocation {
-    const char* file_;
     int lineno_;
+    int counter_;
+    const char* file_;
     const char* func_;
 //    const char* class_;
 
@@ -18,7 +19,8 @@ struct CLSLocation {
         std::size_t operator()(CLSLocation const& loc) const {
             std::size_t h = std::hash<const char*>()(loc.file_)
                 + std::hash<const char*>()(loc.func_)
-                + std::hash<int>()(loc.lineno_);
+                + std::hash<int>()(loc.lineno_)
+                + std::hash<int>()(loc.counter_);
 //            std::cout << "Hash return:" << h << std::endl;
             return h;
         }
@@ -26,6 +28,7 @@ struct CLSLocation {
 
     friend bool operator==(CLSLocation const& lhs, CLSLocation const& rhs) {
         bool ret = lhs.lineno_ == rhs.lineno_ &&
+            lhs.counter_ == rhs.counter_ &&
             strcmp(lhs.file_, rhs.file_) == 0 &&
             strcmp(lhs.func_, rhs.func_) == 0;
 //        std::cout << "operator== return:" << ret << std::endl;

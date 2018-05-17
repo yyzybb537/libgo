@@ -71,6 +71,11 @@ void car() {
     gCls++;
 }
 
+void oneLine() {
+    int &a = co_cls(int, 0), &b = co_cls(int, 10);
+    cout << "oneLine -> "<< "a=" << a << ", b=" << b << endl;
+}
+
 int test() {
     cout << " ---- function ---- " << endl;
     go foo3;
@@ -87,6 +92,8 @@ int test() {
     go car;
     car();
     car();
+
+    oneLine();
 }
 
 int main() {
