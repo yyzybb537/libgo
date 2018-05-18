@@ -1,12 +1,9 @@
 TODO:
-hook __poll, 源syscall使用__libc_poll, 以支持gethostbyname系列函数
-    1.解决并发调用gethostbyname_r时,内部共用同一个udp socket的问题
-用户调用过poll的fd应该设置对应的readable\writable, 降低io的latency
 协程亲缘性
 支持同时等待多个Channel
 环切(runnable状态)搭配星切, 提升协程切换性能
 mac分支合并到master中
-解决第三方库、glibc++使用tls的隐患(pthread_xxx_specific ?)
+解决第三方库、glibc++ exception使用tls的隐患(pthread_xxx_specific ?)
 
 DONE:
 支持exception
@@ -44,3 +41,6 @@ __attribute__ ((always_inline))
 调度器重入不再crash
 HOOK select poll时, 正确处理文件等非socket句柄
 打造类似TLS的CLS(协程局部对象)
+hook __poll, 源syscall使用__libc_poll, 以支持gethostbyname系列函数
+解决并发调用gethostbyname_r时,内部共用同一个udp socket的问题
+用户调用过poll的fd应该设置对应的readable\writable, 降低io的latency
