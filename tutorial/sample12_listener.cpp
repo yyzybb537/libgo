@@ -5,7 +5,7 @@
  * 使用协程监听器 co_listener 可以监听协程的
  * 创建销毁等事件，也可以进行异常处理
  ************************************************/
-#include "coroutine.h"
+#include <libgo/coroutine.h>
 #include <iostream>
 
 using namespace std;
@@ -44,6 +44,29 @@ public:
      */
     virtual void onStart(uint64_t task_id) noexcept {
         cout << "onStart task_id=" << task_id << endl;
+    }
+
+    /**
+     * 协程切入后（包括协程首次运行的时候）调用
+     * 协程首次运行会在onStart之前调用。
+     * （本方法运行在协程中）
+     *
+     * @prarm task_id 协程ID
+     * @prarm eptr
+     */
+    virtual void onSwapIn(uint64_t task_id) noexcept {
+        cout << "onSwapIn task_id=" << task_id << endl;
+    }
+
+    /**
+     * 协程切出前调用
+     * （本方法运行在协程中）
+     *
+     * @prarm task_id 协程ID
+     * @prarm eptr
+     */
+    virtual void onSwapOut(uint64_t task_id) noexcept {
+        cout << "onSwapOut task_id=" << task_id << endl;
     }
 
     /**
@@ -129,11 +152,17 @@ int main(int argc, char** argv) {
 
     go[] {
         cout << "i am task=" << co_sched.GetCurrentTaskID() << endl;
+        cout << "task " << co_sched.GetCurrentTaskID() << " going to sleep for a while" << endl;
+        co_sleep(1);
+        cout << "task " << co_sched.GetCurrentTaskID() << " returns" << endl;
     };
 
     go[] {
         cout << "i am task=" << co_sched.GetCurrentTaskID() << endl;
+        cout << "task " << co_sched.GetCurrentTaskID() << " going to sleep for a while" << endl;
+        co_sleep(1);
         throw logic_error("wtf!!??");
+        cout << "task " << co_sched.GetCurrentTaskID() << " returns" << endl;
     };
 
     co_sched.RunUntilNoTask();

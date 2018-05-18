@@ -37,15 +37,17 @@ void Task::Task_CB()
     std::exception_ptr eptr;
 
     auto call_fn = [this]() {
-        if (g_Scheduler.GetTaskListener()) {
-            g_Scheduler.GetTaskListener()->onStart(this->id_);
-        }
+        if (auto listener = g_Scheduler.GetTaskListener()) {
+            listener->onSwapIn(this->id_);
+            listener->onStart(this->id_);
 
-        this->fn_();
-        this->fn_ = TaskF(); //让协程function对象的析构也在协程中执行
+            this->fn_();
+            this->fn_ = TaskF(); //让协程function对象的析构也在协程中执行
 
-        if (g_Scheduler.GetTaskListener()) {
-            g_Scheduler.GetTaskListener()->onCompleted(this->id_);
+            listener->onCompleted(this->id_);
+        }else{
+            this->fn_();
+            this->fn_ = TaskF(); //让协程function对象的析构也在协程中执行
         }
     };
 
