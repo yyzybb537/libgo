@@ -16,9 +16,7 @@
 #include "hook_signal.h"
 #include "fd_context.h"
 #include <libgo/scheduler.h>
-#if WITH_CARES
-#include <ares.h>
-#endif
+#include <libgo/co_local_storage.h>
 using namespace co;
 
 // 设置阻塞式connect超时时间(-1无限时)
@@ -35,6 +33,7 @@ namespace co {
     {
         FdManager::getInstance().get_fd_ctx(socketfd);
     }
+    static thread_local CoMutex g_dns_mtx;
 
     int libgo_epoll_wait(int epfd, struct epoll_event *events, int maxevents, int timeout)
     {
@@ -87,12 +86,11 @@ namespace co {
 
     inline int libgo_poll(struct pollfd *fds, nfds_t nfds, int timeout, bool nonblocking_check)
     {
-        if (!poll_f) coroutine_hook_init();
-
         Task* tk = g_Scheduler.GetCurrentTask();
-        DebugPrint(dbg_hook, "task(%s) hook poll(nfds=%d, timeout=%d). %s coroutine.",
+        DebugPrint(dbg_hook, "task(%s) hook libgo_poll(first-fd=%d, nfds=%d, timeout=%d, nonblocking=%d). %s coroutine.",
                 tk ? tk->DebugInfo() : "nil",
-                (int)nfds, timeout,
+                nfds > 0 ? fds[0].fd : -1,
+                (int)nfds, timeout, nonblocking_check,
                 g_Scheduler.IsCoroutine() ? "In" : "Not in");
 
         if (!tk)
@@ -156,6 +154,7 @@ namespace co {
         }
 
         if (!added) {
+            // 全部fd都无法加入epoll
             errno = 0;
             return nfds;
         }
@@ -195,283 +194,16 @@ namespace co {
         errno = 0;
         return n;
     }
-
-
-#if WITH_CARES
-
-    void buffer_to_hostent(char *buf, hostent* h)
-    {
-        assert(h);
-        assert(buf);
-
-        // h_name
-        h->h_name = buf;
-        buf += strlen(h->h_name) + 1;
-
-        // h_addrtype & h_length
-        h->h_addrtype = *(int*)buf;
-        buf += sizeof(int);
-        h->h_length = *(int*)buf;
-        buf += sizeof(int);
-
-        // h_aliases
-        h->h_aliases = (char**)buf;
-        char **p = h->h_aliases;
-        while (*p)
-            ++p;
-
-        h->h_addr_list = ++p;
-    }
-    bool hostent_dup(hostent * src, hostent * dst, char *buf, size_t & buflen)
-    {
-        assert(src);
-        assert(dst);
-        assert(buf);
-        assert(buflen);
-
-        size_t expect_length = 0;
-        expect_length += strlen(src->h_name) + 1;
-
-        expect_length += sizeof(int) * 2;
-
-        size_t alias_c = 0;
-        for (char **p = src->h_aliases; *p; ++p, ++alias_c) {
-            expect_length += strlen(*p) + 1;
-        }
-        expect_length += sizeof(char*) * (alias_c + 1);
-
-        size_t addr_c = 0;
-        for (char **p = src->h_addr_list; *p; ++p, ++addr_c) {
-            expect_length += strlen(*p) + 1;
-        }
-        expect_length += sizeof(char*) * (addr_c + 1);
-        if (buflen < expect_length) {
-            buflen = expect_length;
-            return false;
-        }
-
-        char* ori_buf = buf;
-
-        // h_name
-        strcpy(buf, src->h_name);
-        dst->h_name = buf;
-        buf += strlen(dst->h_name) + 1;
-
-        // h_addrtype
-        *(int*)buf = src->h_addrtype;
-        buf += sizeof(int);
-
-        // h_length
-        *(int*)buf = src->h_length;
-        buf += sizeof(int);
-
-        // h_aliases & h_addr_list
-        char *aliases_array = buf;
-        buf += sizeof(char*) * (alias_c + 1);
-
-        char *addr_array = buf;
-        buf += sizeof(char*) * (addr_c + 1);
-
-        char *alias_buf = buf;
-        for (char **p = src->h_aliases; *p; ++p) {
-            *(char**)aliases_array = alias_buf;
-            aliases_array += sizeof(char*);
-            strcpy(alias_buf, *p);
-            alias_buf += strlen(*p) + 1;
-        }
-        *(char**)aliases_array = nullptr;
-        buf = alias_buf;
-
-        char *addr_buf = buf;
-        for (char **p = src->h_addr_list; *p; ++p) {
-            *(char**)addr_array = addr_buf;
-            addr_array += sizeof(char*);
-            strcpy(addr_buf, *p);
-            addr_buf += strlen(*p) + 1;
-        }
-        *(char**)addr_array = nullptr;
-        buf = addr_buf;
-
-        assert(buf - ori_buf == (int)expect_length);
-        buffer_to_hostent(ori_buf, dst);
-        return true;
-    }
-    struct cares_async_context
-    {
-        bool called;
-        int *errnop;
-        int ret;
-        hostent **result;
-        char* buf;
-        size_t *buflen;
-    };
-    int gethostbyname_with_ares(const char *name, int af, struct hostent *ret_h,
-            char *buf, size_t &buflen, struct hostent **result, int *h_errnop)
-    {
-        int err = 0;
-        if (!h_errnop) h_errnop = &err;
-
-        cares_async_context ctx;
-        ctx.called = false;
-        ctx.errnop = h_errnop;
-        ctx.ret = 0;
-        ctx.result = result;
-        ctx.buf = buf;
-        ctx.buflen = &buflen;
-
-        ares_channel c;
-        ares_init(&c);
-        ares_gethostbyname(c, name, af,
-                [](void * arg, int status, int timeouts, struct hostent *hostent)
-                {
-                cares_async_context *ctx = (cares_async_context *)arg;
-                ctx->called = true;
-                if (status != ARES_SUCCESS) {
-                *ctx->result = nullptr;
-
-                switch (status) {
-                case ARES_ENODATA:
-                *ctx->errnop = NO_DATA;
-                break;
-
-                case ARES_EBADNAME:
-                *ctx->errnop = NO_RECOVERY;
-                break;
-
-                case ARES_ENOTFOUND:
-                default:
-                *ctx->errnop = HOST_NOT_FOUND;
-                break;
-                }
-
-                ctx->ret = -1;
-                return ;
-                }
-
-                if (!hostent_dup(hostent, *ctx->result, ctx->buf, *ctx->buflen)) {
-                    *ctx->result = nullptr;
-                    *ctx->errnop = ENOEXEC;    // 奇怪的错误码.
-                    ctx->ret = -1;
-                    return ;
-                }
-
-                *ctx->errnop = 0;
-                ctx->ret = 0;
-                }, &ctx);
-
-        fd_set readers, writers;
-        FD_ZERO(&readers);
-        FD_ZERO(&writers);
-
-        int nfds = ares_fds(c, &readers, &writers);
-        if (nfds) {
-            struct timeval tv, *tvp;
-            tvp = ares_timeout(c, NULL, &tv);
-            int count = select(nfds, &readers, &writers, NULL, tvp);
-            if (count > 0) {
-                ares_process(c, &readers, &writers);
-            }
-        }
-
-        if (ctx.called)
-            return ctx.ret;
-
-        // No yet invoke callback.
-        *result = nullptr;
-        *h_errnop = HOST_NOT_FOUND; // TODO
-        return -1;
-    }
-
-    int gethostbyaddr_with_ares(const void *addr, int addrlen, int af,
-            struct hostent *ret_h, char *buf, size_t &buflen,
-            struct hostent **result, int *h_errnop)
-    {
-        int err = 0;
-        if (!h_errnop) h_errnop = &err;
-
-        cares_async_context ctx;
-        ctx.called = false;
-        ctx.errnop = h_errnop;
-        ctx.ret = 0;
-        ctx.result = result;
-        ctx.buf = buf;
-        ctx.buflen = &buflen;
-
-        ares_channel c;
-        ares_init(&c);
-        ares_gethostbyaddr(c, addr, addrlen, af,
-                [](void * arg, int status, int timeouts, struct hostent *hostent)
-                {
-                cares_async_context *ctx = (cares_async_context *)arg;
-                ctx->called = true;
-                if (status != ARES_SUCCESS) {
-                *ctx->result = nullptr;
-
-                switch (status) {
-                case ARES_ENODATA:
-                *ctx->errnop = NO_DATA;
-                break;
-
-                case ARES_EBADNAME:
-                *ctx->errnop = NO_RECOVERY;
-                break;
-
-                case ARES_ENOTFOUND:
-                default:
-                *ctx->errnop = HOST_NOT_FOUND;
-                break;
-                }
-
-                ctx->ret = -1;
-                return ;
-                }
-
-                if (!hostent_dup(hostent, *ctx->result, ctx->buf, *ctx->buflen)) {
-                    *ctx->result = nullptr;
-                    *ctx->errnop = ENOEXEC;    // 奇怪的错误码.
-                    ctx->ret = -1;
-                    return ;
-                }
-
-                *ctx->errnop = 0;
-                ctx->ret = 0;
-                }, &ctx);
-
-        fd_set readers, writers;
-        FD_ZERO(&readers);
-        FD_ZERO(&writers);
-
-        int nfds = ares_fds(c, &readers, &writers);
-        if (nfds) {
-            struct timeval tv, *tvp;
-            tvp = ares_timeout(c, NULL, &tv);
-            int count = select(nfds, &readers, &writers, NULL, tvp);
-            if (count > 0) {
-                ares_process(c, &readers, &writers);
-            }
-        }
-
-        if (ctx.called)
-            return ctx.ret;
-
-        // No yet invoke callback.
-        *result = nullptr;
-        *h_errnop = HOST_NOT_FOUND; // TODO
-        return -1;
-    }
-#endif //WITH_CARES
-
 } //namespace co
-
-
 
 template <typename OriginF, typename ... Args>
 static ssize_t read_write_mode(int fd, OriginF fn, const char* hook_fn_name,
         uint32_t event, int timeout_so, ssize_t buflen, Args && ... args)
 {
     Task* tk = g_Scheduler.GetCurrentTask();
-    DebugPrint(dbg_hook, "task(%s) hook %s. %s coroutine.",
-            tk ? tk->DebugInfo() : "nil", hook_fn_name, g_Scheduler.IsCoroutine() ? "In" : "Not in");
+    DebugPrint(dbg_hook, "task(%s) hook %s(fd=%d, buflen=%d). %s coroutine.",
+            tk ? tk->DebugInfo() : "nil", hook_fn_name, fd, (int)buflen,
+            g_Scheduler.IsCoroutine() ? "In" : "Not in");
 
     if (!tk)
         return fn(fd, std::forward<Args>(args)...);
@@ -499,8 +231,8 @@ retry:
     if ((event == POLLIN && !fd_ctx->readable()) ||
            (event == POLLOUT && !fd_ctx->writable()))
     {
-        DebugPrint(dbg_hook, "%s %d unreadable or unwritable. will call poll",
-                hook_fn_name, fd);
+        DebugPrint(dbg_hook, "task(%s) %s %d unreadable or unwritable. will call poll",
+                tk ? tk->DebugInfo() : "nil", hook_fn_name, fd);
 
         int poll_timeout = 0;
         if (!timeout_ms)
@@ -533,12 +265,14 @@ eintr:
 
         if (triggers == 1) {
             if (event == POLLIN && (pfd.revents & POLLIN)) {
-                DebugPrint(dbg_hook, "poll fd=%d return 1. set readable.", fd);
+                DebugPrint(dbg_hook, "task(%s) poll fd=%d return 1. set readable.",
+                        tk ? tk->DebugInfo() : "nil", fd);
                 fd_ctx->set_readable(true);
             }
 
             if (event == POLLOUT && (pfd.revents & POLLOUT)) {
-                DebugPrint(dbg_hook, "poll fd=%d return 1. set writable.", fd);
+                DebugPrint(dbg_hook, "task(%s) poll fd=%d return 1. set writable.",
+                        tk ? tk->DebugInfo() : "nil", fd);
                 fd_ctx->set_writable(true);
             }
         }
@@ -550,12 +284,12 @@ retry_intr_fn:
         if (errno == EAGAIN || errno == EWOULDBLOCK) {
             // 读空了
             if (event == POLLIN) {
-                DebugPrint(dbg_hook, "read %d EAGAIN, buflen=%ld.",
-                        fd, buflen);
+                DebugPrint(dbg_hook, "task(%s) read %d EAGAIN, buflen=%ld.",
+                        tk ? tk->DebugInfo() : "nil", fd, buflen);
                 fd_ctx->set_readable(false);
             } else {
-                DebugPrint(dbg_hook, "write %d returns EAGAIN, buflen=%ld.",
-                        fd, buflen);
+                DebugPrint(dbg_hook, "task(%s) write %d returns EAGAIN, buflen=%ld.",
+                        tk ? tk->DebugInfo() : "nil", fd, buflen);
                 fd_ctx->set_writable(false);
             }
             goto retry;     // 事件触发 OR epoll惊群效应
@@ -567,12 +301,12 @@ retry_intr_fn:
     if (n >= 0 && n < buflen) {
         // 读空了
         if (event == POLLIN) {
-            DebugPrint(dbg_hook, "read %d returns %ld, buflen=%ld.",
-                    fd, n, buflen);
+            DebugPrint(dbg_hook, "task(%s) read %d returns %ld, buflen=%ld.",
+                    tk ? tk->DebugInfo() : "nil", fd, n, buflen);
             fd_ctx->set_readable(false);
         } else {
-            DebugPrint(dbg_hook, "write %d returns %ld, buflen=%ld.",
-                    fd, n, buflen);
+            DebugPrint(dbg_hook, "task(%s) write %d returns %ld, buflen=%ld.",
+                    tk ? tk->DebugInfo() : "nil", fd, n, buflen);
             fd_ctx->set_writable(false);
         }
     }
@@ -608,6 +342,7 @@ dup_t dup_f = NULL;
 dup2_t dup2_f = NULL;
 dup3_t dup3_f = NULL;
 fclose_t fclose_f = NULL;
+gethostbyname_r_t gethostbyname_r_f = NULL;
 
 int connect(int fd, const struct sockaddr *addr, socklen_t addrlen)
 {
@@ -743,8 +478,150 @@ ssize_t sendmsg(int sockfd, const struct msghdr *msg, int flags)
 
 int poll(struct pollfd *fds, nfds_t nfds, int timeout)
 {
-    return libgo_poll(fds, nfds, timeout, true);
+    if (!poll_f) coroutine_hook_init();
+
+    Task* tk = g_Scheduler.GetCurrentTask();
+    DebugPrint(dbg_hook, "task(%s) hook poll(first-fd=%d, nfds=%d, timeout=%d). %s coroutine.",
+            tk ? tk->DebugInfo() : "nil",
+            nfds > 0 ? fds[0].fd : -1,
+            (int)nfds, timeout,
+            g_Scheduler.IsCoroutine() ? "In" : "Not in");
+
+    int triggers = libgo_poll(fds, nfds, timeout, true);
+    if (timeout == 0 && triggers > 0) {
+        for (nfds_t i = 0; i < nfds; i++) {
+            struct pollfd& pfd = fds[i];
+            if (pfd.revents == 0)
+                continue;
+
+            FdCtxPtr fd_ctx = FdManager::getInstance().get_fd_ctx(pfd.fd);
+            if ((pfd.events & POLLIN) && (pfd.revents & POLLIN)) {
+                fd_ctx->set_readable(true);
+                DebugPrint(dbg_hook, "task(%s) hook poll(first-fd=%d, nfds=%d, timeout=%d) SetReadable(%d).",
+                        tk ? tk->DebugInfo() : "nil",
+                        nfds > 0 ? fds[0].fd : -1,
+                        (int)nfds, timeout, pfd.fd);
+            } else if ((pfd.events & POLLOUT) && (pfd.revents & POLLOUT)) {
+                fd_ctx->set_writable(true);
+                DebugPrint(dbg_hook, "task(%s) hook poll(first-fd=%d, nfds=%d, timeout=%d) SetWritable(%d).",
+                        tk ? tk->DebugInfo() : "nil",
+                        nfds > 0 ? fds[0].fd : -1,
+                        (int)nfds, timeout, pfd.fd);
+            }
+        }
+    }
+
+    return triggers;
 }
+
+// ---------------------------------------------------------------------------
+// ------ for dns syscall
+int __poll(struct pollfd *fds, nfds_t nfds, int timeout)
+{
+    if (!poll_f) coroutine_hook_init();
+
+    Task* tk = g_Scheduler.GetCurrentTask();
+    DebugPrint(dbg_hook, "task(%s) hook __poll(first-fd=%d, nfds=%d, timeout=%d). %s coroutine.",
+            tk ? tk->DebugInfo() : "nil",
+            nfds > 0 ? fds[0].fd : -1,
+            (int)nfds, timeout,
+            g_Scheduler.IsCoroutine() ? "In" : "Not in");
+
+//    return poll_f(fds, nfds, timeout);
+    int triggers = libgo_poll(fds, nfds, timeout, true);
+    if (timeout == 0 && triggers > 0) {
+        for (nfds_t i = 0; i < nfds; i++) {
+            struct pollfd& pfd = fds[i];
+            if (pfd.revents == 0)
+                continue;
+
+            FdCtxPtr fd_ctx = FdManager::getInstance().get_fd_ctx(pfd.fd);
+            if ((pfd.events & POLLIN) && (pfd.revents & POLLIN)) {
+                fd_ctx->set_readable(true);
+                DebugPrint(dbg_hook, "task(%s) hook __poll(first-fd=%d, nfds=%d, timeout=%d) SetReadable(%d).",
+                        tk ? tk->DebugInfo() : "nil",
+                        nfds > 0 ? fds[0].fd : -1,
+                        (int)nfds, timeout, pfd.fd);
+            } else if ((pfd.events & POLLOUT) && (pfd.revents & POLLOUT)) {
+                fd_ctx->set_writable(true);
+                DebugPrint(dbg_hook, "task(%s) hook __poll(first-fd=%d, nfds=%d, timeout=%d) SetWritable(%d).",
+                        tk ? tk->DebugInfo() : "nil",
+                        nfds > 0 ? fds[0].fd : -1,
+                        (int)nfds, timeout, pfd.fd);
+            }
+        }
+    }
+
+    return triggers;
+}
+
+res_state __res_state(void)
+{
+    struct __res_state& s = CLS(struct __res_state);
+    Task* tk = g_Scheduler.GetCurrentTask();
+    DebugPrint(dbg_hook, "task(%s) hook __res_state() return:%p. %s coroutine.",
+            tk ? tk->DebugInfo() : "nil",
+            &s,
+            g_Scheduler.IsCoroutine() ? "In" : "Not in");
+    return &s;
+}
+
+struct hostent* gethostbyname(const char* name)
+{
+    Task* tk = g_Scheduler.GetCurrentTask();
+    DebugPrint(dbg_hook, "task(%s) hook gethostbyname(name=%s).",
+            tk ? tk->DebugInfo() : "nil", name ? name : "");
+
+    if (!name) return nullptr;
+    std::vector<char> & buf = CLS(std::vector<char>);
+//    DebugPrint(dbg_hook, "task(%s) hook gethostbyname(name=%s) bufsize=%d.",
+//            tk ? tk->DebugInfo() : "nil", name ? name : "", (int)buf.size());
+    if (buf.capacity() > 1024) {
+        buf.resize(1024);
+        buf.shrink_to_fit();
+    } else if (buf.size() < 64) {
+        buf.resize(64);
+    }
+
+    struct hostent & refh = CLS(struct hostent);
+    struct hostent * host = &refh;
+	struct hostent * result = nullptr;
+    int & host_errno = CLS(int);
+
+	int ret = -1;
+	while (ret = gethostbyname_r(name, host, &buf[0], 
+				buf.size(), &result, &host_errno) == ERANGE && 
+				host_errno == NETDB_INTERNAL )
+	{
+        if (buf.size() < 1024)
+            buf.resize(1024);
+        else
+            buf.resize(buf.size() * 2);
+//        DebugPrint(dbg_hook, "task(%s) hook gethostbyname(name=%s) resize to %d.",
+//                tk ? tk->DebugInfo() : "nil", name ? name : "", (int)buf.size());
+	}
+
+	if (ret == 0 && (host == result)) 
+	{
+		return host;
+	}
+
+    return nullptr;
+}
+int gethostbyname_r(const char *__restrict name,
+			    struct hostent *__restrict __result_buf,
+			    char *__restrict __buf, size_t __buflen,
+			    struct hostent **__restrict __result,
+			    int *__restrict __h_errnop)
+{
+    if (!gethostbyname_r_f) coroutine_hook_init();
+    Task* tk = g_Scheduler.GetCurrentTask();
+    DebugPrint(dbg_hook, "task(%s) hook gethostbyname_r(name=%s, buflen=%d).",
+            tk ? tk->DebugInfo() : "nil", name ? name : "", (int)__buflen);
+    std::unique_lock<CoMutex> lock(g_dns_mtx);
+    return gethostbyname_r_f(name, __result_buf, __buf, __buflen, __result, __h_errnop);
+}
+// ---------------------------------------------------------------------------
 
 int select(int nfds, fd_set *readfds, fd_set *writefds,
         fd_set *exceptfds, struct timeval *timeout)
@@ -916,6 +793,10 @@ int nanosleep(const struct timespec *req, struct timespec *rem)
 int close(int fd)
 {
     if (!close_f) coroutine_hook_init();
+    Task* tk = g_Scheduler.GetCurrentTask();
+    DebugPrint(dbg_hook, "task(%s) hook close(fd=%d). %s coroutine.",
+            tk ? tk->DebugInfo() : "nil", fd,
+            g_Scheduler.IsCoroutine() ? "In" : "Not in");
     return FdManager::getInstance().close(fd);
 }
 
@@ -1131,123 +1012,6 @@ int fclose(FILE* fp)
     return FdManager::getInstance().fclose(fp);
 }
 
-#if WITH_CARES
-struct hostent* co_gethostbyname2(const char *name, int af)
-{
-    static size_t s_buflen = 8192;
-    static char *s_buffer = (char*)malloc(s_buflen);
-    static hostent h;
-    hostent *p = &h;
-
-    int err = 0;
-    size_t buflen = s_buflen;
-    int res = co::gethostbyname_with_ares(name, af, p, s_buffer, buflen,
-            &p, &err);
-    if (res == -1 && buflen > s_buflen) {
-        s_buflen = buflen;
-        s_buffer = (char*)realloc(s_buffer, s_buflen);
-        res = co::gethostbyname_with_ares(name, af, p, s_buffer, buflen,
-                &p, &err);
-    }
-
-    if (res == 0) {
-        return p;
-    }
-
-    h_errno = err;
-    return nullptr;
-}
-
-struct hostent* gethostbyname(const char *name)
-{
-    Task* tk = g_Scheduler.GetCurrentTask();
-    DebugPrint(dbg_hook, "task(%s) hook gethostbyname(%s). %s coroutine.",
-            tk ? tk->DebugInfo() : "nil", name ? name : "nil",
-            g_Scheduler.IsCoroutine() ? "In" : "Not in");
-
-    return co_gethostbyname2(name, AF_INET);
-}
-
-struct hostent *gethostbyname2(const char *name, int af)
-{
-    Task* tk = g_Scheduler.GetCurrentTask();
-    DebugPrint(dbg_hook, "task(%s) hook gethostbyname2(%s, %d). %s coroutine.",
-            tk ? tk->DebugInfo() : "nil", name ? name : "nil", af,
-            g_Scheduler.IsCoroutine() ? "In" : "Not in");
-
-    return co_gethostbyname2(name, af);
-}
-
-int gethostbyname_r(const char *name, struct hostent *ret_h, char *buf,
-        size_t buflen, struct hostent **result, int *h_errnop)
-{
-    Task* tk = g_Scheduler.GetCurrentTask();
-    DebugPrint(dbg_hook, "task(%s) hook gethostbyname_r(name=%s, buflen=%d). %s coroutine.",
-            tk ? tk->DebugInfo() : "nil", name ? name : "nil", (int)buflen,
-            g_Scheduler.IsCoroutine() ? "In" : "Not in");
-
-    return co::gethostbyname_with_ares(name, AF_INET, ret_h, buf, buflen, result, h_errnop);
-}
-
-int gethostbyname2_r(const char *name, int af,
-        struct hostent *ret, char *buf, size_t buflen,
-        struct hostent **result, int *h_errnop)
-{
-    Task* tk = g_Scheduler.GetCurrentTask();
-    DebugPrint(dbg_hook, "task(%s) hook gethostbyname2_r(name=%s, af=%d, buflen=%d). %s coroutine.",
-            tk ? tk->DebugInfo() : "nil", name ? name : "nil", af, (int)buflen,
-            g_Scheduler.IsCoroutine() ? "In" : "Not in");
-
-    return co::gethostbyname_with_ares(name, af, ret, buf, buflen, result, h_errnop);
-}
-
-struct hostent *gethostbyaddr(const void *addr, socklen_t len, int type)
-{
-    Task* tk = g_Scheduler.GetCurrentTask();
-    DebugPrint(dbg_hook, "task(%s) hook gethostbyaddr_r(ip=%s, type=%d). %s coroutine.",
-            tk ? tk->DebugInfo() : "nil",
-            inet_ntoa(*(in_addr*)addr), type,
-            g_Scheduler.IsCoroutine() ? "In" : "Not in");
-
-    static size_t s_buflen = 8192;
-    static char *s_buffer = (char*)malloc(s_buflen);
-    static hostent h;
-    hostent *p = &h;
-
-    int err = 0;
-    size_t buflen = s_buflen;
-    int res = co::gethostbyaddr_with_ares(addr, len, type, p, s_buffer, buflen,
-            &p, &err);
-    if (res == -1 && buflen > s_buflen) {
-        s_buflen = buflen;
-        s_buffer = (char*)realloc(s_buffer, s_buflen);
-        res = co::gethostbyaddr_with_ares(addr, len, type, p, s_buffer, buflen,
-                &p, &err);
-    }
-
-    if (res == 0) {
-        return p;
-    }
-
-    h_errno = err;
-    return nullptr;
-}
-
-int gethostbyaddr_r(const void *addr, socklen_t len, int type,
-        struct hostent *ret, char *buf, size_t buflen,
-        struct hostent **result, int *h_errnop)
-{
-    Task* tk = g_Scheduler.GetCurrentTask();
-    DebugPrint(dbg_hook, "task(%s) hook gethostbyaddr_r(ip=%s, type=%d, buflen=%d). %s coroutine.",
-            tk ? tk->DebugInfo() : "nil",
-            inet_ntoa(*(in_addr*)addr), type, (int)buflen,
-            g_Scheduler.IsCoroutine() ? "In" : "Not in");
-
-    return co::gethostbyaddr_with_ares(addr, len, type, ret, buf, buflen, result, h_errnop);
-}
-
-#endif
-
 
 // safe signal
 #if WITH_SAFE_SIGNAL
@@ -1272,7 +1036,7 @@ extern ssize_t __sendto(int sockfd, const void *buf, size_t len, int flags,
         const struct sockaddr *dest_addr, socklen_t addrlen);
 extern ssize_t __sendmsg(int sockfd, const struct msghdr *msg, int flags);
 extern int __libc_accept(int sockfd, struct sockaddr *addr, socklen_t *addrlen);
-extern int __poll(struct pollfd *fds, nfds_t nfds, int timeout);
+extern int __libc_poll(struct pollfd *fds, nfds_t nfds, int timeout);
 extern int __select(int nfds, fd_set *readfds, fd_set *writefds,
                           fd_set *exceptfds, struct timeval *timeout);
 extern unsigned int __sleep(unsigned int seconds);
@@ -1289,6 +1053,11 @@ extern int __dup2(int, int);
 extern int __dup3(int, int, int);
 extern int __usleep(useconds_t usec);
 extern int __new_fclose(FILE *fp);
+extern int __gethostbyname_r(const char *__restrict __name,
+			    struct hostent *__restrict __result_buf,
+			    char *__restrict __buf, size_t __buflen,
+			    struct hostent **__restrict __result,
+			    int *__restrict __h_errnop);
 
 // 某些版本libc.a中没有__usleep.
 __attribute__((weak))
@@ -1336,6 +1105,7 @@ void coroutine_hook_init()
     dup2_f = (dup2_t)dlsym(RTLD_NEXT, "dup2");
     dup3_f = (dup3_t)dlsym(RTLD_NEXT, "dup3");
     fclose_f = (fclose_t)dlsym(RTLD_NEXT, "fclose");
+    gethostbyname_r_f = (gethostbyname_r_t)dlsym(RTLD_NEXT, "gethostbyname_r");
 #else
     connect_f = &__connect;
     read_f = &__read;
@@ -1349,7 +1119,7 @@ void coroutine_hook_init()
     sendto_f = &__sendto;
     sendmsg_f = &__sendmsg;
     accept_f = &__libc_accept;
-    poll_f = &__poll;
+    poll_f = &__libc_poll;
     select_f = &__select;
     sleep_f = &__sleep;
     usleep_f = &__usleep;
@@ -1363,12 +1133,13 @@ void coroutine_hook_init()
     dup2_f = &__dup2;
     dup3_f = &__dup3;
     fclose_f = &__new_fclose;
+    gethostbyname_r_f = &__gethostbyname_r;
 #endif
 
     if (!connect_f || !read_f || !write_f || !readv_f || !writev_f || !send_f
             || !sendto_f || !sendmsg_f || !accept_f || !poll_f || !select_f
             || !sleep_f|| !usleep_f || !nanosleep_f || !close_f || !fcntl_f || !setsockopt_f
-            || !getsockopt_f || !dup_f || !dup2_f || !fclose_f
+            || !getsockopt_f || !dup_f || !dup2_f || !fclose_f || !gethostbyname_r_f
             // 老版本linux中没有dup3, 无需校验
             // || !dup3_f
             )

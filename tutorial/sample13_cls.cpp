@@ -73,7 +73,8 @@ void car() {
 
 void oneLine() {
     int &a = co_cls(int, 0), &b = co_cls(int, 10);
-    cout << "oneLine -> "<< "a=" << a << ", b=" << b << endl;
+    int &c = co_cls(int, 20);
+    cout << "oneLine -> "<< "a=" << a << ", b=" << b << ", c=" << c << endl;
 }
 
 int test() {

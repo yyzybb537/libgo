@@ -30,15 +30,15 @@ add_subdirectory(${PROJECT_SOURCE_DIR}/../../third_party/gtest ${PROJECT_BINARY_
 aux_source_directory(${PROJECT_SOURCE_DIR} SRC_LIST)
 
 if (UNIX)
-    set(STATIC_LINK_ARG -static -static-libstdc++)
+    set(STATIC_LINK_ARG -static -static-libgcc -static-libstdc++)
     set(LINK_ARGS libgo gtest_main gtest ${Boost_LIBRARIES} pthread dl)
     if (WITH_CARES)
         set(LINK_ARGS ${LINK_ARGS} cares)
     else()
-        list(REMOVE_ITEM SRC_LIST ${PROJECT_SOURCE_DIR}/dns.cpp)
+        #list(REMOVE_ITEM SRC_LIST ${PROJECT_SOURCE_DIR}/dns.cpp)
     endif()
 else ()
-    set(LINK_ARGS libgo gtest_main gtest ${Boost_LIBRARIES} ws2_32)
+    set(LINK_ARGS libgo gtest gtest_main ${Boost_LIBRARIES} ws2_32)
 endif()
 
 if (WIN32)

@@ -1,5 +1,7 @@
 #pragma once
 #include <unistd.h>
+#include <resolv.h>
+#include <netdb.h>
 
 extern "C" {
 
@@ -92,6 +94,12 @@ extern fclose_t fclose_f;
 // gethostbyname
 // gethostbyname2
 // gethostbyname_r
+typedef int (*gethostbyname_r_t) (const char *__restrict __name,
+			    struct hostent *__restrict __result_buf,
+			    char *__restrict __buf, size_t __buflen,
+			    struct hostent **__restrict __result,
+			    int *__restrict __h_errnop);
+extern gethostbyname_r_t gethostbyname_r_f;
 // gethostbyname2_r
 // gethostbyaddr
 // gethostbyaddr_r
