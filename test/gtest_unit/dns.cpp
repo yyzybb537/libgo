@@ -4,6 +4,7 @@
 #include <gtest/gtest.h>
 #include "coroutine.h"
 #include <netdb.h>
+#include <resolv.h>
 #include <arpa/inet.h>
 using namespace std;
 using namespace co;
@@ -47,7 +48,7 @@ void test_gethostbyname3()
     printf("{%d} gethostbyname3[%d] begin\n", co_sched.GetCurrentTaskID(), idx);
     hostent* h = gethostbyname("");
     EXPECT_FALSE(!!h);
-    EXPECT_EQ(h_errno, NO_RECOVERY);
+    EXPECT_EQ(h_errno, NO_DATA);
     printf("{%d} gethostbyname3[%d] done\n", co_sched.GetCurrentTaskID(), idx);
 }
 
@@ -122,19 +123,27 @@ void test_gethostbyname_r4()
     printf("{%d} gethostbyname_r4[%d] done\n", co_sched.GetCurrentTaskID(), idx);
 }
 
+void printDebug() {
+    printf("----------------- ---------------- -------------------\n");
+    printf("DebugInfo:%s\n", co::CoDebugger::getInstance().GetAllInfo().c_str());
+}
 
 TEST(testDns, testDns)
 {
+
     int yield_c = 0;
 
-    co_sched.GetOptions().debug = co::dbg_hook;
+//    co_sched.GetOptions().debug = co::dbg_hook;
 
-//    go test_gethostbyname_r2;
-//    go test_gethostbyname_r3;
-//    go test_gethostbyname_r4;
+//    printf("call poll\n");
+//    poll(nullptr, 0, 0);
+//    printf("call __res_state\n");
+//    auto rs = __res_state();
+//    go []{
+//        auto rs = __res_state();
+//    };
 //    co_sched.RunUntilNoTask();
 //    return ;
-//    printf("yield count=%d\n", yield_c);
 
     for (int i = 0; i < 10; ++i)
     {
@@ -143,12 +152,13 @@ TEST(testDns, testDns)
         };
     }
 
-//    go test_gethostbyname2;
-//    go test_gethostbyname3;
+    go test_gethostbyname2;
+    go test_gethostbyname3;
 
     co_sched.RunUntilNoTask();
     EXPECT_TRUE(yield_c > 0);
     printf("yield count=%d\n", yield_c);
+//    printDebug();
 
     yield_c = 0;
     for (int i = 0; i < 10; ++i)
@@ -157,24 +167,16 @@ TEST(testDns, testDns)
             test_gethostbyname_r1(i, yield_c); 
         };
     }
-    go []{
-        sleep(10);
-        printf("----------------- ---------------- -------------------\n");
-        printf("DebugInfo:%s\n", co::CoDebugger::getInstance().GetAllInfo().c_str());
-    };
     co_sched.RunUntilNoTask();
     EXPECT_TRUE(yield_c > 0);
     printf("yield count=%d\n", yield_c);
+//    printDebug();
 
     go test_gethostbyname_r2;
     go test_gethostbyname_r3;
     go test_gethostbyname_r4;
-    go []{
-        sleep(10);
-        printf("----------------- ---------------- -------------------\n");
-        printf("DebugInfo:%s\n", co::CoDebugger::getInstance().GetAllInfo().c_str());
-    };
     co_sched.RunUntilNoTask();
     EXPECT_TRUE(yield_c > 0);
     printf("yield count=%d\n", yield_c);
+//    printDebug();
 }
