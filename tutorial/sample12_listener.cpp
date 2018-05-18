@@ -5,7 +5,7 @@
  * 使用协程监听器 co_listener 可以监听协程的
  * 创建销毁等事件，也可以进行异常处理
  ************************************************/
-#include <libgo/coroutine.h>
+#include "coroutine.h"
 #include <iostream>
 
 using namespace std;
