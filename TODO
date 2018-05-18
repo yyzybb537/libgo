@@ -1,5 +1,7 @@
 TODO:
 hook __poll, 源syscall使用__libc_poll, 以支持gethostbyname系列函数
+    1.解决并发调用gethostbyname_r时,内部共用同一个udp socket的问题
+用户调用过poll的fd应该设置对应的readable\writable, 降低io的latency
 协程亲缘性
 支持同时等待多个Channel
 环切(runnable状态)搭配星切, 提升协程切换性能

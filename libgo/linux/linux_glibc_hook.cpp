@@ -91,6 +91,12 @@ namespace co {
     inline int libgo_poll(struct pollfd *fds, nfds_t nfds, int timeout, bool nonblocking_check)
     {
         Task* tk = g_Scheduler.GetCurrentTask();
+        DebugPrint(dbg_hook, "task(%s) hook libgo_poll(first-fd=%d, nfds=%d, timeout=%d, nonblocking=%d). %s coroutine.",
+                tk ? tk->DebugInfo() : "nil",
+                nfds > 0 ? fds[0].fd : -1,
+                (int)nfds, timeout, nonblocking_check,
+                g_Scheduler.IsCoroutine() ? "In" : "Not in");
+
         if (!tk)
             return poll_f(fds, nfds, timeout);
 
@@ -152,6 +158,7 @@ namespace co {
         }
 
         if (!added) {
+            // 全部fd都无法加入epoll
             errno = 0;
             return nfds;
         }
@@ -466,8 +473,9 @@ static ssize_t read_write_mode(int fd, OriginF fn, const char* hook_fn_name,
         uint32_t event, int timeout_so, ssize_t buflen, Args && ... args)
 {
     Task* tk = g_Scheduler.GetCurrentTask();
-    DebugPrint(dbg_hook, "task(%s) hook %s. %s coroutine.",
-            tk ? tk->DebugInfo() : "nil", hook_fn_name, g_Scheduler.IsCoroutine() ? "In" : "Not in");
+    DebugPrint(dbg_hook, "task(%s) hook %s(fd=%d, buflen=%d). %s coroutine.",
+            tk ? tk->DebugInfo() : "nil", hook_fn_name, fd, (int)buflen,
+            g_Scheduler.IsCoroutine() ? "In" : "Not in");
 
     if (!tk)
         return fn(fd, std::forward<Args>(args)...);
@@ -548,12 +556,12 @@ retry_intr_fn:
         if (errno == EAGAIN || errno == EWOULDBLOCK) {
             // 读空了
             if (event == POLLIN) {
-                DebugPrint(dbg_hook, "read %d EAGAIN, buflen=%ld.",
-                        fd, buflen);
+                DebugPrint(dbg_hook, "task(%s) read %d EAGAIN, buflen=%ld.",
+                        tk ? tk->DebugInfo() : "nil", fd, buflen);
                 fd_ctx->set_readable(false);
             } else {
-                DebugPrint(dbg_hook, "write %d returns EAGAIN, buflen=%ld.",
-                        fd, buflen);
+                DebugPrint(dbg_hook, "task(%s) write %d returns EAGAIN, buflen=%ld.",
+                        tk ? tk->DebugInfo() : "nil", fd, buflen);
                 fd_ctx->set_writable(false);
             }
             goto retry;     // 事件触发 OR epoll惊群效应
@@ -565,12 +573,12 @@ retry_intr_fn:
     if (n >= 0 && n < buflen) {
         // 读空了
         if (event == POLLIN) {
-            DebugPrint(dbg_hook, "read %d returns %ld, buflen=%ld.",
-                    fd, n, buflen);
+            DebugPrint(dbg_hook, "task(%s) read %d returns %ld, buflen=%ld.",
+                    tk ? tk->DebugInfo() : "nil", fd, n, buflen);
             fd_ctx->set_readable(false);
         } else {
-            DebugPrint(dbg_hook, "write %d returns %ld, buflen=%ld.",
-                    fd, n, buflen);
+            DebugPrint(dbg_hook, "task(%s) write %d returns %ld, buflen=%ld.",
+                    tk ? tk->DebugInfo() : "nil", fd, n, buflen);
             fd_ctx->set_writable(false);
         }
     }
@@ -766,7 +774,8 @@ int __poll(struct pollfd *fds, nfds_t nfds, int timeout)
             (int)nfds, timeout,
             g_Scheduler.IsCoroutine() ? "In" : "Not in");
 
-    return libgo_poll(fds, nfds, timeout, true);
+    return poll_f(fds, nfds, timeout);
+//    return libgo_poll(fds, nfds, timeout, true);
 }
 
 res_state __res_state()
@@ -985,6 +994,10 @@ int nanosleep(const struct timespec *req, struct timespec *rem)
 int close(int fd)
 {
     if (!close_f) coroutine_hook_init();
+    Task* tk = g_Scheduler.GetCurrentTask();
+    DebugPrint(dbg_hook, "task(%s) hook close(fd=%d). %s coroutine.",
+            tk ? tk->DebugInfo() : "nil", fd,
+            g_Scheduler.IsCoroutine() ? "In" : "Not in");
     return FdManager::getInstance().close(fd);
 }
 
