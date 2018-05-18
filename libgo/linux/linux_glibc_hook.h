@@ -91,8 +91,8 @@ extern fclose_t fclose_f;
 
 // DNS by libcares
 // gethostent
+
 // gethostbyname
-// gethostbyname2
 // gethostbyname_r
 typedef int (*gethostbyname_r_t) (const char *__restrict __name,
 			    struct hostent *__restrict __result_buf,
@@ -100,9 +100,18 @@ typedef int (*gethostbyname_r_t) (const char *__restrict __name,
 			    struct hostent **__restrict __result,
 			    int *__restrict __h_errnop);
 extern gethostbyname_r_t gethostbyname_r_f;
+// gethostbyname2
 // gethostbyname2_r
+typedef int (*gethostbyname2_r_t) (const char *name, int af,
+        struct hostent *ret, char *buf, size_t buflen,
+        struct hostent **result, int *h_errnop);
+extern gethostbyname2_r_t gethostbyname2_r_f;
 // gethostbyaddr
 // gethostbyaddr_r
+typedef int (*gethostbyaddr_r_t) (const void *addr, socklen_t len, int type,
+        struct hostent *ret, char *buf, size_t buflen,
+        struct hostent **result, int *h_errnop);
+extern gethostbyaddr_r_t gethostbyaddr_r_f;
 
 } //extern "C"
 

@@ -343,6 +343,8 @@ dup2_t dup2_f = NULL;
 dup3_t dup3_f = NULL;
 fclose_t fclose_f = NULL;
 gethostbyname_r_t gethostbyname_r_f = NULL;
+gethostbyname2_r_t gethostbyname2_r_f = NULL;
+gethostbyaddr_r_t gethostbyaddr_r_f = NULL;
 
 int connect(int fd, const struct sockaddr *addr, socklen_t addrlen)
 {
@@ -555,16 +557,17 @@ int __poll(struct pollfd *fds, nfds_t nfds, int timeout)
     return triggers;
 }
 
-res_state __res_state(void)
-{
-    struct __res_state& s = CLS(struct __res_state);
-    Task* tk = g_Scheduler.GetCurrentTask();
-    DebugPrint(dbg_hook, "task(%s) hook __res_state() return:%p. %s coroutine.",
-            tk ? tk->DebugInfo() : "nil",
-            &s,
-            g_Scheduler.IsCoroutine() ? "In" : "Not in");
-    return &s;
-}
+// --- This is invalid hook when gcc-5.4.
+//res_state __res_state(void)
+//{
+//    struct __res_state& s = CLS(struct __res_state);
+//    Task* tk = g_Scheduler.GetCurrentTask();
+//    DebugPrint(dbg_hook, "task(%s) hook __res_state() return:%p. %s coroutine.",
+//            tk ? tk->DebugInfo() : "nil",
+//            &s,
+//            g_Scheduler.IsCoroutine() ? "In" : "Not in");
+//    return &s;
+//}
 
 struct hostent* gethostbyname(const char* name)
 {
@@ -574,8 +577,6 @@ struct hostent* gethostbyname(const char* name)
 
     if (!name) return nullptr;
     std::vector<char> & buf = CLS(std::vector<char>);
-//    DebugPrint(dbg_hook, "task(%s) hook gethostbyname(name=%s) bufsize=%d.",
-//            tk ? tk->DebugInfo() : "nil", name ? name : "", (int)buf.size());
     if (buf.capacity() > 1024) {
         buf.resize(1024);
         buf.shrink_to_fit();
@@ -597,8 +598,6 @@ struct hostent* gethostbyname(const char* name)
             buf.resize(1024);
         else
             buf.resize(buf.size() * 2);
-//        DebugPrint(dbg_hook, "task(%s) hook gethostbyname(name=%s) resize to %d.",
-//                tk ? tk->DebugInfo() : "nil", name ? name : "", (int)buf.size());
 	}
 
 	if (ret == 0 && (host == result)) 
@@ -620,6 +619,105 @@ int gethostbyname_r(const char *__restrict name,
             tk ? tk->DebugInfo() : "nil", name ? name : "", (int)__buflen);
     std::unique_lock<CoMutex> lock(g_dns_mtx);
     return gethostbyname_r_f(name, __result_buf, __buf, __buflen, __result, __h_errnop);
+}
+
+struct hostent* gethostbyname2(const char* name, int af)
+{
+    Task* tk = g_Scheduler.GetCurrentTask();
+    DebugPrint(dbg_hook, "task(%s) hook gethostbyname2(name=%s, af=%d).",
+            tk ? tk->DebugInfo() : "nil", name ? name : "", af);
+
+    if (!name) return nullptr;
+    std::vector<char> & buf = CLS(std::vector<char>);
+    if (buf.capacity() > 1024) {
+        buf.resize(1024);
+        buf.shrink_to_fit();
+    } else if (buf.size() < 64) {
+        buf.resize(64);
+    }
+
+    struct hostent & refh = CLS(struct hostent);
+    struct hostent * host = &refh;
+	struct hostent * result = nullptr;
+    int & host_errno = CLS(int);
+
+	int ret = -1;
+	while (ret = gethostbyname2_r(name, af, host, &buf[0], 
+				buf.size(), &result, &host_errno) == ERANGE && 
+				host_errno == NETDB_INTERNAL )
+	{
+        if (buf.size() < 1024)
+            buf.resize(1024);
+        else
+            buf.resize(buf.size() * 2);
+	}
+
+	if (ret == 0 && (host == result)) 
+	{
+		return host;
+	}
+
+    return nullptr;
+}
+int gethostbyname2_r(const char *name, int af,
+        struct hostent *ret, char *buf, size_t buflen,
+        struct hostent **result, int *h_errnop)
+{
+    if (!gethostbyname2_r_f) coroutine_hook_init();
+    Task* tk = g_Scheduler.GetCurrentTask();
+    DebugPrint(dbg_hook, "task(%s) hook gethostbyname2_r(name=%s, af=%d, buflen=%d).",
+            tk ? tk->DebugInfo() : "nil", name ? name : "", af, (int)buflen);
+    std::unique_lock<CoMutex> lock(g_dns_mtx);
+    return gethostbyname2_r_f(name, af, ret, buf, buflen, result, h_errnop);
+}
+
+struct hostent *gethostbyaddr(const void *addr, socklen_t len, int type)
+{
+    Task* tk = g_Scheduler.GetCurrentTask();
+    DebugPrint(dbg_hook, "task(%s) hook gethostbyaddr(type=%d).",
+            tk ? tk->DebugInfo() : "nil", type);
+
+    if (!addr) return nullptr;
+    std::vector<char> & buf = CLS(std::vector<char>);
+    if (buf.capacity() > 1024) {
+        buf.resize(1024);
+        buf.shrink_to_fit();
+    } else if (buf.size() < 64) {
+        buf.resize(64);
+    }
+
+    struct hostent & refh = CLS(struct hostent);
+    struct hostent * host = &refh;
+	struct hostent * result = nullptr;
+    int & host_errno = CLS(int);
+
+	int ret = -1;
+	while (ret = gethostbyaddr_r(addr, len, type,
+                host, &buf[0], buf.size(), &result, &host_errno) == ERANGE && 
+				host_errno == NETDB_INTERNAL )
+	{
+        if (buf.size() < 1024)
+            buf.resize(1024);
+        else
+            buf.resize(buf.size() * 2);
+	}
+
+	if (ret == 0 && (host == result))
+		return host;
+
+    return nullptr;
+
+}
+int gethostbyaddr_r(const void *addr, socklen_t len, int type,
+        struct hostent *ret, char *buf, size_t buflen,
+        struct hostent **result, int *h_errnop)
+{
+    if (!gethostbyaddr_r_f) coroutine_hook_init();
+    Task* tk = g_Scheduler.GetCurrentTask();
+    DebugPrint(dbg_hook, "task(%s) hook gethostbyaddr_r(buflen=%d).",
+            tk ? tk->DebugInfo() : "nil", (int)buflen);
+    std::unique_lock<CoMutex> lock(g_dns_mtx);
+    return gethostbyaddr_r_f(addr, len, type, ret, buf, buflen, result, h_errnop);
 }
 // ---------------------------------------------------------------------------
 
@@ -1058,6 +1156,12 @@ extern int __gethostbyname_r(const char *__restrict __name,
 			    char *__restrict __buf, size_t __buflen,
 			    struct hostent **__restrict __result,
 			    int *__restrict __h_errnop);
+extern int __gethostbyname2_r(const char *name, int af,
+        struct hostent *ret, char *buf, size_t buflen,
+        struct hostent **result, int *h_errnop);
+extern int __gethostbyaddr_r(const void *addr, socklen_t len, int type,
+        struct hostent *ret, char *buf, size_t buflen,
+        struct hostent **result, int *h_errnop);
 
 // 某些版本libc.a中没有__usleep.
 __attribute__((weak))
@@ -1106,6 +1210,9 @@ void coroutine_hook_init()
     dup3_f = (dup3_t)dlsym(RTLD_NEXT, "dup3");
     fclose_f = (fclose_t)dlsym(RTLD_NEXT, "fclose");
     gethostbyname_r_f = (gethostbyname_r_t)dlsym(RTLD_NEXT, "gethostbyname_r");
+    gethostbyname2_r_f = (gethostbyname2_r_t)dlsym(RTLD_NEXT, "gethostbyname2_r");
+    gethostbyaddr_r_f = (gethostbyaddr_r_t)dlsym(RTLD_NEXT, "gethostbyaddr_r");
+
 #else
     connect_f = &__connect;
     read_f = &__read;
@@ -1134,12 +1241,15 @@ void coroutine_hook_init()
     dup3_f = &__dup3;
     fclose_f = &__new_fclose;
     gethostbyname_r_f = &__gethostbyname_r;
+    gethostbyname2_r_f = &__gethostbyname2_r;
+    gethostbyaddr_r_f = &__gethostbyaddr_r;
 #endif
 
     if (!connect_f || !read_f || !write_f || !readv_f || !writev_f || !send_f
             || !sendto_f || !sendmsg_f || !accept_f || !poll_f || !select_f
             || !sleep_f|| !usleep_f || !nanosleep_f || !close_f || !fcntl_f || !setsockopt_f
             || !getsockopt_f || !dup_f || !dup2_f || !fclose_f || !gethostbyname_r_f
+            || !gethostbyname2_r_f || !gethostbyaddr_r_f
             // 老版本linux中没有dup3, 无需校验
             // || !dup3_f
             )
