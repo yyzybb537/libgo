@@ -5,13 +5,14 @@
 
 namespace co {
 
+extern CLSMap* GetThreadLocalCLSMap();
+
 template <typename T, typename ... Args>
 T& GetSpecific(CLSLocation loc, Args && ... args) {
     Task* task = Scheduler::getInstance().GetCurrentTask();
     CLSMap *m = nullptr;
     if (!task) {
-        thread_local CLSMap tlm;
-        m = &tlm;
+        m = GetThreadLocalCLSMap();
     } else {
         m = task->GetCLSMap();
     }
@@ -19,6 +20,7 @@ T& GetSpecific(CLSLocation loc, Args && ... args) {
     CLSAny& any = m->Get(loc);
     if (any.empty()) {
 //        std::cout << "Set<T> any:" << (void*)&any << ", m:" << (void*)m << std::endl;
+//        std::cout << "sizeof:" << sizeof...(args) << std::endl;
         any.Set<T>(std::forward<Args>(args)...);
     }
     return any.Cast<T>();
