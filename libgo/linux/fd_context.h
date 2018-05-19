@@ -73,6 +73,7 @@ public:
 
     bool is_initialize();
     bool is_socket();
+    bool is_tcp();
     bool is_epoll();
     bool closed();
     int close(bool call_syscall);
@@ -134,6 +135,7 @@ private:
     mutex_t lock_;
     bool is_initialize_ = false;
     bool is_socket_ = false;
+    bool is_tcp_ = false;
     bool is_epoll_ = false;
     bool sys_nonblock_ = false;
     bool user_nonblock_ = false;

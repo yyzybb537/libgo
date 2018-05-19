@@ -298,8 +298,9 @@ retry_intr_fn:
             goto retry_intr_fn;
     }
 
-    if (n >= 0 && n < buflen) {
-        // 读空了
+    if (n >= 0 && n < buflen && fd_ctx->is_tcp()) {
+        // tcp读空了, 可读可写设置为false, 减少一次系统调用
+        // udp read时n<buflen是常态, 不必处理
         if (event == POLLIN) {
             DebugPrint(dbg_hook, "task(%s) read %d returns %ld, buflen=%ld.",
                     tk ? tk->DebugInfo() : "nil", fd, n, buflen);

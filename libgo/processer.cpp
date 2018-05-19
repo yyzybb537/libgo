@@ -108,7 +108,9 @@ Task* Processer::GetCurrentTask()
 std::size_t Processer::StealHalf(Processer & other)
 {
     std::size_t runnable_task_count = runnable_list_.size();
-    SList<Task> tasks = runnable_list_.pop_back((runnable_task_count + 1) / 2);
+    std::size_t steal_count = (runnable_task_count + 1) / 2;
+    steal_count = (std::min)(steal_count, std::size_t(1024));
+    SList<Task> tasks = runnable_list_.pop_back(steal_count);
     std::size_t c = tasks.size();
     DebugPrint(dbg_scheduler, "proc[%u] steal proc[%u] work returns %d.",
             other.id_, id_, (int)c);

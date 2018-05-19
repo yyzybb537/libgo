@@ -81,6 +81,13 @@ bool FileDescriptorCtx::re_initialize()
             fcntl_f(fd_, F_SETFL, flags | O_NONBLOCK);
 
         sys_nonblock_ = true;
+
+        int sock_type = 0;
+        socklen_t optlen = 4;
+        int res = getsockopt(fd_, SOL_SOCKET, SO_TYPE, (char*)&sock_type, &optlen);
+        if (res == 0 && sock_type == SOCK_STREAM) {
+            is_tcp_ = true;
+        }
     } else {
         sys_nonblock_ = false;
         recv_o_ = send_o_ = timeval{0, 0};
@@ -103,6 +110,10 @@ bool FileDescriptorCtx::is_initialize()
 bool FileDescriptorCtx::is_socket()
 {
     return is_socket_;
+}
+bool FileDescriptorCtx::is_tcp()
+{
+    return is_tcp_;
 }
 bool FileDescriptorCtx::is_epoll()
 {
