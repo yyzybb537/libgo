@@ -1,4 +1,4 @@
-#include <WinSock2.h>
+ï»¿#include <WinSock2.h>
 #include <Windows.h>
 #include <xhook.h>
 #include "../scheduler.h"
@@ -147,7 +147,7 @@ namespace co {
             if (ret > 0) return ret;
 
             if (exceptfds) {
-                // ÒòÎªwindowsµÄselect, ½öÔÚÊÂÏÈ¼àÌıÊ±²ÅÄÜ²¶»ñµ½error, Òò´Ë´Ë´¦ĞèÒªÊÖ¶¯check
+                // å› ä¸ºwindowsçš„select, ä»…åœ¨äº‹å…ˆç›‘å¬æ—¶æ‰èƒ½æ•è·åˆ°error, å› æ­¤æ­¤å¤„éœ€è¦æ‰‹åŠ¨check
                 fd_set e_result;
                 FD_ZERO(&e_result);
                 for (u_int i = 0; i < exceptfds->fd_count; ++i)
@@ -287,7 +287,7 @@ namespace co {
             return fn(s, std::forward<Args>(args)...);
 
         R ret = fn(s, std::forward<Args>(args)...);
-        if (ret != -1) {    // accept·µ»ØSOCKETÀàĞÍ£¬ÊÇÎŞ·ûºÅÕûÊı£¬ËùÒÔ´Ë´¦²»¿ÉÅĞ¶ÏĞ¡ÓÚ0.
+        if (ret != -1) {    // acceptè¿”å›SOCKETç±»å‹ï¼Œæ˜¯æ— ç¬¦å·æ•´æ•°ï¼Œæ‰€ä»¥æ­¤å¤„ä¸å¯åˆ¤æ–­å°äº0.
             SetNonblocking(s, false);
             return ret;
         }
@@ -636,6 +636,28 @@ namespace co {
             s, lpMsg, dwFlags, lpNumberOfBytesSent, lpOverlapped, lpCompletionRoutine);
     }
 
+	typedef VOID (WINAPI *Sleep_t)(
+		_In_ DWORD dwMilliseconds
+		);
+	static Sleep_t Sleep_f = (Sleep_t)GetProcAddress(GetModuleHandleA("Kernel32.dll"), "Sleep");
+	static VOID WINAPI hook_Sleep(
+		_In_ DWORD dwMilliseconds
+		)
+	{
+		Task* tk = g_Scheduler.GetCurrentTask();
+		
+		DebugPrint(dbg_hook, "task(%s) Hook %s(dwMilliseconds=%u). %s coroutine.",
+			tk ? tk->DebugInfo() : "nil", "Sleep", dwMilliseconds,
+			g_Scheduler.IsCoroutine() ? "In" : "Not in");
+
+		if (!tk) {
+			Sleep_f(dwMilliseconds);
+			return;
+		}
+
+		g_Scheduler.SleepSwitch(dwMilliseconds);
+	}
+
     void coroutine_hook_init()
     {
 		XHookRestoreAfterWith();
@@ -670,6 +692,10 @@ namespace co {
 		ok &= XHookAttach((PVOID*)&WSASend_f, &hook_WSASend) == NO_ERROR;
 		ok &= XHookAttach((PVOID*)&WSASendTo_f, &hook_WSASendTo) == NO_ERROR;
 		ok &= XHookAttach((PVOID*)&WSASendMsg_f, &hook_WSASendMsg) == NO_ERROR;
+
+		// Sleep-like functions
+		ok &= XHookAttach((PVOID*)&Sleep_f, &hook_Sleep) == NO_ERROR;
+
 		XHookTransactionCommit();
         
         if (!ok) {
