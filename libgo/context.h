@@ -67,9 +67,7 @@ namespace co
 
 } //namespace co
 
-#if USE_BOOST_COROUTINE
-# include <libgo/ctx_boost_coroutine/context.h>
-#elif USE_BOOST_CONTEXT
+#if USE_BOOST_CONTEXT
 # include <libgo/ctx_boost_context/context.h>
 #elif USE_UCONTEXT
 # include <libgo/ctx_ucontext/context.h>

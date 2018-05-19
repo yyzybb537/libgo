@@ -1,7 +1,5 @@
 #pragma once
 
-#define USE_BOOST_COROUTINE ${USE_BOOST_COROUTINE}
-
 #define USE_UCONTEXT ${USE_UCONTEXT}
 
 #define USE_FIBER ${USE_FIBER}
