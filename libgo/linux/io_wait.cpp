@@ -9,6 +9,7 @@ namespace co
 IoWait::IoWait()
 {
     epoll_event_size_ = 1024;
+    wait_io_sentries_.check_ = (void*)this;
 }
 
 int& IoWait::EpollFdRef()

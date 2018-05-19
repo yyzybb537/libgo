@@ -36,6 +36,7 @@ struct Task
     TaskState state_ = TaskState::init;
     uint64_t yield_count_ = 0;
     Processer* proc_ = NULL;
+    bool is_affinity_ = false;  // 协程亲缘性
     Context ctx_;
     std::string debug_info_;
     TaskF fn_;
