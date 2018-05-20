@@ -1,4 +1,5 @@
 TODO:
+go dispatch(xx) stack(xxx) malloc-free(xx,yy) func;用这种灵活的语法替代go_dispatch这种老旧的方式。
 协程亲缘性
 支持同时等待多个Channel
 环切(runnable状态)搭配星切, 提升协程切换性能
