@@ -12,6 +12,7 @@ endif()
 
 include(${PROJECT_SOURCE_DIR}/../boost.cmake)
 
+include_directories(${PROJECT_SOURCE_DIR}/..)
 include_directories(${PROJECT_SOURCE_DIR}/../libgo)
 if (UNIX)
     include_directories(${PROJECT_SOURCE_DIR}/../libgo/linux)

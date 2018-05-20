@@ -21,8 +21,8 @@ include(${PROJECT_SOURCE_DIR}/../../boost.cmake)
 
 set(TARGET "unit_test.t")
 include_directories(${PROJECT_SOURCE_DIR}/../../third_party/gtest/include)
+include_directories(${PROJECT_SOURCE_DIR}/../..)
 include_directories(${PROJECT_SOURCE_DIR}/../../libgo)
-include_directories(${PROJECT_SOURCE_DIR}/../../libgo/linux)
 link_directories(${PROJECT_BINARY_DIR}/gtest)
 link_directories(${PROJECT_BINARY_DIR}/../..)
 add_subdirectory(${PROJECT_SOURCE_DIR}/../../third_party/gtest ${PROJECT_BINARY_DIR}/gtest)
@@ -30,9 +30,11 @@ add_subdirectory(${PROJECT_SOURCE_DIR}/../../third_party/gtest ${PROJECT_BINARY_
 aux_source_directory(${PROJECT_SOURCE_DIR} SRC_LIST)
 
 if (UNIX)
+    include_directories(${PROJECT_SOURCE_DIR}/../../libgo/linux)
     set(STATIC_LINK_ARG -static -static-libgcc -static-libstdc++)
     set(LINK_ARGS libgo gtest_main gtest ${Boost_LIBRARIES} pthread dl)
 else ()
+    include_directories(${PROJECT_SOURCE_DIR}/../../libgo/windows)
     set(LINK_ARGS libgo gtest gtest_main ${Boost_LIBRARIES} ws2_32)
 endif()
 
