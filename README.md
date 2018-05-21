@@ -199,3 +199,4 @@ libgo有以下特点：
 		sendto                                                                             
 		WSASendTo                                                                          
 		WSASendMsg
+		Sleep
