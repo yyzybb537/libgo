@@ -108,9 +108,21 @@ void Processer::CoYield()
 
     DebugPrint(dbg_yield, "yield task(%s) state=%d", tk->DebugInfo(), (int)tk->state_);
     ++tk->yield_count_;
-    if (!tk->SwapOut()) {
-        fprintf(stderr, "swapcontext error:%s\n", strerror(errno));
-        ThrowError(eCoErrorCode::ec_yield_failed);
+
+    if (g_Scheduler.GetTaskListener()) {
+        g_Scheduler.GetTaskListener()->onSwapOut(tk->id_);
+        if (!tk->SwapOut()) {
+            fprintf(stderr, "swapcontext error:%s\n", strerror(errno));
+            ThrowError(eCoErrorCode::ec_yield_failed);
+            return;
+        }
+        g_Scheduler.GetTaskListener()->onSwapIn(tk->id_);
+    } else {
+        if (!tk->SwapOut()) {
+            fprintf(stderr, "swapcontext error:%s\n", strerror(errno));
+            ThrowError(eCoErrorCode::ec_yield_failed);
+            return;
+        }
     }
 }
 
