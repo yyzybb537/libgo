@@ -116,7 +116,6 @@ void Processer::CoYield()
     if (!tk->SwapOut()) {
         fprintf(stderr, "swapcontext error:%s\n", strerror(errno));
         ThrowError(eCoErrorCode::ec_yield_failed);
-        return;
     }
 }
 
