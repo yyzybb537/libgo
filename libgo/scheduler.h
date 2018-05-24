@@ -264,7 +264,7 @@ class Scheduler
 
             virtual ~TaskListener() noexcept = default;
 
-            // s: Secheduler，表示该方法运行在调度器上下文中
+            // s: Scheduler，表示该方法运行在调度器上下文中
             // c: Coroutine，表示该方法运行在协程上下文中
             //
             //                                           -->[c]onCompleted->
