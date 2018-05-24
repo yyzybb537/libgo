@@ -38,16 +38,14 @@ void Task::Task_CB()
 
     auto call_fn = [this]() {
         if (g_Scheduler.GetTaskListener()) {
-            g_Scheduler.GetTaskListener()->onSwapIn(this->id_);
             g_Scheduler.GetTaskListener()->onStart(this->id_);
+        }
 
-            this->fn_();
-            this->fn_ = TaskF(); //让协程function对象的析构也在协程中执行
+        this->fn_();
+        this->fn_ = TaskF(); //让协程function对象的析构也在协程中执行
 
+        if (g_Scheduler.GetTaskListener()) {
             g_Scheduler.GetTaskListener()->onCompleted(this->id_);
-        } else {
-            this->fn_();
-            this->fn_ = TaskF(); //让协程function对象的析构也在协程中执行
         }
     };
 
