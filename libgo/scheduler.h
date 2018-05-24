@@ -267,13 +267,13 @@ class Scheduler
             // s: Secheduler，表示该方法运行在调度器上下文中
             // c: Coroutine，表示该方法运行在协程上下文中
             //
-            //                                           -->onCompleted(c)->
+            //                                           -->[c]onCompleted->
             //                                          |                   |
-            // onCreated(s)-->onSwapIn(s)-->onStart(c)->*--->onSwapOut(c)-- -->onFinished(c)-->onSwapOut(c)
+            // [s]onCreated-->[s]onSwapIn-->[c]onStart->*--->[c]onSwapOut-- -->[c]onFinished-->[c]onSwapOut
             //                                          |\                | |
-            //                                          | \<-onSwapIn(s)--V |
+            //                                          | \<-[s]onSwapIn--V |
             //                                          |                   |
-            //                                           -->onException(c)->
+            //                                           -->[c]onException->
         };
 
     private:
