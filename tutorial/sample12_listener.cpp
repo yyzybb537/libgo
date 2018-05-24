@@ -21,6 +21,7 @@ using namespace std;
 //                                          | \<-[s]onSwapIn--V |
 //                                          |                   |
 //                                           -->[c]onException->               
+//                                         (运行时抛出未捕获的异常)
 //
 //！！注意协程监听器回调方法均不能抛出异常，如果可能有异常抛出，请在回调方法内自行 try...catch 消化掉
 
