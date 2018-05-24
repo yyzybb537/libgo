@@ -86,7 +86,7 @@ enum e_go_dispatch
     egod_robin = -2,
     egod_local_thread = -1,
 
-    // ...
+    // >= 0时, 对应线程ID;
 };
 
 // 协程中抛出未捕获异常时的处理方式
