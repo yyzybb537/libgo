@@ -11,13 +11,16 @@
 using namespace std;
 
 //协程监听器的调用过程：
-//                          (正常运行完成)
-//                      ---> onCompleted -->
-//                      |                  |
-// onCreated --> onStart                   ---> onFinished
-//                      |                  |
-//                      ---> onException -->
-//                     (运行时抛出未捕获的异常)
+// s: Scheduler，表示该方法运行在调度器上下文中
+// c: Coroutine，表示该方法运行在协程上下文中
+//                                             (正常运行完成)
+//                                           -->[c]onCompleted->
+//                                          |                   |
+// [s]onCreated-->[s]onSwapIn-->[c]onStart->*--->[c]onSwapOut-- -->[c]onFinished-->[c]onSwapOut
+//                                          |\                | |
+//                                          | \<-[s]onSwapIn--V |
+//                                          |                   |
+//                                           -->[c]onException->               
 //
 //！！注意协程监听器回调方法均不能抛出异常，如果可能有异常抛出，请在回调方法内自行 try...catch 消化掉
 
@@ -36,6 +39,17 @@ public:
     }
 
     /**
+     * 每次协程切入前调用
+     * （注意此时并未运行在协程中）
+     *
+     * @prarm task_id 协程ID
+     * @prarm eptr
+     */
+    virtual void onSwapIn(uint64_t task_id) noexcept {
+        cout << "onSwapIn task_id=" << task_id << endl;
+    }
+    
+    /**
      * 协程开始运行
      * （本方法运行在协程中）
      *
@@ -47,19 +61,7 @@ public:
     }
 
     /**
-     * 协程切入后（包括协程首次运行的时候）调用
-     * 协程首次运行会在onStart之前调用。
-     * （本方法运行在协程中）
-     *
-     * @prarm task_id 协程ID
-     * @prarm eptr
-     */
-    virtual void onSwapIn(uint64_t task_id) noexcept {
-        cout << "onSwapIn task_id=" << task_id << endl;
-    }
-
-    /**
-     * 协程切出前调用
+     * 每次协程切出前调用
      * （本方法运行在协程中）
      *
      * @prarm task_id 协程ID
