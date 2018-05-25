@@ -211,6 +211,27 @@ class Scheduler
             virtual void onStart(uint64_t task_id) noexcept {
             }
 
+             /**
+             * 协程切入后（包括协程首次运行的时候）调用
+			 * 协程首次运行会在onStart之前调用。
+             * （本方法运行在协程中）
+             *
+             * @prarm task_id 协程ID
+             * @prarm eptr
+             */
+            virtual void onSwapIn(uint64_t task_id) noexcept {
+            }
+
+            /**
+             * 协程切出前调用
+             * （本方法运行在协程中）
+             *
+             * @prarm task_id 协程ID
+             * @prarm eptr
+             */
+            virtual void onSwapOut(uint64_t task_id) noexcept {
+            }
+			
             /**
              * 协程正常运行结束（无异常抛出）
              * （本方法运行在协程中）
