@@ -48,7 +48,7 @@ class Scheduler
 
         // 创建一个协程
         void CreateTask(TaskF const& fn, std::size_t stack_size,
-                const char* file, int lineno, int dispatch);
+                const char* file, int lineno, int dispatch, bool affinity);
 
         // 当前是否处于协程中
         bool IsCoroutine();

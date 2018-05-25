@@ -53,10 +53,11 @@ Processer* Scheduler::GetProcesser(std::size_t index)
 }
 
 void Scheduler::CreateTask(TaskF const& fn, std::size_t stack_size,
-        const char* file, int lineno, int dispatch)
+        const char* file, int lineno, int dispatch, bool affinity)
 {
     Task* tk = new Task(fn, stack_size ? stack_size : GetOptions().stack_size, file, lineno);
     ++task_count_;
+    tk->is_affinity_ = affinity;
 
     DebugPrint(dbg_task, "task(%s) created.", tk->DebugInfo());
     if (task_listener) {

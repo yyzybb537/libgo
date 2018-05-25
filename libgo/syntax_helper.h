@@ -63,7 +63,7 @@ struct __go
     ALWAYS_INLINE void operator-(Function const& f)
     {
         Scheduler::getInstance().CreateTask(f, opt_.stack_size_,
-                opt_.file_, opt_.lineno_, opt_.dispatch_);
+                opt_.file_, opt_.lineno_, opt_.dispatch_, opt_.affinity_);
     }
 
     ALWAYS_INLINE __go& operator-(__go_option<opt_stack_size> const& opt)

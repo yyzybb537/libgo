@@ -1,8 +1,10 @@
 TODO:
-go dispatch(xx) stack(xxx) malloc-free(xx,yy) func;用这种灵活的语法替代go_dispatch这种老旧的方式。
-协程亲缘性
-支持同时等待多个Channel
 环切(runnable状态)搭配星切, 提升协程切换性能
+    A）使用环切调度替代现在的星切调度(CoYeild时选择下一个切换目标)，必要时才切换回线程处理epoll、定时器、sleep等逻辑，同时协调好多线程调度
+    B）调度器的Run函数里面做了很多协程切换之外的事情，尽量降低这部分在非必要时的cpu消耗，比如：有任务加入定时器是设置一个tls标记为true，只有标记为true时才去处理定时器相关逻辑。
+    C）调度器中的runnable队列使用了自旋锁，没有竞争时对原子变量的操作也是比较昂贵的，runnable队列可以优化成多写一读，仅在写入端加锁的队列。
+协程对象Task内存布局调优，tls池化，每个池使用多写一读链表队列，申请时仅在当前线程的池中申请，可以免锁，释放时均衡每个线程的池水水位，可以塞入其他线程的池中。
+支持同时等待多个Channel
 mac分支合并到master中
 解决第三方库、glibc++ exception使用tls的隐患(pthread_xxx_specific ?)
 
@@ -45,3 +47,5 @@ HOOK select poll时, 正确处理文件等非socket句柄
 hook __poll, 源syscall使用__libc_poll, 以支持gethostbyname系列函数
 解决并发调用gethostbyname_r时,内部共用同一个udp socket的问题
 用户调用过poll的fd应该设置对应的readable\writable, 降低io的latency
+go dispatch(xx) stack(xxx) malloc-free(xx,yy) func;用这种灵活的语法替代go_dispatch这种老旧的方式。
+协程亲缘性
