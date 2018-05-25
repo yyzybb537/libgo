@@ -2,6 +2,7 @@
 #include <sys/epoll.h>
 #include <libgo/scheduler.h>
 #include <signal.h>
+#include "linux_glibc_hook.h"
 
 namespace co
 {
@@ -115,7 +116,6 @@ int IoWait::reactor_ctl(int epollfd, int epoll_ctl_mod, int fd,
         return res;
     }
 
-    // TODO: poll模拟
     errno = EPERM;
     return -1;
 }
@@ -124,12 +124,12 @@ int IoWait::WaitLoop(int wait_milliseconds)
     if (!IsEpollCreated())
         return -1;
 
-    // TODO: epoll多线程触发, poll单线程触发.
-
     thread_local static epoll_event *evs = new epoll_event[epoll_event_size_];
 
+    if (!epoll_wait_f) coroutine_hook_init();
+
 retry:
-    int n = epoll_wait(GetEpollFd(), evs, epoll_event_size_, wait_milliseconds);
+    int n = epoll_wait_f(GetEpollFd(), evs, epoll_event_size_, wait_milliseconds);
     if (n == -1) {
         if (errno == EINTR) {
             goto retry;
@@ -150,11 +150,9 @@ retry:
                 fd, EpollEvent2Str(evs[i].events).c_str(), !!fd_ctx);
         if (!fd_ctx) continue;
 
-        // 暂存, 最后再执行Trigger, 以便于poll可以得到更多的事件触发.
+        // 暂存, 最后再执行Trigger, 以便于poll可以一次性得到更多的事件触发.
         fd_ctx->reactor_trigger(EpollEvent2Poll(evs[i].events), triggers);
     }
-
-    // TODO: run poll
 
     // 触发事件, 唤醒等待中的协程.
     // 过时的唤醒由于已不在wait列表中, 

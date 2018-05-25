@@ -43,6 +43,10 @@ extern sendmsg_t sendmsg_f;
 typedef int(*poll_t)(struct pollfd *fds, nfds_t nfds, int timeout);
 extern poll_t poll_f;
 
+typedef int (*epoll_wait_t)(int epfd, struct epoll_event *events,
+        int maxevents, int timeout);
+extern epoll_wait_t epoll_wait_f;
+
 typedef int(*select_t)(int nfds, fd_set *readfds, fd_set *writefds,
         fd_set *exceptfds, struct timeval *timeout);
 extern select_t select_f;
@@ -132,4 +136,5 @@ namespace co {
     extern void reset_readable(int fd);
     extern void reset_writable(int fd);
 
+    extern void coroutine_hook_init();
 } //namespace co

@@ -37,14 +37,16 @@ namespace co {
 
     int libgo_epoll_wait(int epfd, struct epoll_event *events, int maxevents, int timeout)
     {
+        if (!epoll_wait_f) coroutine_hook_init();
+
         Task* tk = g_Scheduler.GetCurrentTask();
         DebugPrint(dbg_hook, "task(%s) call libgo_epoll_wait. %s coroutine.",
                 tk ? tk->DebugInfo() : "nil", g_Scheduler.IsCoroutine() ? "In" : "Not in");
 
         if (!tk)
-            return epoll_wait(epfd, events, maxevents, timeout);
+            return epoll_wait_f(epfd, events, maxevents, timeout);
 
-        int res = epoll_wait(epfd, events, maxevents, 0);
+        int res = epoll_wait_f(epfd, events, maxevents, 0);
         if (res != 0) return res;
 
         FdCtxPtr fd_ctx = FdManager::getInstance().get_fd_ctx(epfd);
@@ -60,7 +62,7 @@ namespace co {
         pfd.revents = 0;
         res = poll(&pfd, 1, timeout);
         if (res <= 0) return res;
-        return epoll_wait(epfd, events, maxevents, 0);
+        return epoll_wait_f(epfd, events, maxevents, 0);
     }
 
     void set_et_mode(int fd)
@@ -346,6 +348,7 @@ fclose_t fclose_f = NULL;
 gethostbyname_r_t gethostbyname_r_f = NULL;
 gethostbyname2_r_t gethostbyname2_r_f = NULL;
 gethostbyaddr_r_t gethostbyaddr_r_f = NULL;
+epoll_wait_t epoll_wait_f = NULL;
 
 int connect(int fd, const struct sockaddr *addr, socklen_t addrlen)
 {
@@ -1111,6 +1114,12 @@ int fclose(FILE* fp)
     return FdManager::getInstance().fclose(fp);
 }
 
+#if defined(CO_DYNAMIC_LINK)
+int epoll_wait(int epfd, struct epoll_event *events, int maxevents, int timeout)
+{
+    return libgo_epoll_wait(epfd, events, maxevents, timeout);
+}
+#endif
 
 // safe signal
 #if WITH_SAFE_SIGNAL
@@ -1213,7 +1222,7 @@ void coroutine_hook_init()
     gethostbyname_r_f = (gethostbyname_r_t)dlsym(RTLD_NEXT, "gethostbyname_r");
     gethostbyname2_r_f = (gethostbyname2_r_t)dlsym(RTLD_NEXT, "gethostbyname2_r");
     gethostbyaddr_r_f = (gethostbyaddr_r_t)dlsym(RTLD_NEXT, "gethostbyaddr_r");
-
+    epoll_wait_f = (epoll_wait_t)dlsym(RTLD_NEXT, "epoll_wait");
 #else
     connect_f = &__connect;
     read_f = &__read;
@@ -1244,13 +1253,14 @@ void coroutine_hook_init()
     gethostbyname_r_f = &__gethostbyname_r;
     gethostbyname2_r_f = &__gethostbyname2_r;
     gethostbyaddr_r_f = &__gethostbyaddr_r;
+    epoll_wait_f = &::epoll_wait;
 #endif
 
     if (!connect_f || !read_f || !write_f || !readv_f || !writev_f || !send_f
             || !sendto_f || !sendmsg_f || !accept_f || !poll_f || !select_f
             || !sleep_f|| !usleep_f || !nanosleep_f || !close_f || !fcntl_f || !setsockopt_f
             || !getsockopt_f || !dup_f || !dup2_f || !fclose_f || !gethostbyname_r_f
-            || !gethostbyname2_r_f || !gethostbyaddr_r_f
+            || !gethostbyname2_r_f || !gethostbyaddr_r_f || !epoll_wait_f
             // 老版本linux中没有dup3, 无需校验
             // || !dup3_f
             )
