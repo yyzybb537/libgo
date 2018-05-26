@@ -52,6 +52,8 @@ uint32_t Processer::Run(uint32_t &done_count)
 
             current_task_ = tk;
             DebugPrint(dbg_switch, "enter task(%s)", tk->DebugInfo());
+            if (g_Scheduler.GetTaskListener())
+                g_Scheduler.GetTaskListener()->onSwapIn(tk->id_);
             if (!tk->SwapIn()) {
                 fprintf(stderr, "swapcontext error:%s\n", strerror(errno));
                 current_task_ = nullptr;
@@ -108,6 +110,9 @@ void Processer::CoYield()
 
     DebugPrint(dbg_yield, "yield task(%s) state=%d", tk->DebugInfo(), (int)tk->state_);
     ++tk->yield_count_;
+
+    if (g_Scheduler.GetTaskListener())
+        g_Scheduler.GetTaskListener()->onSwapOut(tk->id_);
     if (!tk->SwapOut()) {
         fprintf(stderr, "swapcontext error:%s\n", strerror(errno));
         ThrowError(eCoErrorCode::ec_yield_failed);

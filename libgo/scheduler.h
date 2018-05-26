@@ -200,6 +200,16 @@ class Scheduler
              */
             virtual void onCreated(uint64_t task_id) noexcept {
             }
+            
+            /**
+             * 每次协程切入前调用
+             * （注意此时并未运行在协程中）
+             *
+             * @prarm task_id 协程ID
+             * @prarm eptr
+             */
+            virtual void onSwapIn(uint64_t task_id) noexcept {
+            }
 
             /**
              * 协程开始运行
@@ -211,6 +221,16 @@ class Scheduler
             virtual void onStart(uint64_t task_id) noexcept {
             }
 
+            /**
+             * 每次协程切出前调用
+             * （本方法运行在协程中）
+             *
+             * @prarm task_id 协程ID
+             * @prarm eptr
+             */
+            virtual void onSwapOut(uint64_t task_id) noexcept {
+            }
+            
             /**
              * 协程正常运行结束（无异常抛出）
              * （本方法运行在协程中）
@@ -234,6 +254,7 @@ class Scheduler
 
             /**
              * 协程运行完成，if(eptr) 为false说明协程正常结束，为true说明协程抛出了了异常
+             *（本方法运行在协程中）
              *
              * @prarm task_id 协程ID
              * @prarm eptr 抛出的异常对象指针
@@ -243,11 +264,16 @@ class Scheduler
 
             virtual ~TaskListener() noexcept = default;
 
-            //                      ---> onCompleted -->
-            //                      |                  |
-            // onCreated --> onStart                   ---> onFinished
-            //                      |                  |
-            //                      ---> onException -->
+            // s: Scheduler，表示该方法运行在调度器上下文中
+            // c: Coroutine，表示该方法运行在协程上下文中
+            //
+            //                                           -->[c]onCompleted->
+            //                                          |                   |
+            // [s]onCreated-->[s]onSwapIn-->[c]onStart->*--->[c]onSwapOut-- -->[c]onFinished-->[c]onSwapOut
+            //                                          |\                | |
+            //                                          | \<-[s]onSwapIn--V |
+            //                                          |                   |
+            //                                           -->[c]onException->
         };
 
     private:

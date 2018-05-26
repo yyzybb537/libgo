@@ -28,8 +28,28 @@ void show()
     std::cout << "Switch " << coro * coro << " times: " << sec_c << std::endl;
 }
 
-int main()
+class TestListener: public co_listener {
+public:
+    virtual void onSwapIn(uint64_t task_id) noexcept {
+    }
+    virtual void onSwapOut(uint64_t task_id) noexcept {
+    }
+};
+
+int main(int argc, char** argv)
 {
+    TestListener listener;
+    if (argc >1) {
+        if (strcmp(argv[1], "-h") == 0 || strcmp(argv[1], "--help") == 0) {
+            printf("\n    Usage: %s [--listen_task_swap]\n", argv[0]);
+            printf("\n           --listen_task_swap: add task swap in/out listener for go routines\n\n");
+            exit(1);
+        }
+        if (strcmp(argv[1],"--listen_task_swap")==0) {
+            set_co_listener(&listener);
+            std::cout << "task swap listened" << std::endl;
+        }
+    }
     
     boost::thread_group tg;
     co_sched.Run();
