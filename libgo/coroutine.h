@@ -58,7 +58,8 @@ using ::co::co_timer_block_cancel;
 
 // co_defer
 #define co_defer auto LIBGO_PP_CAT(__defer_, __COUNTER__) = ::co::__defer_op()-
-#define co_last_defer() LIBGO_PP_CAT(__defer_, LIBGO_PP_DEC(__COUNTER__))
+//#define co_last_defer() LIBGO_PP_CAT(__defer_, LIBGO_PP_DEC(__COUNTER__))
+#define co_last_defer() ::co::GetLastDefer()
 #define co_defer_scope co_defer [&]
 
 // co_listener

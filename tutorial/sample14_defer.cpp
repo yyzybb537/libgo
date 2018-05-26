@@ -29,7 +29,7 @@
  *    auto & defer_foo_object = co_last_defer();
  *    defer_foo_object.dismiss();
  *
- * 注: 1.defer是一个与协程无关的额外的语法糖.
+ * 注: 1.defer在协程中和协程外均可使用
  *     2.和go关键字一样，不要忘记尾部的分号
 ************************************************/
 #include <unistd.h>
@@ -37,6 +37,22 @@
 #include <libgo/libgo.h>
 #include "win_exit.h"
 using namespace std;
+
+void foo() {
+    auto & dis1 = co_last_defer();
+    {
+        co_defer_scope {
+            cout << "go defer 1" << endl;
+        };
+        auto & dis2 = co_last_defer();
+        bool success = dis2.dismiss();
+        cout << "IsOK:" << success << endl;
+    }
+    auto & dis3 = co_last_defer();
+    bool success = dis3.dismiss();
+    cout << "IsOK:" << !success << endl;
+    cout << "IsOK:" << (&dis1 == &dis3) << endl;
+}
 
 int main() {
     co_defer [&]{ cout << "defer 3" << endl; };
@@ -52,5 +68,8 @@ int main() {
 
     co_defer []{ cout << "cancel 2" << endl; };
     co_last_defer().dismiss();
+
+    go foo;
+    co_sched.RunUntilNoTask();
 }
 

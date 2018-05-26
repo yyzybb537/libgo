@@ -54,6 +54,11 @@ struct Task
     bool is_block_timeout_ = false;     // sys_block的等待是否超时
 
     int sleep_ms_ = 0;                  // 睡眠时间
+
+    // defer专用的cls存储
+    void *defer_cls_ = nullptr;
+
+    // cls变量表
     CLSMap cls_map_;
 
     explicit Task(TaskF const& fn, std::size_t stack_size,
