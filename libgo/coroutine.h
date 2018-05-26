@@ -1,5 +1,7 @@
 #pragma once
+#include <libgo/pp.h>
 #include <libgo/syntax_helper.h>
+#include <libgo/defer.h>
 
 using ::co::egod_default;
 using ::co::egod_random;
@@ -53,6 +55,11 @@ using ::co::co_timer_block_cancel;
 // coroutine local storage
 #define co_cls(type, ...) CLS(type, ##__VA_ARGS__)
 #define co_cls_ref(type) CLS_REF(type)
+
+// co_defer
+#define co_defer auto LIBGO_PP_CAT(__defer_, __COUNTER__) = ::co::__defer_op()-
+#define co_last_defer() LIBGO_PP_CAT(__defer_, LIBGO_PP_DEC(__COUNTER__))
+#define co_defer_scope(callback) co_defer [&]{ callback }
 
 // co_listener
 using ::co::co_listener;
