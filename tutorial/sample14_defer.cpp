@@ -12,10 +12,10 @@
  * 同时还提供了一个宏: co_defer_scope, 可以直接在
  * 参数中写多条语句.
  * 例如:
- *    co_defer_scope(
+ *    co_defer_scope {
  *      cout << "1" << endl;
  *      cout << "2" << endl;
- *    );
+ *    };
  *
  * 除此之外, libgo还提供了撤销defer操作的办法:
  * 在紧随defer定义之后, 使用co_last_defer()可以获
@@ -41,10 +41,10 @@ using namespace std;
 int main() {
     co_defer [&]{ cout << "defer 3" << endl; };
 
-    co_defer_scope( 
+    co_defer_scope {
         cout << "defer 1" << endl;
         cout << "defer 2" << endl;
-    );
+    };
 
     co_defer []{ cout << "cancel 1" << endl; };
     auto & defer_obj = co_last_defer();

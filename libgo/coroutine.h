@@ -11,9 +11,9 @@ using ::co::egod_local_thread;
 #define go ::co::__go(__FILE__, __LINE__)-
 
 // create coroutine options
-#define co_stack(size) ::co::__go_option<opt_stack_size>{size}-
-#define co_dispatch(thread_id_or_type) ::co::__go_option<opt_dispatch>{thread_id_or_type}-
-#define co_affinity() ::co::__go_option<opt_affinity>{true}-
+#define co_stack(size) ::co::__go_option<::co::opt_stack_size>{size}-
+#define co_dispatch(thread_id_or_type) ::co::__go_option<::co::opt_dispatch>{thread_id_or_type}-
+#define co_affinity() ::co::__go_option<::co::opt_affinity>{true}-
 
 #define go_stack(size) go co_stack(size)
 #define go_dispatch(thread_id_or_type) go co_dispatch(thread_id_or_type)
@@ -59,7 +59,7 @@ using ::co::co_timer_block_cancel;
 // co_defer
 #define co_defer auto LIBGO_PP_CAT(__defer_, __COUNTER__) = ::co::__defer_op()-
 #define co_last_defer() LIBGO_PP_CAT(__defer_, LIBGO_PP_DEC(__COUNTER__))
-#define co_defer_scope(callback) co_defer [&]{ callback }
+#define co_defer_scope co_defer [&]
 
 // co_listener
 using ::co::co_listener;
