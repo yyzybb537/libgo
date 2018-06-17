@@ -1,5 +1,5 @@
-#include <libgo/error.h>
-#include <libgo/scheduler.h>
+#include "error.h"
+#include "config.h"
 
 namespace co
 {

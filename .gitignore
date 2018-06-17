@@ -3,7 +3,7 @@
 *.a
 *.so
 third_party/gtest/*
-libgo/cmake_config.h
+libgo/common/cmake_config.h
 vs_proj/vs201*
 tools/libgo.conf
 

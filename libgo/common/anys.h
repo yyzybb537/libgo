@@ -1,5 +1,6 @@
 #pragma once
 #include "config.h"
+#include "spinlock.h"
 #include <string>
 #include <vector>
 #include <type_traits>
@@ -31,15 +32,18 @@ public:
     // 注册一个存储到Task中的kv, 返回取数据用的index
     // 注册行为必须在创建第一个Task之前全部完成, 建议在全局对象初始化阶段完成
     template <typename T>
-    static std::size_t Register(std::string keyName)
+    static std::size_t Register()
     {
-        return Register(keyName, &DefaultConstructorDestructor<T>::Constructor, &DefaultConstructorDestructor<T>::Destructor);
+        return Register<T>(&DefaultConstructorDestructor<T>::Constructor, &DefaultConstructorDestructor<T>::Destructor);
     }
 
     template <typename T>
-    static std::size_t Register(std::string keyName, Constructor constructor, Destructor destructor)
+    static std::size_t Register(Constructor constructor, Destructor destructor)
     {
         std::unique_lock<std::mutex> lock(GetMutex());
+        std::unique_lock<LFLock> inited(GetInitGuard(), std::defer_lock);
+        if (!inited.try_lock())
+            throw std::logic_error("Anys::Register mustbe at front of new first instance.");
 
         KeyInfo info;
         info.align = std::alignment_of<T>::value;
@@ -47,7 +51,6 @@ public:
         info.offset = StorageLen();
         info.constructor = constructor;
         info.destructor = destructor;
-        info.keyName = keyName;
         GetKeys().push_back(info);
         StorageLen() += info.align + info.size - 1;
         Size()++;
@@ -72,14 +75,12 @@ private:
         std::size_t offset;
         Constructor constructor;
         Destructor destructor;
-        std::string keyName;
     };
     inline static std::vector<KeyInfo> & GetKeys()
     {
         static std::vector<Anys::KeyInfo> obj;
         return obj;
     }
-
     inline static std::mutex & GetMutex()
     {
         static std::mutex obj;
@@ -95,6 +96,11 @@ private:
         static std::size_t obj = 0;
         return obj;
     }
+    inline static LFLock & GetInitGuard()
+    {
+        static LFLock obj;
+        return obj;
+    }
 
 private:
     // TODO: 优化:紧凑内存布局, 提高利用率
@@ -106,6 +112,7 @@ public:
     Anys()
         : hold_(nullptr), offsets_(nullptr), storage_(nullptr)
     {
+        GetInitGuard().try_lock();
         if (!Size()) return ;
         hold_ = (char*)malloc(sizeof(std::size_t) * (Size() + 1) + StorageLen());
         storage_ = hold_ + sizeof(std::size_t) * (Size() + 1);

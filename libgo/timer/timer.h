@@ -1,6 +1,6 @@
 #pragma once
-#include <libgo/config.h>
-#include <libgo/spinlock.h>
+#include "../common/config.h"
+#include "../common/spinlock.h"
 
 namespace co
 {

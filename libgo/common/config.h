@@ -1,5 +1,5 @@
 #pragma once
-#include <libgo/cmake_config.h>
+#include "cmake_config.h"
 #include <unordered_map>
 #include <list>
 #include <sys/epoll.h>
@@ -29,10 +29,13 @@
 #endif
 
 #if defined(__GNUC__) && (__GNUC__ > 3 ||(__GNUC__ == 3 && __GNUC_MINOR__ >= 1))
-# define ALWAYS_INLINE __attribute__ ((always_inline))
+# define ALWAYS_INLINE __attribute__ ((always_inline)) inline 
 #else
 # define ALWAYS_INLINE inline
 #endif
+
+#define LIKELY(x) __builtin_expect(!!(x), 1)
+#define UNLIKELY(x) __builtin_expect(!!(x), 0)
 
 #if __linux__
 #include <unistd.h>
@@ -119,6 +122,7 @@ struct CoroutineOptions
     // stack_size建议设置不超过1MB
     // Linux系统下, 设置2MB的stack_size会导致提交内存的使用量比1MB的stack_size多10倍.
     uint32_t stack_size = 1 * 1024 * 1024; 
+    /************************************************************/
 
     // 没有协程需要调度时, Run最多休眠的毫秒数(开发高实时性系统可以考虑调低这个值)
     uint8_t max_sleep_ms = 20;
@@ -154,8 +158,8 @@ struct CoroutineOptions
     }
 };
 
-extern uint32_t codebug_GetCurrentProcessID();
-extern uint32_t codebug_GetCurrentThreadID();
+extern int codebug_GetCurrentProcessID();
+extern int codebug_GetCurrentThreadID();
 extern std::string codebug_GetCurrentTime();
 extern const char* BaseFile(const char* file);
 
@@ -163,8 +167,8 @@ extern const char* BaseFile(const char* file);
 
 #define DebugPrint(type, fmt, ...) \
     do { \
-        if (::co::CoroutineOptions::getInstance().debug & (type)) { \
-            fprintf(::co::CoroutineOptions::getInstance().debug_output, "[%s][%05u][%02u]%s:%d:(%s)\t " fmt "\n", \
+        if (UNLIKELY(::co::CoroutineOptions::getInstance().debug & (type))) { \
+            fprintf(::co::CoroutineOptions::getInstance().debug_output, "[%s][%05d][%04d]%s:%d:(%s)\t " fmt "\n", \
                     ::co::codebug_GetCurrentTime().c_str(),\
                     ::co::codebug_GetCurrentProcessID(), ::co::codebug_GetCurrentThreadID(), \
                     ::co::BaseFile(__FILE__), __LINE__, __FUNCTION__, ##__VA_ARGS__); \

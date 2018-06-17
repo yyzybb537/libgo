@@ -6,5 +6,4 @@ include_directories("${PROJECT_SOURCE_DIR}/../linux")
 
 add_library(libgo_main libgo_main.cpp)
 
-set(CMAKE_INSTALL_PREFIX "/usr/local")
 install(TARGETS libgo_main LIBRARY DESTINATION "lib" ARCHIVE DESTINATION "lib")

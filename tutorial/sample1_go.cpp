@@ -18,6 +18,8 @@ struct A {
 
 int main()
 {
+//    co_sched.GetOptions().debug = co::dbg_scheduler | co::dbg_switch;    // 关闭worksteal负载均衡算法
+
     // 使用关键字go创建协程, go后面可以使用:
     //     1.void(*)()函数指针, 比如:foo.
     //     2.也可以使用无参数的lambda, std::bind对象, function对象, 
@@ -47,7 +49,7 @@ int main()
     //   3.RunUntilNoTask 循环执行Run, 直至协程数量为零.
     //
     // 当仅使用一个线程进行协程调度时, 协程地执行会严格地遵循其创建顺序.
-    co_sched.RunUntilNoTask();
+//    co_sched.RunUntilNoTask();
 
     // 多线程模式下, libgo还支持指定协程初始运行于哪个线程
     // 使用go_dispatch关键字来创建协程, 可以分派协程执行的线程.
@@ -70,11 +72,12 @@ int main()
     };
 
     // 启动额外两个线程和主线程一起调度
-    boost::thread_group tg;
-    for (int i = 0; i < 2; ++i)
-        tg.create_thread([]{ co_sched.RunUntilNoTask(); });
-    co_sched.RunUntilNoTask();
-    tg.join_all();
+    co_sched.Start();
+//    boost::thread_group tg;
+//    for (int i = 0; i < 2; ++i)
+//        tg.create_thread([]{ co_sched.RunUntilNoTask(); });
+//    co_sched.RunUntilNoTask();
+//    tg.join_all();
 
     // 默认配置下, 多线程调度时会采用worksteal算法做负载均衡, dispatch指定的协程也可能被其他
     // 线程偷走, 如果不希望被偷走, 可以关闭worksteal算法.
