@@ -1,4 +1,5 @@
 #pragma once
+#include "config.h"
 #include <string>
 #include <vector>
 #include <type_traits>
@@ -54,19 +55,12 @@ public:
     }
 
     template <typename T>
-    T& get(std::size_t index)
+    ALWAYS_INLINE T& get(std::size_t index)
     {
-        if (index >= Size()) {
+        if (index >= *(std::size_t*)hold_)
             throw std::logic_error("Anys::get overflow");
-        }
 
-        auto const& keyInfo = GetKeys()[index];
-        std::size_t offset = keyInfo.offset;
-        std::size_t space = keyInfo.align + keyInfo.size - 1;
-        void *p = storage_ + offset;
-        if (!std::align(keyInfo.align, keyInfo.size, p, space))
-            throw std::logic_error("Anys::get call std::align error");
-
+        char *p = storage_ + offsets_[index];
         return *reinterpret_cast<T*>(p);
     }
 
@@ -104,22 +98,40 @@ private:
 
 private:
     // TODO: 优化:紧凑内存布局, 提高利用率
+    char* hold_;
+    std::size_t* offsets_;
     char* storage_;
 
 public:
     Anys()
-        : storage_(nullptr)
+        : hold_(nullptr), offsets_(nullptr), storage_(nullptr)
     {
         if (!Size()) return ;
-        storage_ = (char*)malloc(StorageLen());
+        hold_ = (char*)malloc(sizeof(std::size_t) * (Size() + 1) + StorageLen());
+        storage_ = hold_ + sizeof(std::size_t) * (Size() + 1);
+        *(std::size_t*)hold_ = Size();
+        offsets_ = (std::size_t*)(hold_ + sizeof(std::size_t));
+        for (std::size_t i = 0; i < Size(); i++) {
+            auto const& keyInfo = GetKeys()[i];
+            std::size_t offset = keyInfo.offset;
+            std::size_t space = keyInfo.align + keyInfo.size - 1;
+            char *base = storage_ + offset;
+            void *ptr = base;
+            if (!std::align(keyInfo.align, keyInfo.size, ptr, space))
+                throw std::logic_error("Anys::get call std::align error");
+            offset += (char*)ptr - base;
+            offsets_[i] = offset;
+        }
         Init();
     }
 
     ~Anys()
     {
         Deinit();
-        if (storage_) {
-            free(storage_);
+        if (hold_) {
+            free(hold_);
+            hold_ = nullptr;
+            offsets_ = nullptr;
             storage_ = nullptr;
         }
     }
@@ -139,11 +151,7 @@ public:
             if (!keyInfo.constructor)
                 continue;
 
-            std::size_t offset = keyInfo.offset;
-            std::size_t space = keyInfo.align + keyInfo.size - 1;
-            void *p = storage_ + offset;
-            if (!std::align(keyInfo.align, keyInfo.size, p, space))
-                throw std::logic_error("Anys::get call std::align error");
+            char *p = storage_ + offsets_[i];
             keyInfo.constructor(p);
         }
     }
@@ -157,11 +165,7 @@ public:
             if (!keyInfo.destructor)
                 continue;
 
-            std::size_t offset = keyInfo.offset;
-            std::size_t space = keyInfo.align + keyInfo.size - 1;
-            void *p = storage_ + offset;
-            if (!std::align(keyInfo.align, keyInfo.size, p, space))
-                throw std::logic_error("Anys::get call std::align error");
+            char *p = storage_ + offsets_[i];
             keyInfo.destructor(p);
         }
     }
