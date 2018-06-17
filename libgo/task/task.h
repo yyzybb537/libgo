@@ -1,12 +1,13 @@
 #pragma once
-#include <libgo/config.h>
-#include <libgo/context.h>
-#include <libgo/ts_queue.h>
-#include <libgo/timer.h>
+#include "../common/config.h"
+#include "../context/context.h"
+#include "../common/ts_queue.h"
+#include "../timer/timer.h"
 #include <string.h>
-#include <libgo/util.h>
-#include <libgo/co_local_storage_fwd.h>
+#include "../common/util.h"
 #include "fd_context.h"
+#include "../cls/co_local_storage_fwd.h"
+#include "../common/anys.h"
 
 namespace co
 {
@@ -26,12 +27,15 @@ std::string GetTaskStateName(TaskState state);
 
 typedef std::function<void()> TaskF;
 
-class BlockObject;
-class Processer;
+struct TaskGroupKey {};
+typedef Anys<TaskGroupKey> TaskAnys;
 
 struct Task
     : public TSQueueHook, public RefObject
 {
+    TaskF fn_;
+    TaskAnys anys_;
+
     uint64_t id_;
     TaskState state_ = TaskState::init;
     uint64_t yield_count_ = 0;
@@ -39,7 +43,6 @@ struct Task
     bool is_affinity_ = false;  // 协程亲缘性
     Context ctx_;
     std::string debug_info_;
-    TaskF fn_;
     SourceLocation location_;
     std::exception_ptr eptr_;           // 保存exception的指针
 

@@ -1,5 +1,3 @@
-#include <boost/context/all.hpp>
-
 namespace co
 {
     struct ContextScopedGuard {};
