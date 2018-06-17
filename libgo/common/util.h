@@ -1,5 +1,5 @@
 #pragma once
-#include <libgo/config.h>
+#include "config.h"
 
 namespace co
 {
@@ -42,8 +42,7 @@ struct RefObject
 
 // 裸指针 -> shared_ptr
 template <typename T>
-typename std::enable_if<std::is_base_of<RefObject, T>::value,
-    std::shared_ptr<T>>::type
+typename std::enable_if<std::is_base_of<RefObject, T>::value, std::shared_ptr<T>>::type
 SharedFromThis(T * ptr)
 {
     ptr->IncrementRef();
@@ -52,8 +51,7 @@ SharedFromThis(T * ptr)
 
 // make_shared
 template <typename T, typename ... Args>
-typename std::enable_if<std::is_base_of<RefObject, T>::value,
-    std::shared_ptr<T>>::type
+typename std::enable_if<std::is_base_of<RefObject, T>::value, std::shared_ptr<T>>::type
 MakeShared(Args && ... args)
 {
     T * ptr = new T(std::forward<Args>(args)...);

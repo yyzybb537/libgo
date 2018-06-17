@@ -1,52 +1,70 @@
 #pragma once
-#include <libgo/config.h>
-#include <libgo/task.h>
-#include <libgo/ts_queue.h>
+#include "../common/config.h"
+#include "../task/task.h"
+#include "../common/ts_queue.h"
+#include <condition_variable>
+#include <mutex>
+#include "../timer/timer.h"
 
 namespace co {
 
-struct ThreadLocalInfo;
-
 // 协程执行器
-//   管理一批协程的共享栈和调度, 非线程安全.
+// 对应一个线程, 负责本线程的协程调度, 非线程安全.
 class Processer
     : public TSQueueHook
 {
 private:
-    typedef TSQueue<Task> TaskList;
+    // 线程ID
+    int id_;
 
-    enum class RunnableListType {
-        normal,      // 普通的runnable队列, 允许被steal
-        io_trigger,  // io触发后变回runnable状态的队列, 由于还有些epoll状态需要清理, 因此不允许被steal
-        pri,         // 亲缘性协程队, 私有队列, 不能steal
-        count,
-    };
+    // 当前正在运行的协程
+    Task* runningTask_ = nullptr;
 
-    Task* current_task_ = nullptr;
-    TaskList runnable_list_[(int)RunnableListType::count];
-    uint32_t id_;
-    static atomic_t<uint32_t> s_id_;
+    // 当前正在运行的协程本次调度开始的时间戳(Dispatch线程专用)
+    uint64_t runningTick_ = 0;
 
-    // 允许WorkSteal; io_block状态由于切换回来后要清理本线程的epoll上的监听信息，
-    // 因此io_block状态回转到runnable的协程不可以切换到其他线程;
-    TaskList io_runnable_list_;
+    // 协程队列
+    TSQueue<Task> runnableQueue_;
+    TSQueue<Task, false> waitQueue_;
+    TSQueue<Task, false> gcQueue_;
+
+    // 等待的条件变量
+    std::mutex cvMutex_;
+    std::condition_variable cv_;
+    std::atomic_bool waiting_{false};
+
+    static int s_check_;
 
 public:
-    explicit Processer();
+    explicit Processer(int id);
+
+    ALWAYS_INLINE int Id() { return id_; }
 
     void AddTaskRunnable(Task *tk);
 
-    uint32_t Run(uint32_t &done_count);
+    void Process();
 
     void CoYield();
 
     uint32_t GetTaskCount();
 
+    static Processer* & GetCurrentProcesser();
+
     Task* GetCurrentTask();
 
-    std::size_t StealHalf(Processer & other);
+    void NotifyCondition();
 
-    std::size_t size();
+    std::size_t RunnableSize();
+
+    ALWAYS_INLINE bool IsWaiting() { return waiting_.load(std::memory_order_acquire); }
+
+private:
+    void WaitCondition();
+
+    void GC();
+
+    // TODO
+    ALWAYS_INLINE void UpdateTick() {}
 };
 
 } //namespace co

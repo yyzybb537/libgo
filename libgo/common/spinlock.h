@@ -1,5 +1,5 @@
 #pragma once
-#include <libgo/config.h>
+#include "config.h"
 
 namespace co
 {

@@ -1,5 +1,5 @@
-#include <libgo/config.h>
-#include <libgo/context.h>
+#include "config.h"
+#include "../context/context.h"
 #include <string.h>
 
 namespace co

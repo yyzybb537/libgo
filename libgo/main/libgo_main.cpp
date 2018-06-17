@@ -7,14 +7,15 @@ __attribute__((weak))
 #endif
 int main(int argc, char **argv)
 {
-    co_chan<int> c(1);
+//    co_chan<int> c(1);
 
     go [=]{
-        c << __coroutine_main_function(argc, argv);
+//        c << 
+            __coroutine_main_function(argc, argv);
     };
 
-    co_sched.RunUntilNoTask();
-    int ret = 1;
-    c.TryPop(ret);
-    return ret;
+    co_sched.Start();
+//    int ret = 1;
+//    c.TryPop(ret);
+//    return ret;
 }

@@ -1,10 +1,12 @@
-#include <libgo/scheduler.h>
-#include <libgo/error.h>
+#include "scheduler.h"
+#include "../common/error.h"
 #include <stdio.h>
 #include <system_error>
 #include <unistd.h>
-#include <libgo/thread_pool.h>
 #include <time.h>
+#include "ref.h"
+#include <thread>
+#include <sys/sysinfo.h>
 #if __linux__
 #include <sys/time.h>
 #endif
@@ -16,55 +18,52 @@ namespace co
 {
 
 extern void coroutine_hook_init();
+
+inline atomic_t<unsigned long long> & GetTaskIdFactory()
+{
+    static atomic_t<unsigned long long> factory;
+    return factory;
+}
+
 Scheduler::Scheduler()
 {
-    thread_pool_ = nullptr;
-    coroutine_hook_init();
+//    coroutine_hook_init();
+
+    // register TaskAnys.
+    TaskRefInit(Affinity);
+    TaskRefInit(YieldCount);
+    TaskRefInit(Location);
+    TaskRefInit(DebugInfo);
+
+    processers_.push_back(new Processer(0));
 }
 
 Scheduler::~Scheduler()
 {
-    if (thread_pool_)
-        delete thread_pool_;
-}
-
-ThreadLocalInfo& Scheduler::GetLocalInfo()
-{
-    static thread_local ThreadLocalInfo *info = NULL;
-    if (!info)
-        info = new ThreadLocalInfo();
-
-    return *info;
 }
 
 Processer* Scheduler::GetProcesser(std::size_t index)
 {
-    if (run_proc_list_.size() > index)
-        return run_proc_list_[index];
+    if (processers_.size() > index)
+        return processers_[index];
 
-    std::unique_lock<LFLock> lock(proc_init_lock_);
-    if (run_proc_list_.size() > index)
-        return run_proc_list_[index];
-
-    while (run_proc_list_.size() <= index)
-        run_proc_list_.push_back(new Processer);
-
-    return run_proc_list_[index];
+    return processers_[0];
 }
 
-void Scheduler::CreateTask(TaskF const& fn, std::size_t stack_size,
-        const char* file, int lineno, int dispatch, bool affinity)
+void Scheduler::CreateTask(TaskF const& fn, TaskOpt const& opt)
 {
-    Task* tk = new Task(fn, stack_size ? stack_size : GetOptions().stack_size, file, lineno);
+    Task* tk = new Task(fn, opt.stack_size_ ? opt.stack_size_ : GetOptions().stack_size);
+    tk->id_ = ++GetTaskIdFactory();
+    TaskRefAffinity(tk) = opt.affinity_;
+    TaskRefLocation(tk).Init(opt.file_, opt.lineno_);
     ++task_count_;
-    tk->is_affinity_ = affinity;
 
-    DebugPrint(dbg_task, "task(%s) created.", tk->DebugInfo());
-    if (task_listener) {
-        task_listener->onCreated(tk->id_);
+    DebugPrint(dbg_task, "task(%s) created.", TaskDebugInfo(tk));
+    if (GetTaskListener()) {
+        GetTaskListener()->onCreated(tk->id_);
     }
 
-    AddTaskRunnable(tk, dispatch);
+    AddTaskRunnable(tk, opt.dispatch_);
 }
 
 bool Scheduler::IsCoroutine()
@@ -79,167 +78,141 @@ bool Scheduler::IsEmpty()
 
 void Scheduler::CoYield()
 {
-    ThreadLocalInfo& info = GetLocalInfo();
-    if (info.proc)
-        info.proc->CoYield();
+    auto proc = Processer::GetCurrentProcesser();
+    if (proc)
+        proc->CoYield();
 }
 
-uint32_t Scheduler::Run(int flags)
+void Scheduler::Start(int minThreadNumber, int maxThreadNumber)
 {
-    ThreadLocalInfo &info = GetLocalInfo();
-    if (info.thread_id < 0) {
-        info.thread_id = thread_id_++;
-        info.proc = GetProcesser(info.thread_id);
+    if (!started_.try_lock())
+        throw std::logic_error("libgo repeated call Scheduler::Start");
+
+    if (minThreadNumber < 1)
+       minThreadNumber = get_nprocs();
+
+    if (maxThreadNumber == 0 || maxThreadNumber < minThreadNumber)
+        maxThreadNumber = minThreadNumber;
+
+    minThreadNumber_ = minThreadNumber;
+    maxThreadNumber_ = maxThreadNumber;
+
+#ifndef LIBGO_SINGLE_THREAD
+    for (int i = 0; i < minThreadNumber_ - 1; i++) {
+        auto p = new Processer(i+1);
+        std::thread t([p]{
+                p.Process();
+            });
+        p.BindThread(t);
+        this->processers_.push_back(p);
     }
 
-#if LIBGO_SINGLE_THREAD
-    if (info.thread_id > 0) {
-        usleep(20 * 1000);
-        return 0;
+    if (maxThreadNumber_ > 1) {
+        std::thread t([this]{
+                this->DispatcherThread();
+                });
+        t.detach();
     }
 #endif
 
-    if (IsCoroutine()) return 0;
-
-    uint32_t run_task_count = 0;
-    if (flags & erf_do_coroutines)
-        run_task_count = DoRunnable(GetOptions().enable_work_steal);
-
-    // timer
-    long long timer_next_ms = GetOptions().max_sleep_ms;
-    uint32_t tm_count = 0;
-    if (flags & erf_do_timer)
-        tm_count = DoTimer(timer_next_ms);
-
-    // sleep wait.
-    long long sleep_next_ms = GetOptions().max_sleep_ms;
-    uint32_t sl_count = 0;
-    if (flags & erf_do_sleeper)
-        sl_count = DoSleep(sleep_next_ms);
-
-    // 下一次timer或sleeper触发的时间毫秒数, 休眠或阻塞等待IO事件触发的时间不能超过这个值
-    long long next_ms = (std::min)(timer_next_ms, sleep_next_ms);
-
-    // epoll
-    int ep_count = -1;
-    if (flags & erf_do_eventloop) {
-        int wait_milliseconds = 0;
-        if (run_task_count || tm_count || sl_count)
-            wait_milliseconds = 0;
-        else {
-            wait_milliseconds = (std::min<long long>)(next_ms, GetOptions().max_sleep_ms);
-            DebugPrint(dbg_scheduler_sleep, "wait_milliseconds %d ms, next_ms=%lld", wait_milliseconds, next_ms);
-        }
-        ep_count = DoEpoll(wait_milliseconds);
-    }
-
-    if (flags & erf_idle_cpu) {
-        if (!run_task_count && ep_count <= 0 && !tm_count && !sl_count) {
-            if (ep_count == -1) {
-                // 此线程没有执行epoll_wait, 使用sleep降低空转时的cpu使用率
-                ++info.sleep_ms;
-                info.sleep_ms = (std::min)(info.sleep_ms, GetOptions().max_sleep_ms);
-                info.sleep_ms = (std::min<long long>)(info.sleep_ms, next_ms);
-                DebugPrint(dbg_scheduler_sleep, "sleep %d ms, next_ms=%lld", (int)info.sleep_ms, next_ms);
-                usleep(info.sleep_ms * 1000);
-            }
-        } else {
-            info.sleep_ms = 1;
-        }
-    }
-
-#if WITH_SAFE_SIGNAL
-    if (flags & erf_signal) {
-        HookSignal::getInstance().Run();
-    }
-#endif
-
-    return run_task_count;
+    GetProcesser(0)->Process();
 }
 
-void Scheduler::RunUntilNoTask(uint32_t loop_task_count)
+void Scheduler::DispatcherThread()
 {
-    if (IsCoroutine()) return ;
-    do { 
-        Run();
-    } while (task_count_ > loop_task_count);
-}
+    for (;;) {
+        // TODO: 用condition_variable降低cpu使用率
+        usleep(100);
 
-// Run函数的一部分, 处理runnable状态的协程
-uint32_t Scheduler::DoRunnable(bool allow_steal)
-{
-    ThreadLocalInfo& info = GetLocalInfo();
-
-    uint32_t do_count = 0;
-    uint32_t done_count = 0;
-    try {
-        do_count += info.proc->Run(done_count);
-    } catch (...) {
-        task_count_ -= done_count;
-        throw ;
-    }
-    task_count_ -= done_count;
-    DebugPrint(dbg_scheduler, "run %d coroutines, remain=%d\n",
-            (int)done_count, (int)task_count_);
-
-    // Steal-Work
-    if (!do_count && !done_count && allow_steal) {
-        // 没有任务了, 随机选一个线程偷取
-        std::unique_lock<LFLock> lock(proc_init_lock_);
-        std::size_t thread_count = run_proc_list_.size();
-        lock.unlock();
-
-        if (thread_count > 1) {
-            int r = rand() % thread_count;
-            if (r == info.thread_id)    // 不能选到当前线程
-                r = info.thread_id > 0 ? (info.thread_id - 1) : (info.thread_id + 1);
-            std::size_t steal_count = run_proc_list_[r]->StealHalf(*info.proc);
-            if (steal_count) {
-                return DoRunnable(false);
+        // wakeup waiting process
+        for (std::size_t i = 0; i < processers_.size(); i++) {
+            auto p = processers_[i];
+            if (p->IsWaiting()) {
+                if (p->RunnableSize() > 0)
+                    p->NotifyCondition();
+                else {
+                    // 空闲线程
+                }
             }
         }
+
     }
-
-    return do_count;
 }
 
-// Run函数的一部分, 处理epoll相关
-int Scheduler::DoEpoll(int wait_milliseconds)
-{
-    return io_wait_.WaitLoop(wait_milliseconds);
-}
-
-uint32_t Scheduler::DoSleep(long long &next_ms)
-{
-    return sleep_wait_.WaitLoop(next_ms);
-}
-
-// Run函数的一部分, 处理定时器
-uint32_t Scheduler::DoTimer(long long &next_ms)
-{
-    uint32_t c = 0;
-    while (!GetOptions().timer_handle_every_cycle || c < GetOptions().timer_handle_every_cycle)
-    {
-        std::list<CoTimerPtr> timers;
-        next_ms = timer_mgr_.GetExpired(timers, 128);
-        if (timers.empty()) break;
-        c += timers.size();
-        for (auto &sp_timer : timers)
-        {
-            DebugPrint(dbg_timer, "enter timer callback %llu", (long long unsigned)sp_timer->GetId());
-            (*sp_timer)();
-            DebugPrint(dbg_timer, "leave timer callback %llu", (long long unsigned)sp_timer->GetId());
-        }
-    }
-
-    return c;
-}
-
-void Scheduler::RunLoop()
-{
-    if (IsCoroutine()) return ;
-    for (;;) Run();
-}
+//void Scheduler::Process()
+//{
+//    ThreadLocalInfo &info = GetLocalInfo();
+//    if (info.thread_id < 0) {
+//        info.thread_id = thread_id_++;
+//        info.proc = GetProcesser(info.thread_id);
+//
+//        if (info.thread_id > 0) {
+//            // 超过一个调度线程
+//        }
+//    }
+//
+//    if (IsCoroutine()) return 0;
+//
+//#if LIBGO_SINGLE_THREAD
+//    if (info.thread_id > 0) {
+//        usleep(20 * 1000);
+//        return 0;
+//    }
+//#endif
+//
+//    DoRunnable();
+//
+//    // timer
+//    long long timer_next_ms = GetOptions().max_sleep_ms;
+//    uint32_t tm_count = 0;
+//    if (flags & erf_do_timer)
+//        tm_count = DoTimer(timer_next_ms);
+//
+//    // sleep wait.
+//    long long sleep_next_ms = GetOptions().max_sleep_ms;
+//    uint32_t sl_count = 0;
+//    if (flags & erf_do_sleeper)
+//        sl_count = DoSleep(sleep_next_ms);
+//
+//    // 下一次timer或sleeper触发的时间毫秒数, 休眠或阻塞等待IO事件触发的时间不能超过这个值
+//    long long next_ms = (std::min)(timer_next_ms, sleep_next_ms);
+//
+//    // epoll
+//    int ep_count = -1;
+//    if (flags & erf_do_eventloop) {
+//        int wait_milliseconds = 0;
+//        if (run_task_count || tm_count || sl_count)
+//            wait_milliseconds = 0;
+//        else {
+//            wait_milliseconds = (std::min<long long>)(next_ms, GetOptions().max_sleep_ms);
+//            DebugPrint(dbg_scheduler_sleep, "wait_milliseconds %d ms, next_ms=%lld", wait_milliseconds, next_ms);
+//        }
+//        ep_count = DoEpoll(wait_milliseconds);
+//    }
+//
+//    if (flags & erf_idle_cpu) {
+//        if (!run_task_count && ep_count <= 0 && !tm_count && !sl_count) {
+//            if (ep_count == -1) {
+//                // 此线程没有执行epoll_wait, 使用sleep降低空转时的cpu使用率
+//                ++info.sleep_ms;
+//                info.sleep_ms = (std::min)(info.sleep_ms, GetOptions().max_sleep_ms);
+//                info.sleep_ms = (std::min<long long>)(info.sleep_ms, next_ms);
+//                DebugPrint(dbg_scheduler_sleep, "sleep %d ms, next_ms=%lld", (int)info.sleep_ms, next_ms);
+//                usleep(info.sleep_ms * 1000);
+//            }
+//        } else {
+//            info.sleep_ms = 1;
+//        }
+//    }
+//
+//#if WITH_SAFE_SIGNAL
+//    if (flags & erf_signal) {
+//        HookSignal::getInstance().Run();
+//    }
+//#endif
+//
+//    return run_task_count;
+//}
 
 void Scheduler::AddTaskRunnable(Task* tk, int dispatch)
 {
@@ -253,23 +226,23 @@ void Scheduler::AddTaskRunnable(Task* tk, int dispatch)
         switch (dispatch) {
             case egod_random:
                 {
-                    std::size_t n = std::max<std::size_t>(run_proc_list_.size(), 1);
+                    std::size_t n = std::max<std::size_t>(processers_.size(), 1);
                     GetProcesser(rand() % n)->AddTaskRunnable(tk);
                 }
                 return ;
 
             case egod_robin:
                 {
-                    std::size_t n = std::max<std::size_t>(run_proc_list_.size(), 1);
+                    std::size_t n = std::max<std::size_t>(processers_.size(), 1);
                     GetProcesser(dispatch_robin_index_++ % n)->AddTaskRunnable(tk);
                 }
                 return ;
 
             case egod_local_thread:
                 {
-                    ThreadLocalInfo &info = GetLocalInfo();
-                    if (info.proc)
-                        info.proc->AddTaskRunnable(tk);
+                    auto proc = Processer::GetCurrentProcesser();
+                    if (proc)
+                        proc->AddTaskRunnable(tk);
                     else
                         GetProcesser(0)->AddTaskRunnable(tk);
                 }
@@ -295,14 +268,14 @@ uint64_t Scheduler::GetCurrentTaskID()
 uint64_t Scheduler::GetCurrentTaskYieldCount()
 {
     Task* tk = GetCurrentTask();
-    return tk ? tk->yield_count_ : 0;
+    return tk ? TaskRefYieldCount(tk) : 0;
 }
 
 void Scheduler::SetCurrentTaskDebugInfo(std::string const& info)
 {
     Task* tk = GetCurrentTask();
     if (!tk) return ;
-    tk->SetDebugInfo(info);
+    TaskRefDebugInfo(tk) = info;
 }
 
 const char* Scheduler::GetCurrentTaskDebugInfo()
@@ -311,12 +284,13 @@ const char* Scheduler::GetCurrentTaskDebugInfo()
     return tk ? tk->DebugInfo() : "";
 }
 
-uint32_t Scheduler::GetCurrentThreadID()
+int Scheduler::GetCurrentThreadID()
 {
-    return GetLocalInfo().thread_id;
+    auto proc = Processer::GetCurrentProcesser();
+    return proc ? proc->Id() : -1;
 }
 
-uint32_t Scheduler::GetCurrentProcessID()
+int Scheduler::GetCurrentProcessID()
 {
 #if __linux__
     return getpid();
@@ -327,51 +301,43 @@ uint32_t Scheduler::GetCurrentProcessID()
 
 Task* Scheduler::GetCurrentTask()
 {
-    ThreadLocalInfo& info = GetLocalInfo();
-    return info.proc ? info.proc->GetCurrentTask() : nullptr;
+    auto proc = Processer::GetCurrentProcesser();
+    return proc ? proc->GetCurrentTask() : nullptr;
 }
 
-void Scheduler::SleepSwitch(int timeout_ms)
-{
-    if (timeout_ms <= 0)
-        CoYield();
-    else
-        sleep_wait_.CoSwitch(timeout_ms);
-}
+//bool Scheduler::CancelTimer(TimerId timer_id)
+//{
+//    bool ok = timer_mgr_.Cancel(timer_id);
+//    DebugPrint(dbg_timer, "cancel timer %llu %s", (long long unsigned)timer_id->GetId(),
+//            ok ? "success" : "failed");
+//    return ok;
+//}
+//
+//bool Scheduler::BlockCancelTimer(TimerId timer_id)
+//{
+//    bool ok = timer_mgr_.BlockCancel(timer_id);
+//    DebugPrint(dbg_timer, "block_cancel timer %llu %s", (long long unsigned)timer_id->GetId(),
+//            ok ? "success" : "failed");
+//    return ok;
+//}
+//
+//ThreadPool& Scheduler::GetThreadPool()
+//{
+//    if (!thread_pool_) {
+//        std::unique_lock<LFLock> lock(thread_pool_init_);
+//        if (!thread_pool_) {
+//            thread_pool_ = new ThreadPool;
+//        }
+//    }
+//
+//    return *thread_pool_;
+//}
 
-bool Scheduler::CancelTimer(TimerId timer_id)
-{
-    bool ok = timer_mgr_.Cancel(timer_id);
-    DebugPrint(dbg_timer, "cancel timer %llu %s", (long long unsigned)timer_id->GetId(),
-            ok ? "success" : "failed");
-    return ok;
-}
-
-bool Scheduler::BlockCancelTimer(TimerId timer_id)
-{
-    bool ok = timer_mgr_.BlockCancel(timer_id);
-    DebugPrint(dbg_timer, "block_cancel timer %llu %s", (long long unsigned)timer_id->GetId(),
-            ok ? "success" : "failed");
-    return ok;
-}
-
-ThreadPool& Scheduler::GetThreadPool()
-{
-    if (!thread_pool_) {
-        std::unique_lock<LFLock> lock(thread_pool_init_);
-        if (!thread_pool_) {
-            thread_pool_ = new ThreadPool;
-        }
-    }
-
-    return *thread_pool_;
-}
-
-uint32_t codebug_GetCurrentProcessID()
+int codebug_GetCurrentProcessID()
 {
     return g_Scheduler.GetCurrentProcessID();
 }
-uint32_t codebug_GetCurrentThreadID()
+int codebug_GetCurrentThreadID()
 {
     return g_Scheduler.GetCurrentThreadID();
 }

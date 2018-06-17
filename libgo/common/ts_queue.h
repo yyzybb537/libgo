@@ -1,7 +1,7 @@
 #pragma once
-#include <libgo/config.h>
-#include <libgo/util.h>
-#include <libgo/spinlock.h>
+#include "config.h"
+#include "util.h"
+#include "spinlock.h"
 
 namespace co
 {

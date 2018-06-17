@@ -12,8 +12,6 @@ message("------------ Options -------------")
 message("  CMAKE_BUILD_TYPE: ${CMAKE_BUILD_TYPE}")
 message("  CMAKE_COMMAND: ${CMAKE_COMMAND}")
 
-aux_source_directory(${PROJECT_SOURCE_DIR}/libgo CO_SRC_LIST)
-
 message ("  BOOST_ROOT: ${BOOST_ROOT}")
 option(DEPEND_BOOST "link boost" OFF)
 if (ENABLE_BOOST_CONTEXT)
@@ -80,7 +78,7 @@ endif()
 
 message ("  cmake_toolchain_file: ${CMAKE_TOOLCHAIN_FILE}")
 
-configure_file(${PROJECT_SOURCE_DIR}/libgo/cmake_config.h.in ${PROJECT_SOURCE_DIR}/libgo/cmake_config.h)
+configure_file(${PROJECT_SOURCE_DIR}/libgo/common/cmake_config.h.in ${PROJECT_SOURCE_DIR}/libgo/common/cmake_config.h)
 message("----------------------------------")
 
 message("-------------- Env ---------------")
@@ -88,41 +86,48 @@ message("  CMAKE_SOURCE_DIR: ${CMAKE_SOURCE_DIR}")
 message("  CMAKE_BINARY_DIR: ${CMAKE_BINARY_DIR}")
 message("----------------------------------")
 
+include_directories(${PROJECT_SOURCE_DIR})
+aux_source_directory(${PROJECT_SOURCE_DIR}/libgo CO_SRC_LIST)
+aux_source_directory(${PROJECT_SOURCE_DIR}/libgo/common CO_SRC_LIST)
+aux_source_directory(${PROJECT_SOURCE_DIR}/libgo/context CO_SRC_LIST)
+aux_source_directory(${PROJECT_SOURCE_DIR}/libgo/task CO_SRC_LIST)
+aux_source_directory(${PROJECT_SOURCE_DIR}/libgo/scheduler CO_SRC_LIST)
+
 # 选项互斥检查
 if (UNIX)
     # unix like platforms
-    aux_source_directory(${PROJECT_SOURCE_DIR}/libgo/linux CO_SRC_LIST)
-    include_directories(${PROJECT_SOURCE_DIR}/libgo/linux)
+    #aux_source_directory(${PROJECT_SOURCE_DIR}/libgo/linux CO_SRC_LIST)
+    #include_directories(${PROJECT_SOURCE_DIR}/libgo/linux)
 
     if (DEPEND_BOOST)
         set(LINK_LIBS "-lboost_coroutine -lboost_context -lboost_thread -lboost_system -pthread")
         #set(LINK_LIBS "PRIVATE ${Boost_LIBRARIES} -pthread")
     else ()
-        aux_source_directory(${PROJECT_SOURCE_DIR}/libgo/ctx_ucontext CO_SRC_LIST)
+        #aux_source_directory(${PROJECT_SOURCE_DIR}/libgo/ctx_ucontext CO_SRC_LIST)
     endif()
 
     if (DISABLE_HOOK)
         list(REMOVE_ITEM CO_SRC_LIST ${PROJECT_SOURCE_DIR}/libgo/linux/linux_glibc_hook.cpp)
-        aux_source_directory(${PROJECT_SOURCE_DIR}/libgo/disable_hook CO_SRC_LIST)
+        #aux_source_directory(${PROJECT_SOURCE_DIR}/libgo/disable_hook CO_SRC_LIST)
     endif()
 
 elseif (WIN32)
     # windows platform
     add_definitions(-D_CRT_SECURE_NO_WARNINGS)
-    include_directories(${PROJECT_SOURCE_DIR}/libgo/windows)
-    aux_source_directory(${PROJECT_SOURCE_DIR}/libgo/windows CO_SRC_LIST)
-    aux_source_directory(${PROJECT_SOURCE_DIR}/libgo/windows/arpa CO_SRC_LIST)
-    aux_source_directory(${PROJECT_SOURCE_DIR}/libgo/windows/sys CO_SRC_LIST)
+    #include_directories(${PROJECT_SOURCE_DIR}/libgo/windows)
+    #aux_source_directory(${PROJECT_SOURCE_DIR}/libgo/windows CO_SRC_LIST)
+    #aux_source_directory(${PROJECT_SOURCE_DIR}/libgo/windows/arpa CO_SRC_LIST)
+    #aux_source_directory(${PROJECT_SOURCE_DIR}/libgo/windows/sys CO_SRC_LIST)
 
     if (DEPEND_BOOST)
         message(WARNING "boost.coroutine was unstable in windows platform")
     else()
-        aux_source_directory(${PROJECT_SOURCE_DIR}/libgo/ctx_win_fiber CO_SRC_LIST)
+        #aux_source_directory(${PROJECT_SOURCE_DIR}/libgo/ctx_win_fiber CO_SRC_LIST)
     endif()
 
     if (DISABLE_HOOK)
-        list(REMOVE_ITEM CO_SRC_LIST ${PROJECT_SOURCE_DIR}/libgo/windows/win_vc_hook.cpp)
-        aux_source_directory(${PROJECT_SOURCE_DIR}/libgo/disable_hook CO_SRC_LIST)
+        #list(REMOVE_ITEM CO_SRC_LIST ${PROJECT_SOURCE_DIR}/libgo/windows/win_vc_hook.cpp)
+        #aux_source_directory(${PROJECT_SOURCE_DIR}/libgo/disable_hook CO_SRC_LIST)
     else ()
         list(APPEND CO_SRC_LIST "${PROJECT_SOURCE_DIR}/third_party/xhook/src/xhook.cpp")
         include_directories(${PROJECT_SOURCE_DIR}/third_party/xhook/src)
@@ -150,8 +155,6 @@ endif()
 message("------------ Cxx flags -------------")
 message("  CMAKE_CXX_FLAGS_${CMAKE_BUILD_TYPE}: ${CMAKE_CXX_FLAGS_${CMAKE_BUILD_TYPE}}")
 message("------------------------------------")
-
-include_directories(${PROJECT_SOURCE_DIR})
 
 set(TARGET "libgo")
 set(STATIC_T "libgo_static")
