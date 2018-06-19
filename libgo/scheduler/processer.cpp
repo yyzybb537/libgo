@@ -12,6 +12,9 @@ Processer::Processer(int id)
     : id_(id)
 {
     runnableQueue_.check_ = (void*)&s_check_;
+    waitQueue_.check_ = (void*)&s_check_;
+    gcQueue_.check_ = (void*)&s_check_;
+    newQueue_.check_ = (void*)&s_check_;
 }
 
 Processer* & Processer::GetCurrentProcesser()
@@ -24,7 +27,8 @@ void Processer::AddTaskRunnable(Task *tk)
 {
     DebugPrint(dbg_scheduler, "task(%s) add into proc(%u)", tk->DebugInfo(), id_);
     tk->state_ = TaskState::runnable;
-    runnableQueue_.push(tk);
+    tk->proc_ = this;
+    newQueue_.push(tk);
 
     if (IsWaiting()) {
         NotifyCondition();
@@ -40,50 +44,64 @@ void Processer::Process()
 
     for (;;)
     {
-        DebugPrint(dbg_scheduler, "Run [Proc(%d) QueueSize:%lu] --------------------------", id_, runnableQueue_.size());
+        DebugPrint(dbg_scheduler, "Run [Proc(%d) QueueSize:%lu] --------------------------", id_, RunnableSize());
 
-        Task *tk = runnableQueue_.pop();
-        DebugPrint(dbg_scheduler, "Run [Proc(%d) pop QueueSize:%lu] --------------------------", id_, runnableQueue_.size());
+        Task *tk = runnableQueue_.front();
+        if (!tk) {
+            AddNewTasks();
+            tk = runnableQueue_.front();
+        }
+
         if (!tk) {
             WaitCondition();
+            AddNewTasks();
             continue;
         }
 
-        runningTask_ = tk;
-        UpdateTick();
+        while (tk) {
+            runningTask_ = tk;
+            UpdateTick();
 
-        DebugPrint(dbg_switch, "enter task(%s)", tk->DebugInfo());
-        if (g_Scheduler.GetTaskListener())
-            g_Scheduler.GetTaskListener()->onSwapIn(tk->id_);
-        if (!tk->SwapIn()) {
-            fprintf(stderr, "swapcontext error:%s\n", strerror(errno));
+            DebugPrint(dbg_switch, "enter task(%s)", tk->DebugInfo());
+            if (g_Scheduler.GetTaskListener())
+                g_Scheduler.GetTaskListener()->onSwapIn(tk->id_);
+            if (!tk->SwapIn()) {
+                fprintf(stderr, "swapcontext error:%s\n", strerror(errno));
+                runningTask_ = nullptr;
+                tk->DecrementRef();
+                ThrowError(eCoErrorCode::ec_swapcontext_failed);
+            }
+            DebugPrint(dbg_switch, "leave task(%s) state=%d", tk->DebugInfo(), (int)tk->state_);
             runningTask_ = nullptr;
-            tk->DecrementRef();
-            ThrowError(eCoErrorCode::ec_swapcontext_failed);
-        }
-        DebugPrint(dbg_switch, "leave task(%s) state=%d", tk->DebugInfo(), (int)tk->state_);
-        runningTask_ = nullptr;
 
-        switch (tk->state_) {
-            case TaskState::runnable:
-                runnableQueue_.push(tk);
-                break;
+            if (!tk->next) {
+                AddNewTasks();
+            }
 
-            case TaskState::block:
-                waitQueue_.push(tk);
-                break;
+            Task *next = (Task*)tk->next;
+            switch (tk->state_) {
+                case TaskState::runnable:
+                    break;
 
-            case TaskState::done:
-            default:
-                DebugPrint(dbg_task, "task(%s) done.", tk->DebugInfo());
-                if (gcQueue_.size() > 16)
-                    GC();
-                gcQueue_.push(tk);
-                if (tk->eptr_) {
-                    std::exception_ptr ep = tk->eptr_;
-                    std::rethrow_exception(ep);
-                }
-                break;
+                case TaskState::block:
+                    runnableQueue_.erase(tk);
+                    waitQueue_.push(tk);
+                    break;
+
+                case TaskState::done:
+                default:
+                    DebugPrint(dbg_task, "task(%s) done.", tk->DebugInfo());
+                    runnableQueue_.erase(tk);
+                    if (gcQueue_.size() > 16)
+                        GC();
+                    gcQueue_.push(tk);
+                    if (tk->eptr_) {
+                        std::exception_ptr ep = tk->eptr_;
+                        std::rethrow_exception(ep);
+                    }
+                    break;
+            }
+            tk = next;
         }
     }
 }
@@ -92,7 +110,6 @@ void Processer::CoYield()
 {
     Task *tk = GetCurrentTask();
     assert(tk);
-    tk->proc_ = this;
 
     DebugPrint(dbg_yield, "yield task(%s) state=%d", tk->DebugInfo(), (int)tk->state_);
     ++ TaskRefYieldCount(tk);
@@ -113,7 +130,7 @@ Task* Processer::GetCurrentTask()
 
 std::size_t Processer::RunnableSize()
 {
-    return runnableQueue_.size();
+    return runnableQueue_.size() + newQueue_.size();
 }
 
 void Processer::NotifyCondition()
@@ -136,6 +153,13 @@ void Processer::GC()
     auto list = gcQueue_.pop_all();
     for (Task & tk : list)
         tk.DecrementRef();
+}
+
+void Processer::AddNewTasks()
+{
+    if (!newQueue_.empty()) {
+        runnableQueue_.push(newQueue_.pop_all());
+    }
 }
 
 } //namespace co

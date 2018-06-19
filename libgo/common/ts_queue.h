@@ -9,8 +9,8 @@ namespace co
 // 侵入式数据结构Hook基类
 struct TSQueueHook
 {
-    TSQueueHook *prev = nullptr;
-    TSQueueHook *next = nullptr;
+    TSQueueHook* prev = nullptr;
+    TSQueueHook* next = nullptr;
     void *check_ = nullptr;
 };
 
@@ -154,6 +154,12 @@ public:
         }
         delete head_;
         head_ = tail_ = 0;
+    }
+
+    ALWAYS_INLINE T* front()
+    {
+        LockGuard lock(lck);
+        return (T*)head_->next;
     }
 
     ALWAYS_INLINE bool empty()

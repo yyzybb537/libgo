@@ -24,9 +24,16 @@ private:
     uint64_t runningTick_ = 0;
 
     // 协程队列
-    TSQueue<Task> runnableQueue_;
+    TSQueue<Task, false> runnableQueue_;
     TSQueue<Task, false> waitQueue_;
     TSQueue<Task, false> gcQueue_;
+
+    TSQueue<Task> newQueue_;
+
+    // WorkSteal
+//    std::atomic_bool isStealing_{false};
+//    std::mutex workStealMutex_;
+//    std::condition_variable workStealCV_;
 
     // 等待的条件变量
     std::mutex cvMutex_;
@@ -62,6 +69,8 @@ private:
     void WaitCondition();
 
     void GC();
+
+    void AddNewTasks();
 
     // TODO
     ALWAYS_INLINE void UpdateTick() {}
