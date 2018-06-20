@@ -14,6 +14,7 @@ message("  CMAKE_COMMAND: ${CMAKE_COMMAND}")
 
 message ("  BOOST_ROOT: ${BOOST_ROOT}")
 option(DEPEND_BOOST "link boost" OFF)
+set(ENABLE_BOOST_CONTEXT ON)
 if (ENABLE_BOOST_CONTEXT)
     include (${PROJECT_SOURCE_DIR}/boost.cmake)
     message ("  layer_context: boost.context")
@@ -78,9 +79,6 @@ endif()
 
 message ("  cmake_toolchain_file: ${CMAKE_TOOLCHAIN_FILE}")
 
-configure_file(${PROJECT_SOURCE_DIR}/libgo/common/cmake_config.h.in ${PROJECT_SOURCE_DIR}/libgo/common/cmake_config.h)
-message("----------------------------------")
-
 message("-------------- Env ---------------")
 message("  CMAKE_SOURCE_DIR: ${CMAKE_SOURCE_DIR}")
 message("  CMAKE_BINARY_DIR: ${CMAKE_BINARY_DIR}")
@@ -92,6 +90,9 @@ aux_source_directory(${PROJECT_SOURCE_DIR}/libgo/common CO_SRC_LIST)
 aux_source_directory(${PROJECT_SOURCE_DIR}/libgo/context CO_SRC_LIST)
 aux_source_directory(${PROJECT_SOURCE_DIR}/libgo/task CO_SRC_LIST)
 aux_source_directory(${PROJECT_SOURCE_DIR}/libgo/scheduler CO_SRC_LIST)
+
+configure_file(${PROJECT_SOURCE_DIR}/libgo/common/cmake_config.h.in ${PROJECT_SOURCE_DIR}/libgo/common/cmake_config.h)
+message("----------------------------------")
 
 # 选项互斥检查
 if (UNIX)
