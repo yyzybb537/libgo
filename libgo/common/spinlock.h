@@ -1,5 +1,6 @@
 #pragma once
 #include "config.h"
+#include <exception>
 
 namespace co
 {
@@ -29,36 +30,71 @@ struct LFLock
         locked_ = false;
         DebugPrint(dbg_spinlock, "unlock");
     }
+
+    ALWAYS_INLINE bool is_lock()
+    {
+        return locked_;
+    }
 };
 #else //LIBGO_SINGLE_THREAD
+
+// 性能高于LFLock2, 但是不支持is_lock, unlock不能做重复性校验
 struct LFLock
 {
-    volatile std::atomic_flag lck;
+    std::atomic_flag flag;
 
-    LFLock() 
+    LFLock() : flag{ATOMIC_FLAG_INIT}
     {
-        lck.clear();
     }
 
     ALWAYS_INLINE void lock()
     {
-        while (std::atomic_flag_test_and_set_explicit(&lck, std::memory_order_acquire)) ;
-        DebugPrint(dbg_spinlock, "lock");
+        while (flag.test_and_set(std::memory_order_acquire)) ;
     }
 
     ALWAYS_INLINE bool try_lock()
     {
-        bool ret = !std::atomic_flag_test_and_set_explicit(&lck, std::memory_order_acquire);
-        DebugPrint(dbg_spinlock, "trylock returns %s", ret ? "true" : "false");
-        return ret;
+        return !flag.test_and_set(std::memory_order_acquire);
     }
     
     ALWAYS_INLINE void unlock()
     {
-        std::atomic_flag_clear_explicit(&lck, std::memory_order_release);
-        DebugPrint(dbg_spinlock, "unlock");
+        flag.clear(std::memory_order_release);
     }
 };
+
+// atomic_bool可能不是无锁
+struct LFLock2
+{
+    std::atomic_bool state;
+
+    LFLock2() : state{false}
+    {
+    }
+
+    ALWAYS_INLINE void lock()
+    {
+        while (state.exchange(true, std::memory_order_acquire)) ;
+    }
+
+    ALWAYS_INLINE bool try_lock()
+    {
+        return !state.exchange(true, std::memory_order_acquire);
+    }
+    
+    ALWAYS_INLINE void unlock()
+    {
+        if (!state.exchange(false, std::memory_order_release)) {
+            throw std::logic_error("libgo.spinlock unlock exception: state == false");
+        }
+    }
+
+    ALWAYS_INLINE bool is_lock()
+    {
+        return state.load(std::memory_order_acq_rel);
+    }
+};
+
 #endif //LIBGO_SINGLE_THREAD
 
 } //namespace co

@@ -46,7 +46,14 @@ void Processer::Process()
     {
         DebugPrint(dbg_scheduler, "Run [Proc(%d) QueueSize:%lu] --------------------------", id_, RunnableSize());
 
-        Task *tk = runnableQueue_.front();
+        Task *tk = nullptr;
+
+        {
+            test_.lock();
+            tk = runnableQueue_.front();
+            test_.unlock();
+        }
+
         if (!tk) {
             AddNewTasks();
             tk = runnableQueue_.front();

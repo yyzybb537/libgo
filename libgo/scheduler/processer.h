@@ -4,6 +4,7 @@
 #include "../common/ts_queue.h"
 #include <condition_variable>
 #include <mutex>
+#include <atomic>
 #include "../timer/timer.h"
 
 namespace co {
@@ -18,7 +19,8 @@ private:
     int id_;
 
     // 当前正在运行的协程
-    Task* runningTask_ = nullptr;
+    Task* runningTask_{nullptr};
+    LFLock test_;
 
     // 当前正在运行的协程本次调度开始的时间戳(Dispatch线程专用)
     uint64_t runningTick_ = 0;
