@@ -31,6 +31,7 @@ void Processer::AddTaskRunnable(Task *tk)
     newQueue_.push(tk);
 
     if (IsWaiting()) {
+        waiting_ = false;
         NotifyCondition();
     }
 }
@@ -46,69 +47,66 @@ void Processer::Process()
     {
         DebugPrint(dbg_scheduler, "Run [Proc(%d) QueueSize:%lu] --------------------------", id_, RunnableSize());
 
-        Task *tk = nullptr;
+        runnableQueue_.front(runningTask_);
 
-        {
-            test_.lock();
-            tk = runnableQueue_.front();
-            test_.unlock();
+        if (!runningTask_) {
+            if (AddNewTasks())
+                runnableQueue_.front(runningTask_);
         }
 
-        if (!tk) {
-            AddNewTasks();
-            tk = runnableQueue_.front();
-        }
-
-        if (!tk) {
+        if (!runningTask_) {
             WaitCondition();
             AddNewTasks();
             continue;
         }
 
-        while (tk) {
-            runningTask_ = tk;
-            UpdateTick();
+        while (runningTask_) {
 
-            DebugPrint(dbg_switch, "enter task(%s)", tk->DebugInfo());
+            DebugPrint(dbg_switch, "enter task(%s)", runningTask_->DebugInfo());
             if (g_Scheduler.GetTaskListener())
-                g_Scheduler.GetTaskListener()->onSwapIn(tk->id_);
-            if (!tk->SwapIn()) {
+                g_Scheduler.GetTaskListener()->onSwapIn(runningTask_->id_);
+            UpdateTick();
+            if (!runningTask_->SwapIn()) {
                 fprintf(stderr, "swapcontext error:%s\n", strerror(errno));
                 runningTask_ = nullptr;
-                tk->DecrementRef();
+                runningTask_->DecrementRef();
                 ThrowError(eCoErrorCode::ec_swapcontext_failed);
             }
-            DebugPrint(dbg_switch, "leave task(%s) state=%d", tk->DebugInfo(), (int)tk->state_);
-            runningTask_ = nullptr;
+            runTick_ = 0;
+            DebugPrint(dbg_switch, "leave task(%s) state=%d", runningTask_->DebugInfo(), (int)runningTask_->state_);
 
-            if (!tk->next) {
-                AddNewTasks();
+            runnableQueue_.next(runningTask_, nextTask_);
+            if (!nextTask_) {
+                if (AddNewTasks())
+                    runnableQueue_.next(runningTask_, nextTask_);
             }
 
-            Task *next = (Task*)tk->next;
-            switch (tk->state_) {
+            switch (runningTask_->state_) {
                 case TaskState::runnable:
                     break;
 
                 case TaskState::block:
-                    runnableQueue_.erase(tk);
-                    waitQueue_.push(tk);
+                    runnableQueue_.erase(runningTask_);
+                    waitQueue_.push(runningTask_);
                     break;
 
                 case TaskState::done:
                 default:
-                    DebugPrint(dbg_task, "task(%s) done.", tk->DebugInfo());
-                    runnableQueue_.erase(tk);
+                    DebugPrint(dbg_task, "task(%s) done.", runningTask_->DebugInfo());
+                    runnableQueue_.erase(runningTask_);
                     if (gcQueue_.size() > 16)
                         GC();
-                    gcQueue_.push(tk);
-                    if (tk->eptr_) {
-                        std::exception_ptr ep = tk->eptr_;
+                    gcQueue_.push(runningTask_);
+                    if (runningTask_->eptr_) {
+                        std::exception_ptr ep = runningTask_->eptr_;
                         std::rethrow_exception(ep);
                     }
                     break;
             }
-            tk = next;
+
+//            std::unique_lock<TaskQueue::lock_t> lock(runnableQueue_.LockRef());
+            runningTask_ = nextTask_;
+            nextTask_ = nullptr;
         }
     }
 }
@@ -162,11 +160,27 @@ void Processer::GC()
         tk.DecrementRef();
 }
 
-void Processer::AddNewTasks()
+bool Processer::AddNewTasks()
 {
-    if (!newQueue_.empty()) {
-        runnableQueue_.push(newQueue_.pop_all());
-    }
+    if (newQueue_.empty()) return false;
+
+    runnableQueue_.push(newQueue_.pop_all());
+    return true;
+}
+
+bool Processer::IsTimeout()
+{
+    return NowMicrosecond() - runTick_ > CoroutineOptions::getInstance().cycle_timeout_us;
+}
+
+void Processer::UpdateTick()
+{
+    runTick_ = NowMicrosecond();
+}
+
+int64_t Processer::NowMicrosecond()
+{
+
 }
 
 } //namespace co

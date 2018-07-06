@@ -127,10 +127,12 @@ class TSQueue
 
 //private:
 public:
-    LFLock lck;
+    typedef typename std::conditional<ThreadSafe,
+            LFLock, FakeLock>::type lock_t;
     typedef typename std::conditional<ThreadSafe,
             std::lock_guard<LFLock>,
             fake_lock_guard>::type LockGuard;
+    lock_t lock_;
     TSQueueHook* head_;
     TSQueueHook* tail_;
     std::size_t count_;
@@ -146,7 +148,7 @@ public:
 
     ~TSQueue()
     {
-        LockGuard lock(lck);
+        LockGuard lock(lock_);
         while (head_ != tail_) {
             TSQueueHook *prev = tail_->prev;
             DecrementRef((T*)tail_);
@@ -156,27 +158,37 @@ public:
         head_ = tail_ = 0;
     }
 
-    ALWAYS_INLINE T* front()
+    ALWAYS_INLINE lock_t& LockRef() {
+        return lock_;
+    }
+
+    ALWAYS_INLINE void front(T*& out)
     {
-        LockGuard lock(lck);
-        return (T*)head_->next;
+        LockGuard lock(lock_);
+        out = (T*)head_->next;
+    }
+
+    ALWAYS_INLINE void next(T* ptr, T*& out)
+    {
+        LockGuard lock(lock_);
+        out = (T*)ptr->next;
     }
 
     ALWAYS_INLINE bool empty()
     {
-        LockGuard lock(lck);
+        LockGuard lock(lock_);
         return head_ == tail_;
     }
 
     ALWAYS_INLINE std::size_t size()
     {
-        LockGuard lock(lck);
+        LockGuard lock(lock_);
         return count_;
     }
 
     ALWAYS_INLINE void push(T* element)
     {
-        LockGuard lock(lck);
+        LockGuard lock(lock_);
         TSQueueHook *hook = static_cast<TSQueueHook*>(element);
         tail_->next = hook;
         hook->prev = tail_;
@@ -190,7 +202,7 @@ public:
     ALWAYS_INLINE T* pop()
     {
         if (head_ == tail_) return nullptr;
-        LockGuard lock(lck);
+        LockGuard lock(lock_);
         if (head_ == tail_) return nullptr;
         TSQueueHook* ptr = head_->next;
         if (ptr == tail_) tail_ = head_;
@@ -207,7 +219,7 @@ public:
     {
         if (elements.empty()) return ;  // empty的SList不能check, 因为stealed的时候已经清除check_.
         assert(elements.check(check_));
-        LockGuard lock(lck);
+        LockGuard lock(lock_);
         count_ += elements.size();
         tail_->next = elements.head();
         elements.head()->prev = tail_;
@@ -220,7 +232,7 @@ public:
     ALWAYS_INLINE SList<T> pop_front(uint32_t n)
     {
         if (head_ == tail_) return SList<T>();
-        LockGuard lock(lck);
+        LockGuard lock(lock_);
         if (head_ == tail_) return SList<T>();
         TSQueueHook* first = head_->next;
         TSQueueHook* last = first;
@@ -239,7 +251,7 @@ public:
     ALWAYS_INLINE SList<T> pop_back(uint32_t n)
     {
         if (head_ == tail_) return SList<T>();
-        LockGuard lock(lck);
+        LockGuard lock(lock_);
         if (head_ == tail_) return SList<T>();
         TSQueueHook* last = tail_;
         TSQueueHook* first = last;
@@ -255,7 +267,7 @@ public:
     ALWAYS_INLINE SList<T> pop_all()
     {
         if (head_ == tail_) return SList<T>();
-        LockGuard lock(lck);
+        LockGuard lock(lock_);
         if (head_ == tail_) return SList<T>();
         TSQueueHook* first = head_->next;
         TSQueueHook* last = tail_;
@@ -269,7 +281,7 @@ public:
 
     ALWAYS_INLINE bool erase(T* hook)
     {
-        LockGuard lock(lck);
+        LockGuard lock(lock_);
         if (hook->check_ != (void*)check_) return false;
         if (hook->prev) hook->prev->next = hook->next;
         if (hook->next) hook->next->prev = hook->prev;
@@ -292,7 +304,7 @@ class TSSkipQueue
     static_assert((std::is_base_of<TSQueueHook, T>::value), "T must be baseof TSQueueHook");
 
 private:
-    LFLock lck;
+    LFLock lock_;
     typedef typename std::conditional<ThreadSafe,
             std::lock_guard<LFLock>,
             fake_lock_guard>::type LockGuard;
@@ -318,7 +330,7 @@ public:
 
     ~TSSkipQueue()
     {
-        LockGuard lock(lck);
+        LockGuard lock(lock_);
         while (head_ != tail_) {
             TSQueueHook *prev = tail_->prev;
             DecrementRef((T*)tail_);
@@ -330,19 +342,19 @@ public:
 
     bool empty()
     {
-        LockGuard lock(lck);
+        LockGuard lock(lock_);
         return head_ == tail_;
     }
 
     std::size_t size()
     {
-        LockGuard lock(lck);
+        LockGuard lock(lock_);
         return count_;
     }
 
     void push(T* element)
     {
-        LockGuard lock(lck);
+        LockGuard lock(lock_);
         // 插入到尾端
         TSQueueHook *hook = static_cast<TSQueueHook*>(element);
         tail_->next = hook;
@@ -363,7 +375,7 @@ public:
     SList<T> pop_front(std::size_t n)
     {
         if (head_ == tail_ || !n) return SList<T>();
-        LockGuard lock(lck);
+        LockGuard lock(lock_);
         if (head_ == tail_) return SList<T>();
         TSQueueHook* first = head_->next;
         TSQueueHook* last = first;
