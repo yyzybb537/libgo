@@ -63,6 +63,12 @@ struct LFLock
     }
 };
 
+struct FakeLock {
+    void lock() {}
+    bool try_lock() { return true; }
+    void unlock() {}
+};
+
 // atomic_bool可能不是无锁
 struct LFLock2
 {
