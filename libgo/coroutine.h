@@ -3,11 +3,6 @@
 #include "common/syntax_helper.h"
 //#include "defer/defer.h"
 
-using ::co::egod_default;
-using ::co::egod_random;
-using ::co::egod_robin;
-using ::co::egod_local_thread;
-
 #define go ::co::__go(__FILE__, __LINE__)-
 
 // create coroutine options

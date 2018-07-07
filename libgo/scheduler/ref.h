@@ -17,7 +17,8 @@ inline const char* TaskDebugInfo(Task *tk)
     if (info.empty()) {
         char buf[128] = {};
         SourceLocation& loc = TaskRefLocation(tk);
-        info = snprintf(buf, sizeof(buf) - 1, "id:%lu, file:%s, line:%d", tk->id_, loc.file_, loc.lineno_);
+        int len = snprintf(buf, sizeof(buf) - 1, "id:%lu, file:%s, line:%d", tk->id_, loc.file_, loc.lineno_);
+        info.assign(buf, len);
     }
     return info.c_str();
 }
