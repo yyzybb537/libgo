@@ -1,5 +1,6 @@
 #include "scheduler.h"
 #include "../common/error.h"
+#include "../common/clock.h"
 #include <stdio.h>
 #include <system_error>
 #include <unistd.h>
@@ -42,28 +43,20 @@ Scheduler::~Scheduler()
 {
 }
 
-Processer* Scheduler::GetProcesser(std::size_t index)
-{
-    if (processers_.size() > index)
-        return processers_[index];
-
-    return processers_[0];
-}
-
 void Scheduler::CreateTask(TaskF const& fn, TaskOpt const& opt)
 {
     Task* tk = new Task(fn, opt.stack_size_ ? opt.stack_size_ : GetOptions().stack_size);
     tk->id_ = ++GetTaskIdFactory();
     TaskRefAffinity(tk) = opt.affinity_;
     TaskRefLocation(tk).Init(opt.file_, opt.lineno_);
-    ++task_count_;
+    ++taskCount_;
 
     DebugPrint(dbg_task, "task(%s) created.", TaskDebugInfo(tk));
     if (GetTaskListener()) {
         GetTaskListener()->onCreated(tk->id_);
     }
 
-    AddTaskRunnable(tk, opt.dispatch_);
+    AddTaskRunnable(tk);
 }
 
 bool Scheduler::IsCoroutine()
@@ -73,7 +66,7 @@ bool Scheduler::IsCoroutine()
 
 bool Scheduler::IsEmpty()
 {
-    return task_count_ == 0;
+    return taskCount_ == 0;
 }
 
 void Scheduler::CoYield()
@@ -97,166 +90,213 @@ void Scheduler::Start(int minThreadNumber, int maxThreadNumber)
     minThreadNumber_ = minThreadNumber;
     maxThreadNumber_ = maxThreadNumber;
 
-#ifndef LIBGO_SINGLE_THREAD
+    auto mainProc = processers_[0];
+
+#if LIBGO_SINGLE_THREAD == 0
     for (int i = 0; i < minThreadNumber_ - 1; i++) {
-        auto p = new Processer(i+1);
-        std::thread t([p]{
-                p.Process();
-            });
-        p.BindThread(t);
-        this->processers_.push_back(p);
+        NewProcessThread();
     }
 
+    // 调度线程
     if (maxThreadNumber_ > 1) {
+        DebugPrint(dbg_scheduler, "---> Create DispatcherThread");
         std::thread t([this]{
                 this->DispatcherThread();
                 });
         t.detach();
+    } else {
+        DebugPrint(dbg_scheduler, "---> No DispatcherThread");
     }
 #endif
 
-    GetProcesser(0)->Process();
+    std::thread(FastSteadyClock::ThreadRun).detach();
+
+    DebugPrint(dbg_scheduler, "Scheduler::Start minThreadNumber_=%d, maxThreadNumber_=%d", minThreadNumber_, maxThreadNumber_);
+    mainProc->Process();
+}
+
+void Scheduler::NewProcessThread()
+{
+    auto p = new Processer(processers_.size());
+    DebugPrint(dbg_scheduler, "---> Create Processer(%d)", p->id_);
+    std::thread t([p]{
+            p->Process();
+            });
+    t.detach();
+    processers_.push_back(p);
 }
 
 void Scheduler::DispatcherThread()
 {
+    DebugPrint(dbg_scheduler, "---> Start DispatcherThread");
+    typedef std::size_t idx_t;
     for (;;) {
         // TODO: 用condition_variable降低cpu使用率
-        usleep(100);
+        std::this_thread::sleep_for(std::chrono::microseconds(GetOptions().dispatcher_thread_cycle_us));
 
-        // wakeup waiting process
-        for (std::size_t i = 0; i < processers_.size(); i++) {
+        // 1.收集负载值, 收集阻塞状态, 打阻塞标记, 唤醒处于等待状态但是有任务的P
+        idx_t pcount = processers_.size();
+        std::size_t totalLoadaverage = 0;
+        typedef std::multimap<std::size_t, idx_t> ActiveMap;
+        ActiveMap actives;
+        std::map<idx_t, std::size_t> blockings;
+
+        int isActiveCount = 0;
+        for (std::size_t i = 0; i < pcount; i++) {
             auto p = processers_[i];
-            if (p->IsWaiting()) {
-                if (p->RunnableSize() > 0)
-                    p->NotifyCondition();
-                else {
-                    // 空闲线程
+            if (p->IsBlocking()) {
+                blockings[i] = p->RunnableSize();
+                if (p->active_) {
+                    p->active_ = false;
+                    DebugPrint(dbg_scheduler, "Block processer(%d)", (int)i);
                 }
+            }
+
+            if (p->active_)
+                isActiveCount++;
+        }
+
+        // 还可激活几个P
+        int activeQuota = isActiveCount < minThreadNumber_ ? (minThreadNumber_ - isActiveCount) : 0;
+
+        for (std::size_t i = 0; i < pcount; i++) {
+            auto p = processers_[i];
+            std::size_t loadaverage = p->RunnableSize();
+            totalLoadaverage += loadaverage;
+
+            if (!p->active_) {
+                if (activeQuota > 0 && !p->IsBlocking()) {
+                    p->active_ = true;
+                    activeQuota--;
+                    DebugPrint(dbg_scheduler, "Active processer(%d)", (int)i);
+                    lastActive_ = i;
+                }
+            }
+
+            if (p->active_) {
+                actives.insert(ActiveMap::value_type{loadaverage, i});
+                p->Mark();
+            }
+
+            if (loadaverage > 0 && p->IsWaiting()) {
+                p->NotifyCondition();
             }
         }
 
+        if (actives.empty() && (int)pcount < maxThreadNumber_) {
+            // 全部阻塞, 并且还有协程待执行, 起新线程
+            NewProcessThread();
+            actives.insert(ActiveMap::value_type{0, pcount});
+            ++pcount;
+        }
+
+        // 全部阻塞并且不能起新线程, 无需调度, 等待即可
+        if (actives.empty())
+            continue;
+
+        // 2.负载均衡
+        // 阻塞线程的任务steal出来
+        {
+            SList<Task> tasks;
+            for (auto &kv : blockings) {
+                auto p = processers_[kv.first];
+                tasks.append(p->Steal(0));
+            }
+            if (!tasks.empty()) {
+                // 任务最少的几个线程平均分
+                auto range = actives.equal_range(actives.begin()->first);
+                std::size_t avg = tasks.size() / std::distance(range.first, range.second);
+                if (avg == 0)
+                    avg = 1;
+
+                ActiveMap newActives;
+                for (auto it = range.second; it != actives.end(); ++it) {
+                    newActives.insert(*it);
+                }
+
+
+                for (auto it = range.first; it != range.second; ++it) {
+                    SList<Task> in = tasks.cut(avg);
+                    if (in.empty())
+                        break;
+
+                    auto p = processers_[it->second];
+                    p->AddTaskRunnable(std::move(in));
+                    newActives.insert(ActiveMap::value_type{p->RunnableSize(), it->second});
+                }
+                if (!tasks.empty())
+                    processers_[range.first->second]->AddTaskRunnable(std::move(tasks));
+
+                for (auto it = range.first; it != range.second; ++it) {
+                    auto p = processers_[it->second];
+                    newActives.insert(ActiveMap::value_type{p->RunnableSize(), it->second});
+                }
+                newActives.swap(actives);
+            }
+        }
+
+        // 如果还有在等待的线程, 从任务多的线程中拿一些给它
+        if (actives.begin()->first == 0) {
+            auto range = actives.equal_range(actives.begin()->first);
+            std::size_t waitN = std::distance(range.first, range.second);
+            if (waitN == actives.size()) {
+                // 都没任务了, 不用偷了
+                continue;
+            }
+
+            auto maxP = processers_[actives.rbegin()->second];
+            std::size_t stealN = std::min(maxP->RunnableSize() / 2, waitN * 1024);
+            auto tasks = maxP->Steal(stealN);
+            if (tasks.empty())
+                continue;
+
+            std::size_t avg = tasks.size() / waitN;
+            if (avg == 0)
+                avg = 1;
+
+            for (auto it = range.first; it != range.second; ++it) {
+                SList<Task> in = tasks.cut(avg);
+                if (in.empty())
+                    break;
+
+                auto p = processers_[it->second];
+                p->AddTaskRunnable(std::move(in));
+            }
+            if (!tasks.empty())
+                processers_[range.first->second]->AddTaskRunnable(std::move(tasks));
+        }
     }
 }
 
-//void Scheduler::Process()
-//{
-//    ThreadLocalInfo &info = GetLocalInfo();
-//    if (info.thread_id < 0) {
-//        info.thread_id = thread_id_++;
-//        info.proc = GetProcesser(info.thread_id);
-//
-//        if (info.thread_id > 0) {
-//            // 超过一个调度线程
-//        }
-//    }
-//
-//    if (IsCoroutine()) return 0;
-//
-//#if LIBGO_SINGLE_THREAD
-//    if (info.thread_id > 0) {
-//        usleep(20 * 1000);
-//        return 0;
-//    }
-//#endif
-//
-//    DoRunnable();
-//
-//    // timer
-//    long long timer_next_ms = GetOptions().max_sleep_ms;
-//    uint32_t tm_count = 0;
-//    if (flags & erf_do_timer)
-//        tm_count = DoTimer(timer_next_ms);
-//
-//    // sleep wait.
-//    long long sleep_next_ms = GetOptions().max_sleep_ms;
-//    uint32_t sl_count = 0;
-//    if (flags & erf_do_sleeper)
-//        sl_count = DoSleep(sleep_next_ms);
-//
-//    // 下一次timer或sleeper触发的时间毫秒数, 休眠或阻塞等待IO事件触发的时间不能超过这个值
-//    long long next_ms = (std::min)(timer_next_ms, sleep_next_ms);
-//
-//    // epoll
-//    int ep_count = -1;
-//    if (flags & erf_do_eventloop) {
-//        int wait_milliseconds = 0;
-//        if (run_task_count || tm_count || sl_count)
-//            wait_milliseconds = 0;
-//        else {
-//            wait_milliseconds = (std::min<long long>)(next_ms, GetOptions().max_sleep_ms);
-//            DebugPrint(dbg_scheduler_sleep, "wait_milliseconds %d ms, next_ms=%lld", wait_milliseconds, next_ms);
-//        }
-//        ep_count = DoEpoll(wait_milliseconds);
-//    }
-//
-//    if (flags & erf_idle_cpu) {
-//        if (!run_task_count && ep_count <= 0 && !tm_count && !sl_count) {
-//            if (ep_count == -1) {
-//                // 此线程没有执行epoll_wait, 使用sleep降低空转时的cpu使用率
-//                ++info.sleep_ms;
-//                info.sleep_ms = (std::min)(info.sleep_ms, GetOptions().max_sleep_ms);
-//                info.sleep_ms = (std::min<long long>)(info.sleep_ms, next_ms);
-//                DebugPrint(dbg_scheduler_sleep, "sleep %d ms, next_ms=%lld", (int)info.sleep_ms, next_ms);
-//                usleep(info.sleep_ms * 1000);
-//            }
-//        } else {
-//            info.sleep_ms = 1;
-//        }
-//    }
-//
-//#if WITH_SAFE_SIGNAL
-//    if (flags & erf_signal) {
-//        HookSignal::getInstance().Run();
-//    }
-//#endif
-//
-//    return run_task_count;
-//}
-
-void Scheduler::AddTaskRunnable(Task* tk, int dispatch)
+void Scheduler::AddTaskRunnable(Task* tk)
 {
     DebugPrint(dbg_scheduler, "Add task(%s) to runnable list.", tk->DebugInfo());
-    if (tk->proc_)
-        tk->proc_->AddTaskRunnable(tk);
-    else {
-        if (dispatch <= egod_default)
-            dispatch = GetOptions().enable_work_steal ? egod_local_thread : egod_robin;
-
-        switch (dispatch) {
-            case egod_random:
-                {
-                    std::size_t n = std::max<std::size_t>(processers_.size(), 1);
-                    GetProcesser(rand() % n)->AddTaskRunnable(tk);
-                }
-                return ;
-
-            case egod_robin:
-                {
-                    std::size_t n = std::max<std::size_t>(processers_.size(), 1);
-                    GetProcesser(dispatch_robin_index_++ % n)->AddTaskRunnable(tk);
-                }
-                return ;
-
-            case egod_local_thread:
-                {
-                    auto proc = Processer::GetCurrentProcesser();
-                    if (proc)
-                        proc->AddTaskRunnable(tk);
-                    else
-                        GetProcesser(0)->AddTaskRunnable(tk);
-                }
-                return ;
-        }
-
-        // 指定了线程索引
-        GetProcesser(dispatch)->AddTaskRunnable(tk);
+    auto proc = tk->proc_;
+    if (proc && proc->active_) {
+        proc->AddTaskRunnable(tk);
+        return ;
     }
+
+    proc = Processer::GetCurrentProcesser();
+    if (proc && proc->active_) {
+        proc->AddTaskRunnable(tk);
+        return ;
+    }
+
+    std::size_t pcount = processers_.size();
+    std::size_t idx = lastActive_;
+    for (std::size_t i = 0; i < pcount; ++i, ++idx) {
+        idx = idx % pcount;
+        proc = processers_[idx];
+        if (proc && proc->active_)
+            break;
+    }
+    proc->AddTaskRunnable(tk);
 }
 
 uint32_t Scheduler::TaskCount()
 {
-    return task_count_;
+    return taskCount_;
 }
 
 uint64_t Scheduler::GetCurrentTaskID()

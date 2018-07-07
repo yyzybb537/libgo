@@ -29,13 +29,6 @@ struct __go_option<opt_stack_size>
 };
 
 template <>
-struct __go_option<opt_dispatch>
-{
-    int dispatch_;
-    explicit __go_option(int v) : dispatch_(v) {}
-};
-
-template <>
 struct __go_option<opt_affinity>
 {
     bool affinity_;
@@ -59,12 +52,6 @@ struct __go
     ALWAYS_INLINE __go& operator-(__go_option<opt_stack_size> const& opt)
     {
         opt_.stack_size_ = opt.stack_size_;
-        return *this;
-    }
-
-    ALWAYS_INLINE __go& operator-(__go_option<opt_dispatch> const& opt)
-    {
-        opt_.dispatch_ = opt.dispatch_;
         return *this;
     }
 

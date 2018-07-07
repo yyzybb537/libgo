@@ -75,9 +75,50 @@ public:
         return *this;
     }
 
+    void append(SList<T> && other) {
+        if (other.empty())
+            return ;
+
+        if (empty()) {
+            *this = std::move(other);
+            return ;
+        }
+
+        assert(check_ == other.check_);
+        tail_->next = other.head_;
+        tail_ = other.tail_;
+        count_ += other.count_;
+        other.stealed();
+    }
+
+    SList<T> cut(std::size_t n) {
+        if (empty()) return SList<T>();
+
+        if (n >= size()) {
+            SList<T> o(std::move(*this));
+            return o;
+        }
+
+        SList<T> o;
+        auto pos = head_;
+        for (std::size_t i = 0; i < n; ++i)
+            pos = (T*)pos->next;
+        o.check_ = check_;
+        o.head_ = head_;
+        o.tail_ = pos;
+        o.count_ = n;
+
+        count_ -= n;
+        head_ = (T*)pos->next;
+        head_->prev = nullptr;
+        pos->next = nullptr;
+        return o;
+    }
+
     ~SList()
     {
-        clear();
+        assert(count_ == 0);
+        assert(check_ == 0);
     }
 
     iterator begin() { return iterator{head_}; }
@@ -189,6 +230,10 @@ public:
     ALWAYS_INLINE void push(T* element)
     {
         LockGuard lock(lock_);
+        pushWithoutLock(element);
+    }
+    ALWAYS_INLINE void pushWithoutLock(T* element)
+    {
         TSQueueHook *hook = static_cast<TSQueueHook*>(element);
         tail_->next = hook;
         hook->prev = tail_;
@@ -252,6 +297,10 @@ public:
     {
         if (head_ == tail_) return SList<T>();
         LockGuard lock(lock_);
+        return pop_backWithoutLock(n);
+    }
+    ALWAYS_INLINE SList<T> pop_backWithoutLock(uint32_t n)
+    {
         if (head_ == tail_) return SList<T>();
         TSQueueHook* last = tail_;
         TSQueueHook* first = last;
@@ -268,6 +317,11 @@ public:
     {
         if (head_ == tail_) return SList<T>();
         LockGuard lock(lock_);
+        return pop_allWithoutLock();
+    }
+
+    ALWAYS_INLINE SList<T> pop_allWithoutLock()
+    {
         if (head_ == tail_) return SList<T>();
         TSQueueHook* first = head_->next;
         TSQueueHook* last = tail_;
@@ -282,6 +336,11 @@ public:
     ALWAYS_INLINE bool erase(T* hook)
     {
         LockGuard lock(lock_);
+        return eraseWithoutLock(hook);
+    }
+
+    ALWAYS_INLINE bool eraseWithoutLock(T* hook)
+    {
         if (hook->check_ != (void*)check_) return false;
         if (hook->prev) hook->prev->next = hook->next;
         if (hook->next) hook->next->prev = hook->prev;

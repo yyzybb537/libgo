@@ -1,6 +1,7 @@
 #include "processer.h"
 #include "scheduler.h"
 #include "../common/error.h"
+#include "../common/clock.h"
 #include <assert.h>
 #include "ref.h"
 
@@ -26,9 +27,18 @@ Processer* & Processer::GetCurrentProcesser()
 void Processer::AddTaskRunnable(Task *tk)
 {
     DebugPrint(dbg_scheduler, "task(%s) add into proc(%u)", tk->DebugInfo(), id_);
-    tk->state_ = TaskState::runnable;
-    tk->proc_ = this;
     newQueue_.push(tk);
+
+    if (IsWaiting()) {
+        waiting_ = false;
+        NotifyCondition();
+    }
+}
+
+void Processer::AddTaskRunnable(SList<Task> && slist)
+{
+    DebugPrint(dbg_scheduler, "task(num=%d) add into proc(%u)", (int)slist.size(), id_);
+    newQueue_.push(std::move(slist));
 
     if (IsWaiting()) {
         waiting_ = false;
@@ -45,8 +55,6 @@ void Processer::Process()
 
     for (;;)
     {
-        DebugPrint(dbg_scheduler, "Run [Proc(%d) QueueSize:%lu] --------------------------", id_, RunnableSize());
-
         runnableQueue_.front(runningTask_);
 
         if (!runningTask_) {
@@ -60,19 +68,21 @@ void Processer::Process()
             continue;
         }
 
-        while (runningTask_) {
+        DebugPrint(dbg_scheduler, "Run [Proc(%d) QueueSize:%lu] --------------------------", id_, RunnableSize());
 
+        while (runningTask_) {
+            runningTask_->state_ = TaskState::runnable;
+            runningTask_->proc_ = this;
             DebugPrint(dbg_switch, "enter task(%s)", runningTask_->DebugInfo());
             if (g_Scheduler.GetTaskListener())
                 g_Scheduler.GetTaskListener()->onSwapIn(runningTask_->id_);
-            UpdateTick();
+            ++switchCount_;
             if (!runningTask_->SwapIn()) {
                 fprintf(stderr, "swapcontext error:%s\n", strerror(errno));
                 runningTask_ = nullptr;
                 runningTask_->DecrementRef();
                 ThrowError(eCoErrorCode::ec_swapcontext_failed);
             }
-            runTick_ = 0;
             DebugPrint(dbg_switch, "leave task(%s) state=%d", runningTask_->DebugInfo(), (int)runningTask_->state_);
 
             runnableQueue_.next(runningTask_, nextTask_);
@@ -104,7 +114,7 @@ void Processer::Process()
                     break;
             }
 
-//            std::unique_lock<TaskQueue::lock_t> lock(runnableQueue_.LockRef());
+            std::unique_lock<TaskQueue::lock_t> lock(runnableQueue_.LockRef());
             runningTask_ = nextTask_;
             nextTask_ = nullptr;
         }
@@ -158,6 +168,7 @@ void Processer::GC()
     auto list = gcQueue_.pop_all();
     for (Task & tk : list)
         tk.DecrementRef();
+    list.stealed();
 }
 
 bool Processer::AddNewTasks()
@@ -168,19 +179,70 @@ bool Processer::AddNewTasks()
     return true;
 }
 
-bool Processer::IsTimeout()
+bool Processer::IsBlocking()
 {
-    return NowMicrosecond() - runTick_ > CoroutineOptions::getInstance().cycle_timeout_us;
+    if (!markSwitch_ || markSwitch_ != switchCount_) return false;
+    return NowMicrosecond() > markTick_ + CoroutineOptions::getInstance().cycle_timeout_us;
 }
 
-void Processer::UpdateTick()
+void Processer::Mark()
 {
-    runTick_ = NowMicrosecond();
+    if (runningTask_ && markSwitch_ != switchCount_) {
+        markSwitch_ = switchCount_;
+        markTick_ = NowMicrosecond();
+    }
 }
 
 int64_t Processer::NowMicrosecond()
 {
+    return std::chrono::duration_cast<std::chrono::microseconds>(FastSteadyClock::now().time_since_epoch()).count();
+}
 
+SList<Task> Processer::Steal(std::size_t n)
+{
+    if (n > 0) {
+        // steal some
+        auto slist = newQueue_.pop_back(n);
+        if (slist.size() >= n)
+            return slist;
+
+        std::unique_lock<TaskQueue::lock_t> lock(runnableQueue_.LockRef());
+        if (runningTask_)
+            runnableQueue_.eraseWithoutLock(runningTask_);
+        if (nextTask_)
+            runnableQueue_.eraseWithoutLock(nextTask_);
+        auto slist2 = runnableQueue_.pop_backWithoutLock(n - slist.size());
+        if (runningTask_)
+            runnableQueue_.pushWithoutLock(runningTask_);
+        if (nextTask_)
+            runnableQueue_.pushWithoutLock(nextTask_);
+        lock.unlock();
+
+        slist2.append(std::move(slist));
+        if (!slist2.empty())
+            DebugPrint(dbg_scheduler, "Proc(%d).Stealed = %d", id_, (int)slist2.size());
+        return slist2;
+    } else {
+        // steal all
+        auto slist = newQueue_.pop_all();
+
+        std::unique_lock<TaskQueue::lock_t> lock(runnableQueue_.LockRef());
+        if (runningTask_)
+            runnableQueue_.eraseWithoutLock(runningTask_);
+        if (nextTask_)
+            runnableQueue_.eraseWithoutLock(nextTask_);
+        auto slist2 = runnableQueue_.pop_allWithoutLock();
+        if (runningTask_)
+            runnableQueue_.pushWithoutLock(runningTask_);
+        if (nextTask_)
+            runnableQueue_.pushWithoutLock(nextTask_);
+        lock.unlock();
+
+        slist2.append(std::move(slist));
+        if (!slist2.empty())
+            DebugPrint(dbg_scheduler, "Proc(%d).Stealed all = %d", id_, (int)slist2.size());
+        return slist2;
+    }
 }
 
 } //namespace co

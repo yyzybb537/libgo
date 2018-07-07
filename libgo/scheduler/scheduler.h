@@ -5,6 +5,7 @@
 #include "../task/task.h"
 #include "../debug/listener.h"
 #include "processer.h"
+#include <mutex>
 
 namespace co {
 
@@ -12,7 +13,6 @@ struct TaskOpt
 {
     bool affinity_ = false;
     int lineno_ = 0;
-    int dispatch_ = egod_default;
     std::size_t stack_size_ = 0;
     const char* file_ = nullptr;
 };
@@ -78,21 +78,21 @@ private:
     Scheduler& operator=(Scheduler &&) = delete;
 
     // 将一个协程加入可执行队列中
-    void AddTaskRunnable(Task* tk, int dispatch = egod_default);
+    void AddTaskRunnable(Task* tk);
 
-    // TODO: dispatcher线程函数
+    // dispatcher线程函数
     // 1.根据协程调度排队时间计算负载(抽样跟踪, 将时间戳写入Task结构中), 将高负载的P中的协程steal一些给低负载的P
     // 2.侦测到阻塞的P(单个协程运行时间超过阀值), 将P中的其他协程steal给其他P
     void DispatcherThread();
 
-    Processer* GetProcesser(std::size_t index);
+    void NewProcessThread();
 
     // deque of Processer, write by start or dispatch thread
     Deque<Processer*> processers_;
-    LFLock started_;
 
-    atomic_t<uint32_t> dispatch_robin_index_{0};
-    atomic_t<uint32_t> task_count_{0};
+    LFLock started_;
+    atomic_t<uint32_t> taskCount_{0};
+    volatile uint32_t lastActive_ = 0;
     
     int minThreadNumber_ = 1;
     int maxThreadNumber_ = 1;
