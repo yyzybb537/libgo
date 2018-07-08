@@ -98,15 +98,6 @@ void Processer::Process()
 
                 case TaskState::block:
                     {
-                        runnableQueue_.next(runningTask_, nextTask_);
-                        if (!nextTask_) {
-                            if (AddNewTasks())
-                                runnableQueue_.next(runningTask_, nextTask_);
-                        }
-
-                        runnableQueue_.erase(runningTask_);
-                        waitQueue_.push(runningTask_);
-
                         std::unique_lock<TaskQueue::lock_t> lock(runnableQueue_.LockRef());
                         runningTask_ = nextTask_;
                         nextTask_ = nullptr;
@@ -266,4 +257,52 @@ SList<Task> Processer::Steal(std::size_t n)
     }
 }
 
+uint64_t Processer::Suspend()
+{
+    Task* tk = g_Scheduler.GetCurrentTask();
+    assert(tk);
+    assert(tk->proc_);
+    return tk->proc_->SuspendBySelf(tk);
+}
+
+uint64_t Processer::SuspendBySelf(Task* tk)
+{
+    assert(tk == runningTask_);
+    assert(tk->state_ == TaskState::runnable);
+
+    tk->state_ = TaskState::block;
+    runnableQueue_.next(runningTask_, nextTask_);
+    if (!nextTask_) {
+        if (AddNewTasks())
+            runnableQueue_.next(runningTask_, nextTask_);
+    }
+    uint64_t id = ++ TaskRefSuspendId(tk);
+    runnableQueue_.erase(runningTask_);
+    waitQueue_.push(runningTask_);
+    return id;
+}
+
+bool Processer::Wakeup(Task* tk, uint64_t id)
+{
+    assert(tk->proc_);
+    return tk->proc_->WakeupBySelf(tk, id);
+}
+
+bool Processer::WakeupBySelf(Task* tk, uint64_t id)
+{
+    if (id != TaskRefSuspendId(tk)) return false;
+
+    {
+        std::unique_lock<TaskQueue::lock_t> lock(waitQueue_.LockRef());
+        if (id != TaskRefSuspendId(tk)) return false;
+        ++ TaskRefSuspendId(tk);
+        bool ret = waitQueue_.eraseWithoutLock(tk);
+        assert(ret);
+    }
+
+    AddTaskRunnable(tk);
+    return true;
+}
+
 } //namespace co
+
