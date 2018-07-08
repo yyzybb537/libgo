@@ -70,6 +70,7 @@ void Processer::Process()
 
         DebugPrint(dbg_scheduler, "Run [Proc(%d) QueueSize:%lu] --------------------------", id_, RunnableSize());
 
+        addNewQuota_ = 1;
         while (runningTask_) {
             runningTask_->state_ = TaskState::runnable;
             runningTask_->proc_ = this;
@@ -89,9 +90,11 @@ void Processer::Process()
                 case TaskState::runnable:
                     {
                         runnableQueue_.next(runningTask_, runningTask_);
-                        if (!runningTask_) {
-                            if (AddNewTasks())
+                        if (!runningTask_ && addNewQuota_ > 0) {
+                            if (AddNewTasks()) {
                                 runnableQueue_.next(runningTask_, runningTask_);
+                                -- addNewQuota_;
+                            }
                         }
                     }
                     break;
@@ -108,9 +111,11 @@ void Processer::Process()
                 default:
                     {
                         runnableQueue_.next(runningTask_, nextTask_);
-                        if (!nextTask_) {
-                            if (AddNewTasks())
+                        if (!nextTask_ && addNewQuota_ > 0) {
+                            if (AddNewTasks()) {
                                 runnableQueue_.next(runningTask_, nextTask_);
+                                -- addNewQuota_;
+                            }
                         }
 
                         DebugPrint(dbg_task, "task(%s) done.", runningTask_->DebugInfo());
@@ -272,9 +277,11 @@ uint64_t Processer::SuspendBySelf(Task* tk)
 
     tk->state_ = TaskState::block;
     runnableQueue_.next(runningTask_, nextTask_);
-    if (!nextTask_) {
-        if (AddNewTasks())
+    if (!nextTask_ && addNewQuota_ > 0) {
+        if (AddNewTasks()) {
             runnableQueue_.next(runningTask_, nextTask_);
+            -- addNewQuota_;
+        }
     }
     uint64_t id = ++ TaskRefSuspendId(tk);
     runnableQueue_.erase(runningTask_);
