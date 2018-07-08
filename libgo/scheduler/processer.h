@@ -36,7 +36,7 @@ private:
     // 协程队列
     typedef TSQueue<Task, true> TaskQueue;
     TaskQueue runnableQueue_;
-    TSQueue<Task, false> waitQueue_;
+    TaskQueue waitQueue_;
     TSQueue<Task, false> gcQueue_;
 
     TaskQueue newQueue_;
@@ -84,6 +84,12 @@ public:
     // 偷协程
     SList<Task> Steal(std::size_t n);
 
+    // 挂起当前协程
+    static uint64_t Suspend();
+
+    // 唤醒协程
+    static bool Wakeup(Task* tk, uint64_t id);
+
 private:
     void WaitCondition();
 
@@ -95,6 +101,10 @@ private:
     void Mark();
 
     int64_t NowMicrosecond();
+
+    uint64_t SuspendBySelf(Task* tk);
+
+    bool WakeupBySelf(Task* tk, uint64_t id);
 };
 
 } //namespace co

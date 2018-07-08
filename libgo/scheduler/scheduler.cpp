@@ -35,6 +35,7 @@ Scheduler::Scheduler()
     TaskRefInit(YieldCount);
     TaskRefInit(Location);
     TaskRefInit(DebugInfo);
+    TaskRefInit(SuspendId);
 
     processers_.push_back(new Processer(0));
 }
