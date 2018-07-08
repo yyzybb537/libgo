@@ -60,12 +60,12 @@ void Processer::Process()
         if (!runningTask_) {
             if (AddNewTasks())
                 runnableQueue_.front(runningTask_);
-        }
 
-        if (!runningTask_) {
-            WaitCondition();
-            AddNewTasks();
-            continue;
+            if (!runningTask_) {
+                WaitCondition();
+                AddNewTasks();
+                continue;
+            }
         }
 
         DebugPrint(dbg_scheduler, "Run [Proc(%d) QueueSize:%lu] --------------------------", id_, RunnableSize());
@@ -85,38 +85,59 @@ void Processer::Process()
             }
             DebugPrint(dbg_switch, "leave task(%s) state=%d", runningTask_->DebugInfo(), (int)runningTask_->state_);
 
-            runnableQueue_.next(runningTask_, nextTask_);
-            if (!nextTask_) {
-                if (AddNewTasks())
-                    runnableQueue_.next(runningTask_, nextTask_);
-            }
-
             switch (runningTask_->state_) {
                 case TaskState::runnable:
+                    {
+                        runnableQueue_.next(runningTask_, runningTask_);
+                        if (!runningTask_) {
+                            if (AddNewTasks())
+                                runnableQueue_.next(runningTask_, runningTask_);
+                        }
+                    }
                     break;
 
                 case TaskState::block:
-                    runnableQueue_.erase(runningTask_);
-                    waitQueue_.push(runningTask_);
+                    {
+                        runnableQueue_.next(runningTask_, nextTask_);
+                        if (!nextTask_) {
+                            if (AddNewTasks())
+                                runnableQueue_.next(runningTask_, nextTask_);
+                        }
+
+                        runnableQueue_.erase(runningTask_);
+                        waitQueue_.push(runningTask_);
+
+                        std::unique_lock<TaskQueue::lock_t> lock(runnableQueue_.LockRef());
+                        runningTask_ = nextTask_;
+                        nextTask_ = nullptr;
+                    }
                     break;
 
                 case TaskState::done:
                 default:
-                    DebugPrint(dbg_task, "task(%s) done.", runningTask_->DebugInfo());
-                    runnableQueue_.erase(runningTask_);
-                    if (gcQueue_.size() > 16)
-                        GC();
-                    gcQueue_.push(runningTask_);
-                    if (runningTask_->eptr_) {
-                        std::exception_ptr ep = runningTask_->eptr_;
-                        std::rethrow_exception(ep);
+                    {
+                        runnableQueue_.next(runningTask_, nextTask_);
+                        if (!nextTask_) {
+                            if (AddNewTasks())
+                                runnableQueue_.next(runningTask_, nextTask_);
+                        }
+
+                        DebugPrint(dbg_task, "task(%s) done.", runningTask_->DebugInfo());
+                        runnableQueue_.erase(runningTask_);
+                        if (gcQueue_.size() > 16)
+                            GC();
+                        gcQueue_.push(runningTask_);
+                        if (runningTask_->eptr_) {
+                            std::exception_ptr ep = runningTask_->eptr_;
+                            std::rethrow_exception(ep);
+                        }
+
+                        std::unique_lock<TaskQueue::lock_t> lock(runnableQueue_.LockRef());
+                        runningTask_ = nextTask_;
+                        nextTask_ = nullptr;
                     }
                     break;
             }
-
-            std::unique_lock<TaskQueue::lock_t> lock(runnableQueue_.LockRef());
-            runningTask_ = nextTask_;
-            nextTask_ = nullptr;
         }
     }
 }
@@ -173,7 +194,7 @@ void Processer::GC()
 
 bool Processer::AddNewTasks()
 {
-    if (newQueue_.empty()) return false;
+    if (newQueue_.emptyUnsafe()) return false;
 
     runnableQueue_.push(newQueue_.pop_all());
     return true;
