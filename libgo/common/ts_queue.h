@@ -176,7 +176,7 @@ public:
     lock_t lock_;
     TSQueueHook* head_;
     TSQueueHook* tail_;
-    std::size_t count_;
+    volatile std::size_t count_;
     void *check_ = nullptr;
 
 public:
@@ -218,7 +218,12 @@ public:
     ALWAYS_INLINE bool empty()
     {
         LockGuard lock(lock_);
-        return head_ == tail_;
+        return !count_;
+    }
+
+    ALWAYS_INLINE bool emptyUnsafe()
+    {
+        return !count_;
     }
 
     ALWAYS_INLINE std::size_t size()
