@@ -23,19 +23,29 @@ class SList
     static_assert((std::is_base_of<TSQueueHook, T>::value), "T must be baseof TSQueueHook");
 
 public:
+    // !! 支持边遍历边删除 !!
     struct iterator
     {
         T* ptr;
+        T* prev;
+        T* next;
 
-        iterator() : ptr(nullptr) {}
-        explicit iterator(T* p) : ptr(p) {}
+        iterator() : ptr(nullptr), prev(nullptr), next(nullptr) {}
+        iterator(T* p) { reset(p); }
+        void reset(T* p) {
+            ptr = p;
+            next = ptr ? (T*)ptr->next : nullptr;
+            prev = ptr ? (T*)ptr->prev : nullptr;
+        }
+
         friend bool operator==(iterator const& lhs, iterator const& rhs)
         { return lhs.ptr == rhs.ptr; }
         friend bool operator!=(iterator const& lhs, iterator const& rhs)
         { return !(lhs.ptr == rhs.ptr); }
-        iterator& operator++() { ptr = (T*)ptr->next; return *this; }
+
+        iterator& operator++() { reset(next); return *this; }
         iterator operator++(int) { iterator ret = *this; ++(*this); return ret; }
-        iterator& operator--() { ptr = (T*)ptr->prev; return *this; }
+        iterator& operator--() { reset(prev); return *this; }
         iterator operator--(int) { iterator ret = *this; --(*this); return ret; }
         T& operator*() { return *(T*)ptr; }
         T* operator->() { return (T*)ptr; }

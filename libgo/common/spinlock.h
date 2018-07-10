@@ -16,6 +16,11 @@ struct LFLock
         DebugPrint(dbg_spinlock, "lock");
     }
 
+    ALWAYS_INLINE bool is_lock()
+    {
+        return locked_;
+    }
+
     ALWAYS_INLINE bool try_lock()
     {
         bool ret = !locked_;
@@ -38,7 +43,7 @@ struct LFLock
 };
 #else //LIBGO_SINGLE_THREAD
 
-// 性能高于LFLock2, 但是不支持is_lock, unlock不能做重复性校验
+// 性能高于LFLock2
 struct LFLock
 {
     std::atomic_flag flag;
@@ -50,6 +55,12 @@ struct LFLock
     ALWAYS_INLINE void lock()
     {
         while (flag.test_and_set(std::memory_order_acquire)) ;
+    }
+
+    // PS: 这是一个可能没有内存一致性的接口, 使用的时候要小心cpu缓存不能及时刷新的问题.
+    ALWAYS_INLINE bool is_lock()
+    {
+        return flag._M_i;
     }
 
     ALWAYS_INLINE bool try_lock()
@@ -65,6 +76,7 @@ struct LFLock
 
 struct FakeLock {
     void lock() {}
+    bool is_lock() { return false; }
     bool try_lock() { return true; }
     void unlock() {}
 };
