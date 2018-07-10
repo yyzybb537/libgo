@@ -11,3 +11,6 @@ tools/libgo.conf
 .ycm_extra_conf.pyc
 build/
 tutorial/build/
+
+test/util/out.exe
+test/util/a.out

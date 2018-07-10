@@ -185,7 +185,7 @@ void Processer::GC()
     auto list = gcQueue_.pop_all();
     for (Task & tk : list)
         tk.DecrementRef();
-    list.stealed();
+    list.clear();
 }
 
 bool Processer::AddNewTasks()

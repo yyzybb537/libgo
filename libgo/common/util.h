@@ -18,9 +18,25 @@ struct fake_lock_guard
 */
 
 // 侵入式引用计数对象基类
+struct RefObject;
+
+// 自定义delete
+struct Deleter
+{
+    typedef void (*func_t)(RefObject* ptr, void* arg);
+    func_t func_;
+    void* arg_;
+
+    Deleter() : func_(nullptr), arg_(nullptr) {}
+    Deleter(func_t func, void* arg) : func_(func), arg_(arg) {}
+
+    inline void operator()(RefObject* ptr);
+};
+
 struct RefObject
 {
     atomic_t<long> reference_;
+    Deleter deleter_;
 
     RefObject() : reference_{1} {}
     virtual ~RefObject() {}
@@ -33,12 +49,23 @@ struct RefObject
     void DecrementRef()
     {
         if (--reference_ == 0)
-            delete this;
+            deleter_(this);
+    }
+
+    void SetDeleter(Deleter d) {
+        deleter_ = d;
     }
 
     RefObject(RefObject const&) = delete;
     RefObject& operator=(RefObject const&) = delete;
 };
+
+inline void Deleter::operator()(RefObject* ptr) {
+    if (func_)
+        func_(ptr, arg_);
+    else
+        delete ptr;
+}
 
 // 裸指针 -> shared_ptr
 template <typename T>
@@ -106,6 +133,86 @@ public:
 private:
     RefObject *ptr_;
 };
+
+// 侵入式引用计数智能指针
+template <typename T>
+class SharedPtr
+{
+public:
+    SharedPtr() : ptr_(nullptr) {}
+    explicit SharedPtr(T* ptr) : ptr_(ptr) {
+        if (ptr_) ptr_->IncrementRef();
+    }
+    ~SharedPtr() {
+        if (ptr_) ptr_->DecrementRef();
+    }
+
+    SharedPtr(SharedPtr const& other) : ptr_(other.ptr_) {
+        if (ptr_) ptr_->IncrementRef();
+    }
+    SharedPtr(SharedPtr && other) {
+        std::swap(ptr_, other.ptr_);
+    }
+    SharedPtr& operator=(SharedPtr const& other) {
+        if (this == &other) return *this;
+        reset();
+        ptr_ = other.ptr_;
+        if (ptr_) ptr_->IncrementRef();
+        return *this;
+    }
+    SharedPtr& operator=(SharedPtr && other) {
+        if (this == &other) return *this;
+        reset();
+        std::swap(ptr_, other.ptr_);
+        return *this;
+    }
+
+    T& operator*() const { return *ptr_; }
+    T* operator->() const { return ptr_; }
+    explicit operator bool() const { return !!ptr_; }
+    T* get() const { return ptr_; }
+
+    void reset() {
+        if (ptr_) {
+            ptr_->DecrementRef();
+            ptr_ = nullptr;
+        }
+    }
+
+    friend inline bool operator==(SharedPtr const& lhs, SharedPtr const& rhs) {
+        return lhs.ptr_ == rhs.ptr_;
+    }
+    friend inline bool operator!=(SharedPtr const& lhs, SharedPtr const& rhs) {
+        return lhs.ptr_ != rhs.ptr_;
+    }
+    friend inline bool operator<(SharedPtr const& lhs, SharedPtr const& rhs) {
+        return lhs.ptr_ < rhs.ptr_;
+    }
+
+private:
+    T* ptr_;
+};
+
+// 全局对象计数器
+template <typename T>
+struct ObjectCounter
+{
+    ObjectCounter() { ++counter(); }
+    ObjectCounter(ObjectCounter const&) { ++counter(); }
+    ObjectCounter(ObjectCounter &&) { ++counter(); }
+    ~ObjectCounter() { --counter(); }
+
+    static long getCount() {
+        return counter();
+    }
+
+private:
+    static atomic_t<long>& counter() {
+        static atomic_t<long> c;
+        return c;
+    }
+};
+
 ///////////////////////////////////////
 
 // 创建协程的源码文件位置
