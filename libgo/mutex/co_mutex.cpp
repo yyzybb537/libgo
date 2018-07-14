@@ -1,39 +1,78 @@
-#include <libgo/co_mutex.h>
-#include <libgo/scheduler.h>
-#include <libgo/error.h>
-#include <assert.h>
+#include "co_mutex.h"
+#include "../scheduler/scheduler.h"
 
 namespace co
 {
 
-CoMutex::CoMutex()
-    : block_(new BlockObject(1, 1))
+CoMutex::CoMutex() : isLocked_(false)
 {
 }
 
 CoMutex::~CoMutex()
 {
+    assert(lock_.try_lock());
+    assert(queue_.empty());
+    assert(!isLocked_);
 }
 
 void CoMutex::lock()
 {
-    block_->CoBlockWait();
+    std::unique_lock<LFLock> lock(lock_);
+    if (!isLocked_) {
+        isLocked_ = true;
+        return ;
+    }
+
+    if (g_Scheduler.GetCurrentTask()) {
+        // 协程
+        queue_.push(Processer::Suspend());
+        lock.unlock();
+        g_Scheduler.CoYield();
+    } else {
+        // 原生线程
+        queue_.push(Processer::SuspendEntry{});
+        cv_.wait(lock);
+    }
 }
 
 bool CoMutex::try_lock()
 {
-    return block_->TryBlockWait();
+    std::unique_lock<LFLock> lock(lock_);
+    if (!isLocked_) {
+        isLocked_ = true;
+        return true;
+    }
+    return false;
 }
 
 bool CoMutex::is_lock()
 {
-    return !block_->IsWakeup();
+    std::unique_lock<LFLock> lock(lock_);
+    return isLocked_;
 }
 
 void CoMutex::unlock()
 {
-    if (!block_->Wakeup())
-        ThrowError(eCoErrorCode::ec_mutex_double_unlock);
+    std::unique_lock<LFLock> lock(lock_);
+    assert(isLocked_);
+    
+    while (!queue_.empty()) {
+        auto entry = queue_.front();
+        queue_.pop();
+
+        if (entry) {
+            // 协程
+            if (Processer::Wakeup(entry))
+                return ;
+        } else {
+            // 原生线程
+            cv_.notify_one();
+            return ;
+        }
+    }
+
+    isLocked_ = false;
+    return ;
 }
 
 } //namespace co
