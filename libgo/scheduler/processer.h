@@ -72,13 +72,13 @@ public:
     };
 
     // 挂起当前协程
-    static uint64_t Suspend();
+    static SuspendEntry Suspend();
 
     // 挂起当前协程, 并在指定时间后自动唤醒
-    static uint64_t Suspend(FastSteadyClock::duration dur);
+    static SuspendEntry Suspend(FastSteadyClock::duration dur);
 
     // 唤醒协程
-    static bool Wakeup(Task* tk, uint64_t id);
+    static bool Wakeup(SuspendEntry & entry);
 
     /// --------------------------------------
     // for friend class Scheduler
@@ -122,9 +122,9 @@ private:
 
     int64_t NowMicrosecond();
 
-    uint64_t SuspendBySelf(Task* tk);
+    SuspendEntry SuspendBySelf(Task* tk);
 
-    bool WakeupBySelf(Task* tk, uint64_t id);
+    bool WakeupBySelf(SuspendEntry & entry);
 };
 
 } //namespace co

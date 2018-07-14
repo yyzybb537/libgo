@@ -65,6 +65,10 @@ public:
         }
     }
 
+    void swap(IncursivePtr & other) {
+        std::swap(ptr_, other.ptr_);
+    }
+
     friend inline bool operator==(IncursivePtr const& lhs, IncursivePtr const& rhs) {
         return lhs.ptr_ == rhs.ptr_;
     }

@@ -262,7 +262,7 @@ SList<Task> Processer::Steal(std::size_t n)
     }
 }
 
-uint64_t Processer::Suspend()
+Processer::SuspendEntry Processer::Suspend()
 {
     Task* tk = g_Scheduler.GetCurrentTask();
     assert(tk);
@@ -270,22 +270,17 @@ uint64_t Processer::Suspend()
     return tk->proc_->SuspendBySelf(tk);
 }
 
-uint64_t Processer::Suspend(FastSteadyClock::duration dur)
+Processer::SuspendEntry Processer::Suspend(FastSteadyClock::duration dur)
 {
-    Task* tk = g_Scheduler.GetCurrentTask();
-    assert(tk);
-    assert(tk->proc_);
-
-    IncursivePtr<Task> sptr(tk);
-    uint64_t id = tk->proc_->SuspendBySelf(tk);
+    SuspendEntry entry = Suspend();
     g_Scheduler.GetTimer().StartTimer(dur,
-            [sptr, id]{
-                Processer::Wakeup(sptr.get(), id);
+            [entry]() mutable {
+                Processer::Wakeup(entry);
             });
-    return id;
+    return entry;
 }
 
-uint64_t Processer::SuspendBySelf(Task* tk)
+Processer::SuspendEntry Processer::SuspendBySelf(Task* tk)
 {
     assert(tk == runningTask_);
     assert(tk->state_ == TaskState::runnable);
@@ -301,22 +296,30 @@ uint64_t Processer::SuspendBySelf(Task* tk)
     uint64_t id = ++ TaskRefSuspendId(tk);
     runnableQueue_.erase(runningTask_);
     waitQueue_.push(runningTask_);
-    return id;
+    return SuspendEntry{ IncursivePtr<Task>(tk), id };
 }
 
-bool Processer::Wakeup(Task* tk, uint64_t id)
+bool Processer::Wakeup(SuspendEntry & entry)
 {
-    assert(tk->proc_);
-    return tk->proc_->WakeupBySelf(tk, id);
+    auto proc = entry.tk_->proc_;
+    if (!proc) {
+        entry.tk_.reset();
+        return false;
+    }
+    return proc->WakeupBySelf(entry);
 }
 
-bool Processer::WakeupBySelf(Task* tk, uint64_t id)
+bool Processer::WakeupBySelf(SuspendEntry & entry)
 {
-    if (id != TaskRefSuspendId(tk)) return false;
+    IncursivePtr<Task> tkPtr;
+    tkPtr.swap(entry.tk_);
+    Task* tk = tkPtr.get();
+
+    if (entry.id_ != TaskRefSuspendId(tk)) return false;
 
     {
         std::unique_lock<TaskQueue::lock_t> lock(waitQueue_.LockRef());
-        if (id != TaskRefSuspendId(tk)) return false;
+        if (entry.id_ != TaskRefSuspendId(tk)) return false;
         ++ TaskRefSuspendId(tk);
         bool ret = waitQueue_.eraseWithoutLock(tk);
         assert(ret);
