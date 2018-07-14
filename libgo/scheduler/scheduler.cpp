@@ -93,10 +93,13 @@ void Scheduler::Start(int minThreadNumber, int maxThreadNumber)
 
     auto mainProc = processers_[0];
 
-#if LIBGO_SINGLE_THREAD == 0
     for (int i = 0; i < minThreadNumber_ - 1; i++) {
         NewProcessThread();
     }
+
+    // 唤醒协程的定时器线程
+    timer_.SetPoolSize(1000, 100);
+    std::thread([this]{ this->timer_.ThreadRun(); }).detach();
 
     // 调度线程
     if (maxThreadNumber_ > 1) {
@@ -108,7 +111,6 @@ void Scheduler::Start(int minThreadNumber, int maxThreadNumber)
     } else {
         DebugPrint(dbg_scheduler, "---> No DispatcherThread");
     }
-#endif
 
     std::thread(FastSteadyClock::ThreadRun).detach();
 

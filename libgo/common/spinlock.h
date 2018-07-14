@@ -5,8 +5,7 @@
 namespace co
 {
 
-#if LIBGO_SINGLE_THREAD
-struct LFLock
+struct BooleanFakeLock
 {
     bool locked_ = false;
 
@@ -35,13 +34,7 @@ struct LFLock
         locked_ = false;
         DebugPrint(dbg_spinlock, "unlock");
     }
-
-    ALWAYS_INLINE bool is_lock()
-    {
-        return locked_;
-    }
 };
-#else //LIBGO_SINGLE_THREAD
 
 // 性能高于LFLock2
 struct LFLock
@@ -112,7 +105,5 @@ struct LFLock2
         return state.load(std::memory_order_acq_rel);
     }
 };
-
-#endif //LIBGO_SINGLE_THREAD
 
 } //namespace co
