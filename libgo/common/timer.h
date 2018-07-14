@@ -73,7 +73,7 @@ public:
 
         friend class Timer;
     private:
-        SharedPtr<Element> elem_;
+        IncursivePtr<Element> elem_;
     };
 
 public:

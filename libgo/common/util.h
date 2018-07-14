@@ -22,31 +22,31 @@ struct RefObject;
 
 // 侵入式引用计数智能指针
 template <typename T>
-class SharedPtr
+class IncursivePtr
 {
 public:
-    SharedPtr() : ptr_(nullptr) {}
-    explicit SharedPtr(T* ptr) : ptr_(ptr) {
+    IncursivePtr() : ptr_(nullptr) {}
+    explicit IncursivePtr(T* ptr) : ptr_(ptr) {
         if (ptr_) ptr_->IncrementRef();
     }
-    ~SharedPtr() {
+    ~IncursivePtr() {
         if (ptr_) ptr_->DecrementRef();
     }
 
-    SharedPtr(SharedPtr const& other) : ptr_(other.ptr_) {
+    IncursivePtr(IncursivePtr const& other) : ptr_(other.ptr_) {
         if (ptr_) ptr_->IncrementRef();
     }
-    SharedPtr(SharedPtr && other) {
+    IncursivePtr(IncursivePtr && other) {
         std::swap(ptr_, other.ptr_);
     }
-    SharedPtr& operator=(SharedPtr const& other) {
+    IncursivePtr& operator=(IncursivePtr const& other) {
         if (this == &other) return *this;
         reset();
         ptr_ = other.ptr_;
         if (ptr_) ptr_->IncrementRef();
         return *this;
     }
-    SharedPtr& operator=(SharedPtr && other) {
+    IncursivePtr& operator=(IncursivePtr && other) {
         if (this == &other) return *this;
         reset();
         std::swap(ptr_, other.ptr_);
@@ -65,13 +65,13 @@ public:
         }
     }
 
-    friend inline bool operator==(SharedPtr const& lhs, SharedPtr const& rhs) {
+    friend inline bool operator==(IncursivePtr const& lhs, IncursivePtr const& rhs) {
         return lhs.ptr_ == rhs.ptr_;
     }
-    friend inline bool operator!=(SharedPtr const& lhs, SharedPtr const& rhs) {
+    friend inline bool operator!=(IncursivePtr const& lhs, IncursivePtr const& rhs) {
         return lhs.ptr_ != rhs.ptr_;
     }
-    friend inline bool operator<(SharedPtr const& lhs, SharedPtr const& rhs) {
+    friend inline bool operator<(IncursivePtr const& lhs, IncursivePtr const& rhs) {
         return lhs.ptr_ < rhs.ptr_;
     }
 

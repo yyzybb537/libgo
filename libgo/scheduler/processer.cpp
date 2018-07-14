@@ -276,7 +276,7 @@ uint64_t Processer::Suspend(FastSteadyClock::duration dur)
     assert(tk);
     assert(tk->proc_);
 
-    SharedPtr<Task> sptr(tk);
+    IncursivePtr<Task> sptr(tk);
     uint64_t id = tk->proc_->SuspendBySelf(tk);
     g_Scheduler.GetTimer().StartTimer(dur,
             [sptr, id]{
