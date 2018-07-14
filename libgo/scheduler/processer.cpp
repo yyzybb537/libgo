@@ -167,7 +167,6 @@ std::size_t Processer::RunnableSize()
 
 void Processer::NotifyCondition()
 {
-    std::unique_lock<std::mutex> lock(cvMutex_);
     cv_.notify_all();
 }
 

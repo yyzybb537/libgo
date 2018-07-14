@@ -69,6 +69,8 @@ public:
     struct SuspendEntry {
         IncursivePtr<Task> tk_;
         uint64_t id_;
+
+        explicit operator bool() const { return !!tk_; }
     };
 
     // 挂起当前协程

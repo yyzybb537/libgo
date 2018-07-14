@@ -1,49 +1,91 @@
 #pragma once
-
-#include <memory>
+#include "../common/config.h"
+#include "../scheduler/processer.h"
+#include <queue>
+#include <condition_variable>
 
 namespace co
 {
-    /// 读写锁
-    class CoRWMutex
+
+/// 读写锁
+class CoRWMutex
+{
+    LFLock lock_;
+    std::queue<Processer::SuspendEntry> rQueue_;
+    std::queue<Processer::SuspendEntry> wQueue_;
+    long lockState_;  // 0:无锁, >=1:读锁, -1:写锁
+
+    // 兼容原生线程
+    std::condition_variable_any rCv_;
+    std::condition_variable_any wCv_;
+
+    // 是否写优先
+    bool writePriority_;
+
+public:
+    explicit CoRWMutex(bool writePriority = true);
+    ~CoRWMutex();
+
+    void RLock();
+    bool RTryLock();
+    void RUnlock();
+
+    void WLock();
+    bool WTryLock();
+    void WUnlock();
+
+    bool IsLock();
+
+private:
+    void TryWakeUp();
+
+public:
+    class ReadView
     {
-        class CoRWMutexImpl;
-        std::shared_ptr<CoRWMutexImpl> impl_;
+        friend class CoRWMutex;
+        CoRWMutex * self_;
 
     public:
-        class ReadView
-        {
-            CoRWMutexImpl & ref_;
-            ReadView(CoRWMutexImpl&);
-            friend class CoRWMutexImpl;
+        void lock();
+        bool try_lock();
+        bool is_lock();
+        void unlock();
 
-        public:
-            void lock();
-            bool try_lock();
-            bool is_lock();
-            void unlock();
-        };
-
-        class WriteView
-        {
-            CoRWMutexImpl & ref_;
-            WriteView(CoRWMutexImpl&);
-            friend class CoRWMutexImpl;
-
-        public:
-            void lock();
-            bool try_lock();
-            bool is_lock();
-            void unlock();
-        };
-
-        CoRWMutex();
-        ReadView& reader();
-        WriteView& writer();
+        ReadView() = default;
+        ReadView(ReadView const&) = delete;
+        ReadView& operator=(ReadView const&) = delete;
     };
 
-    typedef CoRWMutex co_rwmutex;
-    typedef CoRWMutex::ReadView co_rmutex;
-    typedef CoRWMutex::WriteView co_wmutex;
+    class WriteView
+    {
+        friend class CoRWMutex;
+        CoRWMutex * self_;
+
+    public:
+        void lock();
+        bool try_lock();
+        bool is_lock();
+        void unlock();
+
+        WriteView() = default;
+        WriteView(WriteView const&) = delete;
+        WriteView& operator=(WriteView const&) = delete;
+    };
+
+    ReadView& Reader();
+    WriteView& Writer();
+
+    // 兼容旧版接口
+    ReadView& reader();
+    WriteView& writer();
+
+private:
+    ReadView readView_;
+    WriteView writeView_;
+};
+
+typedef CoRWMutex co_rwmutex;
+typedef CoRWMutex::ReadView co_rmutex;
+typedef CoRWMutex::WriteView co_wmutex;
 
 } //namespace co

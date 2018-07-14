@@ -1,7 +1,8 @@
 #pragma once
-#include <stdint.h>
-#include <libgo/block_object.h>
-
+#include "../common/config.h"
+#include "../scheduler/processer.h"
+#include <queue>
+#include <condition_variable>
 
 namespace co
 {
@@ -9,7 +10,12 @@ namespace co
 /// 协程锁
 class CoMutex
 {
-    std::shared_ptr<BlockObject> block_;
+    LFLock lock_;
+    std::queue<Processer::SuspendEntry> queue_;
+    bool isLocked_;
+
+    // 兼容原生线程
+    std::condition_variable_any cv_;
 
 public:
     CoMutex();
