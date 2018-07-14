@@ -65,6 +65,12 @@ public:
     // 暂兼用于负载指数
     std::size_t RunnableSize();
 
+    // 挂起标识
+    struct SuspendEntry {
+        IncursivePtr<Task> tk_;
+        uint64_t id_;
+    };
+
     // 挂起当前协程
     static uint64_t Suspend();
 
