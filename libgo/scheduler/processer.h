@@ -1,5 +1,6 @@
 #pragma once
 #include "../common/config.h"
+#include "../common/clock.h"
 #include "../task/task.h"
 #include "../common/ts_queue.h"
 #include <condition_variable>
@@ -52,29 +53,44 @@ private:
     static int s_check_;
 
 public:
-    explicit Processer(int id);
-
     ALWAYS_INLINE int Id() { return id_; }
 
-    // 新创建、阻塞后触发的协程add进来
-    void AddTaskRunnable(Task *tk);
-
-    // 偷来的协程add进来
-    void AddTaskRunnable(SList<Task> && slist);
-
-    void Process();
-
+    // 协程切出
     void CoYield();
 
-    static Processer* & GetCurrentProcesser();
-
+    // 获取当前正在执行的协程
     Task* GetCurrentTask();
-
-    void NotifyCondition();
 
     // 待执行的协程数量
     // 暂兼用于负载指数
     std::size_t RunnableSize();
+
+    // 挂起当前协程
+    static uint64_t Suspend();
+
+    // 挂起当前协程, 并在指定时间后自动唤醒
+    static uint64_t Suspend(FastSteadyClock::duration dur);
+
+    // 唤醒协程
+    static bool Wakeup(Task* tk, uint64_t id);
+
+    /// --------------------------------------
+    // for friend class Scheduler
+private:
+    explicit Processer(int id);
+
+    static Processer* & GetCurrentProcesser();
+
+    // 新创建、阻塞后触发的协程add进来
+    void AddTaskRunnable(Task *tk);
+
+    // 调度
+    void Process();
+
+    // 偷来的协程add进来
+    void AddTaskRunnable(SList<Task> && slist);
+
+    void NotifyCondition();
 
     // 是否处于等待状态(无runnable协程)
     // 调度线程会尽量分配协程过来
@@ -86,12 +102,7 @@ public:
 
     // 偷协程
     SList<Task> Steal(std::size_t n);
-
-    // 挂起当前协程
-    static uint64_t Suspend();
-
-    // 唤醒协程
-    static bool Wakeup(Task* tk, uint64_t id);
+    /// --------------------------------------
 
 private:
     void WaitCondition();

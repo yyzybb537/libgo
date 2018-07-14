@@ -80,9 +80,9 @@ public:
     Timer();
 
     template <typename Rep, typename Period>
-    explicit Timer(std::chrono::duration<Rep, Period> precision);
+    void SetPrecision(std::chrono::duration<Rep, Period> precision);
 
-    void SetPoolSize(int min, int max, bool reserve);
+    void SetPoolSize(int max, int reserve = 0);
 
     std::size_t GetPoolSize();
 
@@ -109,7 +109,6 @@ private:
 
 //private:
 public:
-    int minPoolSize_ = 0;
     int maxPoolSize_ = 0;
     Pool pool_;
 
@@ -136,13 +135,15 @@ public:
 template <typename F>
 Timer<F>::Timer()
 {
-    precision_ = std::chrono::milliseconds(1);
-    Init();
+    begin_ = FastSteadyClock::now();
+    point_.p64 = 0;
+    pool_.check_ = this;
+    precision_ = std::chrono::microseconds(100);
 }
 
 template <typename F>
 template <typename Rep, typename Period>
-Timer<F>::Timer(std::chrono::duration<Rep, Period> precision)
+void Timer<F>::SetPrecision(std::chrono::duration<Rep, Period> precision)
 {
     if (precision < std::chrono::microseconds(100))
         precision = std::chrono::microseconds(100);
@@ -150,25 +151,17 @@ Timer<F>::Timer(std::chrono::duration<Rep, Period> precision)
         precision = std::chrono::minutes(1);
 
     precision_ = std::chrono::duration_cast<FastSteadyClock::duration>(precision);
-    Init();
 }
 
 template <typename F>
-void Timer<F>::Init()
+void Timer<F>::SetPoolSize(int max, int reserve)
 {
-    begin_ = FastSteadyClock::now();
-    pool_.check_ = this;
-}
-
-template <typename F>
-void Timer<F>::SetPoolSize(int min, int max, bool reserve)
-{
-    minPoolSize_ = min;
     maxPoolSize_ = max;
-    if (reserve && pool_.size() < minPoolSize_) {
+
+    if ((int)pool_.size() < reserve) {
         TSQueue<Element, false> reservePool;
         reservePool.check_ = pool_.check_;
-        for (int i = pool_.size(); i < minPoolSize_; ++i) {
+        for (int i = pool_.size(); i < reserve; ++i) {
             auto ptr = new Element;
             ptr->SetDeleter(Deleter(&Timer<F>::StaticDeleteElement, (void*)this));
             reservePool.push(ptr);
@@ -177,13 +170,13 @@ void Timer<F>::SetPoolSize(int min, int max, bool reserve)
     }
 }
 
-template <typename F>
+    template <typename F>
 std::size_t Timer<F>::GetPoolSize()
 {
     return pool_.size();
 }
 
-template <typename F>
+    template <typename F>
 typename Timer<F>::TimerId Timer<F>::StartTimer(FastSteadyClock::duration dur, F const& cb)
 {
     Element* element = NewElement();
@@ -193,8 +186,8 @@ typename Timer<F>::TimerId Timer<F>::StartTimer(FastSteadyClock::duration dur, F
     Dispatch(element, false);
     return timerId;
 }
-    
-template <typename F>
+
+    template <typename F>
 void Timer<F>::ThreadRun()
 {
     for (;;) {
@@ -222,7 +215,7 @@ void Timer<F>::ThreadRun()
             }
         }
 
-//        printf("p %lu -> %lu. topLevel=%d\n", last.p64, p.p64, topLevel);
+        //        printf("p %lu -> %lu. topLevel=%d\n", last.p64, p.p64, topLevel);
 
         // 低于此刻度的, 都可以直接trigger了
         for (int i = 0; i < topLevel; ++i) {
@@ -242,11 +235,11 @@ void Timer<F>::ThreadRun()
         }
 
         std::this_thread::sleep_for(precision_);
-//        std::this_thread::sleep_for(std::chrono::seconds(1));
+        //        std::this_thread::sleep_for(std::chrono::seconds(1));
     }
 }
 
-template <typename F>
+    template <typename F>
 void Timer<F>::Trigger(Slot & slot)
 {
     SList<Element> slist = slot.pop_all();
@@ -258,7 +251,7 @@ void Timer<F>::Trigger(Slot & slot)
     slist.clear();
 }
 
-template <typename F>
+    template <typename F>
 void Timer<F>::Dispatch(Slot & slot, FastSteadyClock::time_point now)
 {
     SList<Element> slist = slot.pop_all();
@@ -274,7 +267,7 @@ void Timer<F>::Dispatch(Slot & slot, FastSteadyClock::time_point now)
     slist.clear();
 }
 
-template <typename F>
+    template <typename F>
 void Timer<F>::Dispatch(Element * element, bool mainloop)
 {
     uint64_t durVal = std::chrono::duration_cast<FastSteadyClock::duration>(
@@ -334,8 +327,9 @@ void Timer<F>::StaticDeleteElement(RefObject* ptr, void* arg)
 template <typename F>
 void Timer<F>::DeleteElement(Element* element)
 {
-    if (pool_.size() < maxPoolSize_) {
+    if ((int)pool_.size() < maxPoolSize_) {
         element->IncrementRef();
+        element->cb_ = F();
         pool_.push(element);
     }
     else

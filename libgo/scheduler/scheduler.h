@@ -2,6 +2,7 @@
 #include "../common/config.h"
 #include "../common/deque.h"
 #include "../common/spinlock.h"
+#include "../common/timer.h"
 #include "../task/task.h"
 #include "../debug/listener.h"
 #include "processer.h"
@@ -19,6 +20,8 @@ struct TaskOpt
 
 class Scheduler
 {
+    friend class Processer;
+
 public:
     static Scheduler& getInstance();
 
@@ -81,18 +84,26 @@ private:
     void AddTaskRunnable(Task* tk);
 
     // dispatcher线程函数
-    // 1.根据协程调度排队时间计算负载(抽样跟踪, 将时间戳写入Task结构中), 将高负载的P中的协程steal一些给低负载的P
+    // 1.根据待执行协程计算负载, 将高负载的P中的协程steal一些给空载的P
     // 2.侦测到阻塞的P(单个协程运行时间超过阀值), 将P中的其他协程steal给其他P
     void DispatcherThread();
 
     void NewProcessThread();
 
+    typedef Timer<std::function<void()>> TimerType;
+
+    inline TimerType & GetTimer() { return timer_; }
+
     // deque of Processer, write by start or dispatch thread
     Deque<Processer*> processers_;
 
     LFLock started_;
+
     atomic_t<uint32_t> taskCount_{0};
+
     volatile uint32_t lastActive_ = 0;
+
+    TimerType timer_;
     
     int minThreadNumber_ = 1;
     int maxThreadNumber_ = 1;

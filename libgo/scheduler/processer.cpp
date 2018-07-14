@@ -270,6 +270,21 @@ uint64_t Processer::Suspend()
     return tk->proc_->SuspendBySelf(tk);
 }
 
+uint64_t Processer::Suspend(FastSteadyClock::duration dur)
+{
+    Task* tk = g_Scheduler.GetCurrentTask();
+    assert(tk);
+    assert(tk->proc_);
+
+    SharedPtr<Task> sptr(tk);
+    uint64_t id = tk->proc_->SuspendBySelf(tk);
+    g_Scheduler.GetTimer().StartTimer(dur,
+            [sptr, id]{
+                Processer::Wakeup(sptr.get(), id);
+            });
+    return id;
+}
+
 uint64_t Processer::SuspendBySelf(Task* tk)
 {
     assert(tk == runningTask_);
