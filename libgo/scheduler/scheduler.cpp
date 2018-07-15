@@ -47,6 +47,7 @@ Scheduler::~Scheduler()
 void Scheduler::CreateTask(TaskF const& fn, TaskOpt const& opt)
 {
     Task* tk = new Task(fn, opt.stack_size_ ? opt.stack_size_ : GetOptions().stack_size);
+    tk->SetDeleter(Deleter(&Scheduler::DeleteTask, this));
     tk->id_ = ++GetTaskIdFactory();
     TaskRefAffinity(tk) = opt.affinity_;
     TaskRefLocation(tk).Init(opt.file_, opt.lineno_);
@@ -58,6 +59,13 @@ void Scheduler::CreateTask(TaskF const& fn, TaskOpt const& opt)
     }
 
     AddTaskRunnable(tk);
+}
+
+void Scheduler::DeleteTask(RefObject* tk, void* arg)
+{
+    Scheduler* self = (Scheduler*)arg;
+    delete tk;
+    --self->taskCount_;
 }
 
 bool Scheduler::IsCoroutine()

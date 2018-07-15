@@ -90,7 +90,7 @@ aux_source_directory(${PROJECT_SOURCE_DIR}/libgo/common CO_SRC_LIST)
 aux_source_directory(${PROJECT_SOURCE_DIR}/libgo/context CO_SRC_LIST)
 aux_source_directory(${PROJECT_SOURCE_DIR}/libgo/task CO_SRC_LIST)
 aux_source_directory(${PROJECT_SOURCE_DIR}/libgo/scheduler CO_SRC_LIST)
-aux_source_directory(${PROJECT_SOURCE_DIR}/libgo/mutex CO_SRC_LIST)
+aux_source_directory(${PROJECT_SOURCE_DIR}/libgo/sync CO_SRC_LIST)
 
 configure_file(${PROJECT_SOURCE_DIR}/libgo/common/cmake_config.h.in ${PROJECT_SOURCE_DIR}/libgo/common/cmake_config.h)
 message("----------------------------------")

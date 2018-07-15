@@ -22,7 +22,7 @@ public:
     struct DefaultConstructorDestructor
     {
         inline static void Constructor(void *ptr) {
-            new (reinterpret_cast<T*>(ptr)) T;
+            new (reinterpret_cast<T*>(ptr)) T();
         }
         inline static void Destructor(void *ptr) {
             reinterpret_cast<T*>(ptr)->~T();

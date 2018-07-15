@@ -80,6 +80,8 @@ private:
     Scheduler& operator=(Scheduler const&) = delete;
     Scheduler& operator=(Scheduler &&) = delete;
 
+    static void DeleteTask(RefObject* tk, void* arg);
+
     // 将一个协程加入可执行队列中
     void AddTaskRunnable(Task* tk);
 

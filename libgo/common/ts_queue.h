@@ -53,14 +53,13 @@ public:
 
     T* head_;
     T* tail_;
-    void *check_;
     std::size_t count_;
 
 public:
-    SList() : head_(nullptr), tail_(nullptr), check_(nullptr), count_(0) {}
+    SList() : head_(nullptr), tail_(nullptr), count_(0) {}
 
-    SList(TSQueueHook* h, TSQueueHook* t, std::size_t count, void *c)
-        : head_((T*)h), tail_((T*)t), check_(c), count_(count) {}
+    SList(TSQueueHook* h, TSQueueHook* t, std::size_t count)
+        : head_((T*)h), tail_((T*)t), count_(count) {}
 
     SList(SList const&) = delete;
     SList& operator=(SList const&) = delete;
@@ -69,7 +68,6 @@ public:
     {
         head_ = other.head_;
         tail_ = other.tail_;
-        check_ = other.check_;
         count_ = other.count_;
         other.stealed();
     }
@@ -79,7 +77,6 @@ public:
         clear();
         head_ = other.head_;
         tail_ = other.tail_;
-        check_ = other.check_;
         count_ = other.count_;
         other.stealed();
         return *this;
@@ -94,7 +91,6 @@ public:
             return ;
         }
 
-        assert(check_ == other.check_);
         tail_->next = other.head_;
         tail_ = other.tail_;
         count_ += other.count_;
@@ -109,11 +105,14 @@ public:
             return o;
         }
 
+        if (n == 0) {
+            return SList<T>();
+        }
+
         SList<T> o;
         auto pos = head_;
-        for (std::size_t i = 0; i < n; ++i)
+        for (std::size_t i = 1; i < n; ++i)
             pos = (T*)pos->next;
-        o.check_ = check_;
         o.head_ = head_;
         o.tail_ = pos;
         o.count_ = n;
@@ -128,7 +127,6 @@ public:
     ~SList()
     {
         assert(count_ == 0);
-        assert(check_ == 0);
     }
 
     iterator begin() { return iterator{head_}; }
@@ -142,7 +140,6 @@ public:
         if (ptr->next) ptr->next->prev = ptr->prev;
         else tail_ = (T*)tail_->prev;
         ptr->prev = ptr->next = nullptr;
-        ptr->check_ = nullptr;
         -- count_;
         DecrementRef(ptr);
         return it;
@@ -161,13 +158,11 @@ public:
     void stealed()
     {
         head_ = tail_ = nullptr;
-        check_ = nullptr;
         count_ = 0;
     }
 
     ALWAYS_INLINE TSQueueHook* head() { return head_; }
     ALWAYS_INLINE TSQueueHook* tail() { return tail_; }
-    ALWAYS_INLINE bool check(void *c) { return check_ == c; }
 };
 
 // 线程安全的队列(支持随机删除)
@@ -187,7 +182,7 @@ public:
     TSQueueHook* head_;
     TSQueueHook* tail_;
     volatile std::size_t count_;
-    void *check_ = nullptr;
+    void *check_; // 可选的erase检测
 
 public:
     TSQueue()
@@ -217,12 +212,14 @@ public:
     {
         LockGuard lock(lock_);
         out = (T*)head_->next;
+        if (out) out->check_ = check_;
     }
 
     ALWAYS_INLINE void next(T* ptr, T*& out)
     {
         LockGuard lock(lock_);
         out = (T*)ptr->next;
+        if (out) out->check_ = check_;
     }
 
     ALWAYS_INLINE bool empty()
@@ -250,6 +247,8 @@ public:
     ALWAYS_INLINE void pushWithoutLock(T* element)
     {
         TSQueueHook *hook = static_cast<TSQueueHook*>(element);
+        assert(hook->next == nullptr);
+        assert(hook->prev == nullptr);
         tail_->next = hook;
         hook->prev = tail_;
         hook->next = nullptr;
@@ -277,8 +276,9 @@ public:
 
     ALWAYS_INLINE void push(SList<T> && elements)
     {
-        if (elements.empty()) return ;  // empty的SList不能check, 因为stealed的时候已经清除check_.
-        assert(elements.check(check_));
+        if (elements.empty()) return ;
+        assert(elements.head_->prev == nullptr);
+        assert(elements.tail_->next == nullptr);
         LockGuard lock(lock_);
         count_ += elements.size();
         tail_->next = elements.head();
@@ -304,7 +304,7 @@ public:
         if (last->next) last->next->prev = head_;
         first->prev = last->next = nullptr;
         count_ -= c;
-        return SList<T>(first, last, c, check_);
+        return SList<T>(first, last, c);
     }
 
     // O(n), 慎用.
@@ -325,7 +325,7 @@ public:
         tail_ = first->prev;
         first->prev = tail_->next = nullptr;
         count_ -= c;
-        return SList<T>(first, last, c, check_);
+        return SList<T>(first, last, c);
     }
 
     ALWAYS_INLINE SList<T> pop_all()
@@ -345,18 +345,20 @@ public:
         first->prev = last->next = nullptr;
         std::size_t c = count_;
         count_ = 0;
-        return SList<T>(first, last, c, check_);
+        return SList<T>(first, last, c);
     }
 
-    ALWAYS_INLINE bool erase(T* hook)
+    ALWAYS_INLINE bool erase(T* hook, bool check = false)
     {
         LockGuard lock(lock_);
-        return eraseWithoutLock(hook);
+        return eraseWithoutLock(hook, check);
     }
 
-    ALWAYS_INLINE bool eraseWithoutLock(T* hook)
+    ALWAYS_INLINE bool eraseWithoutLock(T* hook, bool check = false)
     {
-        if (hook->check_ != (void*)check_) return false;
+        if (check && hook->check_ != (void*)check_) return false;
+        assert(hook->prev != nullptr);
+        assert(hook == tail_ || hook->next != nullptr);
         if (hook->prev) hook->prev->next = hook->next;
         if (hook->next) hook->next->prev = hook->prev;
         else if (hook == tail_) tail_ = tail_->prev;
@@ -365,127 +367,6 @@ public:
         -- count_;
         DecrementRef((T*)hook);
         return true;
-    }
-};
-
-// 线程安全的跳表队列(支持快速pop出n个元素)
-template <typename T,
-         bool ThreadSafe = true,
-         std::size_t SkipDistance = 64  // 必须是2的n次方
-         >
-class TSSkipQueue
-{
-    static_assert((std::is_base_of<TSQueueHook, T>::value), "T must be baseof TSQueueHook");
-
-private:
-    LFLock lock_;
-    typedef typename std::conditional<ThreadSafe,
-            std::lock_guard<LFLock>,
-            fake_lock_guard>::type LockGuard;
-    TSQueueHook* head_;
-    TSQueueHook* tail_;
-    std::size_t count_;
-
-    struct SkipLayer
-    {
-        std::deque<TSQueueHook*> indexs_;
-        std::size_t head_offset_ = 0;  // begin距离head的距离
-        std::size_t tail_offset_ = 0;  // end距离tail的距离
-    };
-
-    SkipLayer skip_layer_;
-
-public:
-    TSSkipQueue()
-    {
-        head_ = tail_ = new TSQueueHook;
-        count_ = 0;
-    }
-
-    ~TSSkipQueue()
-    {
-        LockGuard lock(lock_);
-        while (head_ != tail_) {
-            TSQueueHook *prev = tail_->prev;
-            DecrementRef((T*)tail_);
-            tail_ = prev;
-        }
-        delete head_;
-        head_ = tail_ = 0;
-    }
-
-    bool empty()
-    {
-        LockGuard lock(lock_);
-        return head_ == tail_;
-    }
-
-    std::size_t size()
-    {
-        LockGuard lock(lock_);
-        return count_;
-    }
-
-    void push(T* element)
-    {
-        LockGuard lock(lock_);
-        // 插入到尾端
-        TSQueueHook *hook = static_cast<TSQueueHook*>(element);
-        tail_->next = hook;
-        hook->prev = tail_;
-        hook->next = nullptr;
-        hook->check_ = this;
-        tail_ = hook;
-        ++ count_;
-        IncrementRef(element);
-
-        // 刷新跳表
-        if (++skip_layer_.tail_offset_ == SkipDistance) {
-            skip_layer_.tail_offset_ = 0;
-            skip_layer_.indexs_.push_back(tail_);
-        }
-    }
-
-    SList<T> pop_front(std::size_t n)
-    {
-        if (head_ == tail_ || !n) return SList<T>();
-        LockGuard lock(lock_);
-        if (head_ == tail_) return SList<T>();
-        TSQueueHook* first = head_->next;
-        TSQueueHook* last = first;
-        n = (std::min)(n, count_);
-        std::size_t next_step = n - 1;
-
-        // 从跳表上查找
-        if ((SkipDistance - skip_layer_.head_offset_) > n) {
-            skip_layer_.head_offset_ += n;
-        } else if (skip_layer_.indexs_.empty()) {
-            skip_layer_.tail_offset_ = count_ - n;
-        } else {
-            // 往前找
-            std::size_t forward = (n + skip_layer_.head_offset_ - SkipDistance) / SkipDistance;
-            next_step = (n + skip_layer_.head_offset_ - SkipDistance) & (SkipDistance - 1);
-            auto it = skip_layer_.indexs_.begin();
-            std::advance(it, forward);
-            last = *it;
-            skip_layer_.indexs_.erase(skip_layer_.indexs_.begin(), ++it);
-            if (skip_layer_.indexs_.empty()) {
-                skip_layer_.tail_offset_ = count_ - n;
-                skip_layer_.head_offset_ = 0;
-            } else {
-                skip_layer_.head_offset_ = next_step;
-            }
-        }
-
-        for (std::size_t i = 0; i < next_step; ++i)
-            last = last->next;
-
-        if (last == tail_) tail_ = head_;
-        head_->next = last->next;
-        if (last->next) last->next->prev = head_;
-        first->prev = last->next = nullptr;
-        count_ -= n;
-        return SList<T>(first, last, n, this);
     }
 };
 

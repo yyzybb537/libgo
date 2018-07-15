@@ -21,6 +21,7 @@
 #include <functional>
 #include <chrono>
 #include <memory>
+#include <queue>
 
 // VS2013²»Ö§³Öthread_local
 #if defined(_MSC_VER) && _MSC_VER < 1900

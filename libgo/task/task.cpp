@@ -83,7 +83,6 @@ Task::~Task()
 {
     assert(!this->prev);
     assert(!this->next);
-    assert(!this->check_);
 //    DebugPrint(dbg_task, "task(%s) destruct. this=%p", DebugInfo(), this);
 }
 
