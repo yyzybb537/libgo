@@ -37,7 +37,8 @@ public:
         if (ptr_) ptr_->IncrementRef();
     }
     IncursivePtr(IncursivePtr && other) {
-        std::swap(ptr_, other.ptr_);
+        ptr_ = other.ptr_;
+        other.ptr_ = nullptr;
     }
     IncursivePtr& operator=(IncursivePtr const& other) {
         if (this == &other) return *this;

@@ -1,17 +1,20 @@
 #pragma once
 #include "common/pp.h"
 #include "common/syntax_helper.h"
+#include "sync/channel.h"
+#include "sync/co_mutex.h"
+#include "sync/co_rwmutex.h"
 //#include "defer/defer.h"
 
 #define go ::co::__go(__FILE__, __LINE__)-
 
 // create coroutine options
 #define co_stack(size) ::co::__go_option<::co::opt_stack_size>{size}-
-#define co_dispatch(thread_id_or_type) ::co::__go_option<::co::opt_dispatch>{thread_id_or_type}-
+//#define co_dispatch(thread_id_or_type) ::co::__go_option<::co::opt_dispatch>{thread_id_or_type}-
 //#define co_affinity() ::co::__go_option<::co::opt_affinity>{true}-
 
 #define go_stack(size) go co_stack(size)
-#define go_dispatch(thread_id_or_type) go co_dispatch(thread_id_or_type)
+//#define go_dispatch(thread_id_or_type) go co_dispatch(thread_id_or_type)
 
 #define co_yield do { g_Scheduler.CoYield(); } while (0)
 
@@ -21,17 +24,17 @@
 // co_sched
 #define co_sched g_Scheduler
 
-//// co_mutex
-//using ::co::co_mutex;
-//
-//// co_rwmutex
-//using ::co::co_rwmutex;
-//using ::co::co_rmutex;
-//using ::co::co_wmutex;
-//
-//// co_chan
-//using ::co::co_chan;
-//
+// co_mutex
+using ::co::co_mutex;
+
+// co_rwmutex
+using ::co::co_rwmutex;
+using ::co::co_rmutex;
+using ::co::co_wmutex;
+
+// co_chan
+using ::co::co_chan;
+
 //// co timer *
 //typedef ::co::TimerId co_timer_id;
 //using ::co::co_timer_add;
