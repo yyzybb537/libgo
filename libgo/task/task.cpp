@@ -81,6 +81,7 @@ Task::Task(TaskF const& fn, std::size_t stack_size)
 
 Task::~Task()
 {
+//    printf("delete Task = %p, impl = %p, weak = %ld\n", this, this->impl_, (long)this->impl_->weak_);
     assert(!this->prev);
     assert(!this->next);
 //    DebugPrint(dbg_task, "task(%s) destruct. this=%p", DebugInfo(), this);

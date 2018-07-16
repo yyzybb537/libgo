@@ -185,8 +185,9 @@ void Processer::WaitCondition()
 void Processer::GC()
 {
     auto list = gcQueue_.pop_all();
-    for (Task & tk : list)
+    for (Task & tk : list) {
         tk.DecrementRef();
+    }
     list.clear();
 }
 
@@ -300,30 +301,27 @@ Processer::SuspendEntry Processer::SuspendBySelf(Task* tk)
     uint64_t id = ++ TaskRefSuspendId(tk);
     runnableQueue_.erase(runningTask_);
     waitQueue_.push(runningTask_);
-    return SuspendEntry{ IncursivePtr<Task>(tk), id };
+    return SuspendEntry{ WeakPtr<Task>(tk), id };
 }
 
-bool Processer::Wakeup(SuspendEntry & entry)
+bool Processer::Wakeup(SuspendEntry const& entry)
 {
-    auto proc = entry.tk_->proc_;
-    if (!proc) {
-        entry.tk_.reset();
-        return false;
-    }
-    return proc->WakeupBySelf(entry);
+    IncursivePtr<Task> tkPtr = entry.tk_.lock();
+    if (!tkPtr) return false;
+
+    auto proc = tkPtr->proc_;
+    return proc ? proc->WakeupBySelf(tkPtr, entry.id_) : false;
 }
 
-bool Processer::WakeupBySelf(SuspendEntry & entry)
+bool Processer::WakeupBySelf(IncursivePtr<Task> const& tkPtr, uint64_t id)
 {
-    IncursivePtr<Task> tkPtr;
-    tkPtr.swap(entry.tk_);
     Task* tk = tkPtr.get();
 
-    if (entry.id_ != TaskRefSuspendId(tk)) return false;
+    if (id != TaskRefSuspendId(tk)) return false;
 
     {
         std::unique_lock<TaskQueue::lock_t> lock(waitQueue_.LockRef());
-        if (entry.id_ != TaskRefSuspendId(tk)) return false;
+        if (id != TaskRefSuspendId(tk)) return false;
         ++ TaskRefSuspendId(tk);
         bool ret = waitQueue_.eraseWithoutLock(tk);
         assert(ret);
