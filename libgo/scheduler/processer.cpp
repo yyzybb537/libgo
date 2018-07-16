@@ -228,9 +228,9 @@ SList<Task> Processer::Steal(std::size_t n)
         std::unique_lock<TaskQueue::lock_t> lock(runnableQueue_.LockRef());
         bool pushRunningTask = false, pushNextTask = false;
         if (runningTask_)
-            pushRunningTask = runnableQueue_.eraseWithoutLock(runningTask_, true);
+            pushRunningTask = runnableQueue_.eraseWithoutLock(runningTask_, true) || slist.erase(runningTask_, newQueue_.check_);
         if (nextTask_)
-            pushNextTask = runnableQueue_.eraseWithoutLock(nextTask_, true);
+            pushNextTask = runnableQueue_.eraseWithoutLock(nextTask_, true) || slist.erase(nextTask_, newQueue_.check_);
         auto slist2 = runnableQueue_.pop_backWithoutLock(n - slist.size());
         if (pushRunningTask)
             runnableQueue_.pushWithoutLock(runningTask_);
@@ -249,9 +249,9 @@ SList<Task> Processer::Steal(std::size_t n)
         std::unique_lock<TaskQueue::lock_t> lock(runnableQueue_.LockRef());
         bool pushRunningTask = false, pushNextTask = false;
         if (runningTask_)
-            pushRunningTask = runnableQueue_.eraseWithoutLock(runningTask_, true);
+            pushRunningTask = runnableQueue_.eraseWithoutLock(runningTask_, true) || slist.erase(runningTask_, newQueue_.check_);
         if (nextTask_)
-            pushNextTask = runnableQueue_.eraseWithoutLock(nextTask_, true);
+            pushNextTask = runnableQueue_.eraseWithoutLock(nextTask_, true) || slist.erase(nextTask_, newQueue_.check_);
         auto slist2 = runnableQueue_.pop_allWithoutLock();
         if (pushRunningTask)
             runnableQueue_.pushWithoutLock(runningTask_);
