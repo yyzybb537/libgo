@@ -1,5 +1,6 @@
 #pragma once
 #include "config.h"
+#include <bits/shared_ptr_base.h>
 
 namespace co
 {
@@ -19,6 +20,116 @@ struct fake_lock_guard
 
 // 侵入式引用计数对象基类
 struct RefObject;
+struct RefObjectImpl;
+struct SharedRefObject;
+
+// 自定义delete
+struct Deleter
+{
+    typedef void (*func_t)(RefObject* ptr, void* arg);
+    func_t func_;
+    void* arg_;
+
+    Deleter() : func_(nullptr), arg_(nullptr) {}
+    Deleter(func_t func, void* arg) : func_(func), arg_(arg) {}
+
+    inline void operator()(RefObject* ptr);
+};
+
+struct RefObject
+{
+    atomic_t<long>* reference_;
+    bool isShared_;
+    atomic_t<long> referenceImpl_;
+    Deleter deleter_;
+
+    RefObject() : isShared_(false), referenceImpl_{1} {
+        reference_ = &referenceImpl_;
+    }
+    virtual ~RefObject() {}
+
+    void IncrementRef()
+    {
+        ++*reference_;
+    }
+
+    virtual bool DecrementRef()
+    {
+        if (--*reference_ == 0) {
+            deleter_(this);
+            return true;
+        }
+        return false;
+    }
+
+    void SetDeleter(Deleter d) {
+        deleter_ = d;
+    }
+
+    RefObject(RefObject const&) = delete;
+    RefObject& operator=(RefObject const&) = delete;
+};
+
+struct RefObjectImpl
+{
+    atomic_t<long> reference_;
+    atomic_t<long> weak_;
+
+    RefObjectImpl() : reference_{1}, weak_{1} {}
+
+    void IncrementWeak()
+    {
+        ++weak_;
+    }
+
+    void DecrementWeak()
+    {
+        if (--weak_ == 0)
+            delete this;
+    }
+
+    bool Lock()
+    {
+        long count = reference_.load(std::memory_order_relaxed);
+        do {
+            if (count == 0)
+                return false;
+        } while (!reference_.compare_exchange_weak(count, count + 1,
+                    std::memory_order_acq_rel, std::memory_order_relaxed));
+
+        return true;
+    }
+
+    RefObjectImpl(RefObjectImpl const&) = delete;
+    RefObjectImpl& operator=(RefObjectImpl const&) = delete;
+};
+
+struct SharedRefObject : public RefObject
+{
+    RefObjectImpl * impl_;
+
+    SharedRefObject() : impl_(new RefObjectImpl) {
+        this->isShared_ = true;
+        this->reference_ = &impl_->reference_;
+    }
+
+    virtual bool DecrementRef()
+    {
+        if (RefObject::DecrementRef()) {
+            std::atomic_thread_fence(std::memory_order_acq_rel);
+            impl_->DecrementWeak();
+            return true;
+        }
+        return false;
+    }
+};
+
+inline void Deleter::operator()(RefObject* ptr) {
+    if (func_)
+        func_(ptr, arg_);
+    else
+        delete ptr;
+}
 
 // 侵入式引用计数智能指针
 template <typename T>
@@ -84,52 +195,60 @@ private:
     T* ptr_;
 };
 
-// 自定义delete
-struct Deleter
+template <typename T>
+class WeakPtr
 {
-    typedef void (*func_t)(RefObject* ptr, void* arg);
-    func_t func_;
-    void* arg_;
+public:
+    WeakPtr() : impl_(nullptr), ptr_(nullptr) {}
+    WeakPtr(IncursivePtr<T> const& iptr) : impl_(nullptr), ptr_(nullptr) {
+        T* ptr = iptr.get();
+        if (!ptr) return ;
+        if (!ptr->isShared_) return ;
+        impl_ = ((SharedRefObject*)ptr)->impl_;
+        ptr_ = ptr;
+        impl_->IncrementWeak();
+    }
+    WeakPtr(WeakPtr const& other) : impl_(other.impl_), ptr_(other.ptr_) {
+        impl_->IncrementWeak();
+    }
+    WeakPtr(WeakPtr && other) : impl_(nullptr), ptr_(nullptr) {
+        swap(other);
+    }
+    WeakPtr& operator=(WeakPtr const& other) {
+        if (this == &other) return *this;
+        reset();
+        if (other.impl_) {
+            impl_ = other.impl_;
+            ptr_ = other.ptr_;
+            impl_->IncrementWeak();
+        }
+    }
+    ~WeakPtr() {
+        reset();
+    }
+    void swap(WeakPtr & other) {
+        std::swap(impl_, other.impl_);
+        std::swap(ptr_, other.ptr_);
+    }
+    void reset() {
+        if (impl_) {
+            impl_->DecrementWeak();
+            impl_ = nullptr;
+            ptr_ = nullptr;
+        }
+    }
+    IncursivePtr<T> lock() {
+        if (!impl_) return IncursivePtr<T>();
+        if (!impl_->Lock()) return IncursivePtr<T>();
+        IncursivePtr<T> iptr(ptr_);
+        ptr_->DecrementRef();
+        return iptr;
+    }
 
-    Deleter() : func_(nullptr), arg_(nullptr) {}
-    Deleter(func_t func, void* arg) : func_(func), arg_(arg) {}
-
-    inline void operator()(RefObject* ptr);
+private:
+    RefObjectImpl * impl_;
+    T* ptr_;
 };
-
-struct RefObject
-{
-    atomic_t<long> reference_;
-    Deleter deleter_;
-
-    RefObject() : reference_{1} {}
-    virtual ~RefObject() {}
-
-    void IncrementRef()
-    {
-        ++reference_;
-    }
-
-    void DecrementRef()
-    {
-        if (--reference_ == 0)
-            deleter_(this);
-    }
-
-    void SetDeleter(Deleter d) {
-        deleter_ = d;
-    }
-
-    RefObject(RefObject const&) = delete;
-    RefObject& operator=(RefObject const&) = delete;
-};
-
-inline void Deleter::operator()(RefObject* ptr) {
-    if (func_)
-        func_(ptr, arg_);
-    else
-        delete ptr;
-}
 
 // 裸指针 -> shared_ptr
 template <typename T>
