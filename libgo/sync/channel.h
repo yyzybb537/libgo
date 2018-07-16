@@ -127,9 +127,19 @@ private:
 
         ~ChannelImpl() {
             assert(lock_.try_lock());
-            assert(queue_.empty());
-            assert(wQueue_.empty());
-            assert(rQueue_.empty());
+            assert(isEmpty(wQueue_));
+            assert(isEmpty(rQueue_));
+        }
+
+        bool isEmpty(std::queue<Entry> & waitQueue) {
+            while (!waitQueue.empty()) {
+                auto entry = waitQueue.front();
+                waitQueue.pop();
+
+                if (entry.entry_ && entry.entry_.tk_.lock())
+                    return false;
+            }
+            return true;
         }
 
         bool Empty()
@@ -238,8 +248,8 @@ private:
                     if (entry.ok_)
                         *entry.ok_ = false;
 
-                    if (entry.entry) {
-                        Processer::Wakeup(entry.entry);
+                    if (entry.entry_) {
+                        Processer::Wakeup(entry.entry_);
                     } else {
                         pCv[i]->notify_one();
                     }

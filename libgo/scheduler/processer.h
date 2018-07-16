@@ -67,7 +67,7 @@ public:
 
     // 挂起标识
     struct SuspendEntry {
-        IncursivePtr<Task> tk_;
+        WeakPtr<Task> tk_;
         uint64_t id_;
 
         explicit operator bool() const { return !!tk_; }
@@ -80,7 +80,7 @@ public:
     static SuspendEntry Suspend(FastSteadyClock::duration dur);
 
     // 唤醒协程
-    static bool Wakeup(SuspendEntry & entry);
+    static bool Wakeup(SuspendEntry const& entry);
 
     /// --------------------------------------
     // for friend class Scheduler
@@ -126,7 +126,7 @@ private:
 
     SuspendEntry SuspendBySelf(Task* tk);
 
-    bool WakeupBySelf(SuspendEntry & entry);
+    bool WakeupBySelf(IncursivePtr<Task> const& tkPtr, uint64_t id);
 };
 
 } //namespace co

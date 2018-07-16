@@ -47,6 +47,7 @@ Scheduler::~Scheduler()
 void Scheduler::CreateTask(TaskF const& fn, TaskOpt const& opt)
 {
     Task* tk = new Task(fn, opt.stack_size_ ? opt.stack_size_ : GetOptions().stack_size);
+//    printf("new tk = %p  impl = %p\n", tk, tk->impl_);
     tk->SetDeleter(Deleter(&Scheduler::DeleteTask, this));
     tk->id_ = ++GetTaskIdFactory();
     TaskRefAffinity(tk) = opt.affinity_;

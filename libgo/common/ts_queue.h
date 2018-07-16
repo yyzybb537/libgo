@@ -152,7 +152,9 @@ public:
         else tail_ = (T*)tail_->prev;
         ptr->prev = ptr->next = nullptr;
         -- count_;
+//        printf("SList.erase ptr=%p, use_count=%ld\n", ptr, ptr->use_count());
         DecrementRef(ptr);
+//        printf("SList.erase done\n");
     }
     std::size_t size() const
     {

@@ -39,14 +39,17 @@ struct Deleter
 struct RefObject
 {
     atomic_t<long>* reference_;
-    bool isShared_;
     atomic_t<long> referenceImpl_;
     Deleter deleter_;
 
-    RefObject() : isShared_(false), referenceImpl_{1} {
+    RefObject() : referenceImpl_{1} {
         reference_ = &referenceImpl_;
     }
     virtual ~RefObject() {}
+
+    bool IsShared() const {
+        return reference_ != &referenceImpl_;
+    }
 
     void IncrementRef()
     {
@@ -60,6 +63,10 @@ struct RefObject
             return true;
         }
         return false;
+    }
+
+    long use_count() {
+        return *reference_;
     }
 
     void SetDeleter(Deleter d) {
@@ -84,8 +91,10 @@ struct RefObjectImpl
 
     void DecrementWeak()
     {
-        if (--weak_ == 0)
+        if (--weak_ == 0) {
+//            printf("delete weak = %p, reference_ = %ld\n", this, (long)reference_);
             delete this;
+        }
     }
 
     bool Lock()
@@ -109,15 +118,15 @@ struct SharedRefObject : public RefObject
     RefObjectImpl * impl_;
 
     SharedRefObject() : impl_(new RefObjectImpl) {
-        this->isShared_ = true;
         this->reference_ = &impl_->reference_;
     }
 
     virtual bool DecrementRef()
     {
+        RefObjectImpl * impl = impl_;
         if (RefObject::DecrementRef()) {
             std::atomic_thread_fence(std::memory_order_acq_rel);
-            impl_->DecrementWeak();
+            impl->DecrementWeak();
             return true;
         }
         return false;
@@ -177,6 +186,14 @@ public:
         }
     }
 
+    long use_count() {
+        return ptr_ ? (long)*ptr_->reference_ : 0;
+    }
+
+    bool unique() {
+        return use_count() == 1;
+    }
+
     void swap(IncursivePtr & other) {
         std::swap(ptr_, other.ptr_);
     }
@@ -200,13 +217,12 @@ class WeakPtr
 {
 public:
     WeakPtr() : impl_(nullptr), ptr_(nullptr) {}
-    WeakPtr(IncursivePtr<T> const& iptr) : impl_(nullptr), ptr_(nullptr) {
+    explicit WeakPtr(T * ptr) : impl_(nullptr), ptr_(nullptr) {
+        reset(ptr);
+    }
+    explicit WeakPtr(IncursivePtr<T> const& iptr) : impl_(nullptr), ptr_(nullptr) {
         T* ptr = iptr.get();
-        if (!ptr) return ;
-        if (!ptr->isShared_) return ;
-        impl_ = ((SharedRefObject*)ptr)->impl_;
-        ptr_ = ptr;
-        impl_->IncrementWeak();
+        reset(ptr);
     }
     WeakPtr(WeakPtr const& other) : impl_(other.impl_), ptr_(other.ptr_) {
         impl_->IncrementWeak();
@@ -237,12 +253,35 @@ public:
             ptr_ = nullptr;
         }
     }
-    IncursivePtr<T> lock() {
+
+    void reset(T * ptr) {
+        if (impl_) {
+            impl_->DecrementWeak();
+            impl_ = nullptr;
+            ptr_ = nullptr;
+        }
+
+        if (!ptr) return ;
+        if (!ptr->IsShared()) return ;
+        impl_ = ((SharedRefObject*)ptr)->impl_;
+        ptr_ = ptr;
+        impl_->IncrementWeak();
+    }
+
+    IncursivePtr<T> lock() const {
         if (!impl_) return IncursivePtr<T>();
         if (!impl_->Lock()) return IncursivePtr<T>();
         IncursivePtr<T> iptr(ptr_);
         ptr_->DecrementRef();
         return iptr;
+    }
+
+    explicit operator bool() const {
+        return !!impl_;
+    }
+
+    long use_count() {
+        return impl_ ? (long)impl_->reference_ : 0;
     }
 
 private:

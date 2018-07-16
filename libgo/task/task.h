@@ -23,7 +23,7 @@ typedef Anys<TaskGroupKey> TaskAnys;
 
 struct Processer;
 struct Task
-    : public TSQueueHook, public RefObject
+    : public TSQueueHook, public SharedRefObject
 {
     TaskState state_ = TaskState::runnable;
     uint64_t id_;
