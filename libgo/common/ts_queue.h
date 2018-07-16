@@ -135,6 +135,17 @@ public:
     iterator erase(iterator it)
     {
         T* ptr = (it++).ptr;
+        erase(ptr);
+        return it;
+    }
+    bool erase(T* ptr, void *check)
+    {
+        if (ptr->check_ != check) return false;
+        erase(ptr);
+        return true;
+    }
+    void erase(T* ptr)
+    {
         if (ptr->prev) ptr->prev->next = ptr->next;
         else head_ = (T*)head_->next;
         if (ptr->next) ptr->next->prev = ptr->prev;
@@ -142,7 +153,6 @@ public:
         ptr->prev = ptr->next = nullptr;
         -- count_;
         DecrementRef(ptr);
-        return it;
     }
     std::size_t size() const
     {
