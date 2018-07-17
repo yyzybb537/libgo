@@ -23,6 +23,8 @@
 #include <memory>
 #include <queue>
 
+#define LIBGO_DEBUG 0
+
 // VS2013²»Ö§³Öthread_local
 #if defined(_MSC_VER) && _MSC_VER < 1900
 # define thread_local __declspec(thread)

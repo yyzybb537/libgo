@@ -24,6 +24,7 @@ void Processer::AddTaskRunnable(Task *tk)
 {
     DebugPrint(dbg_scheduler, "task(%s) add into proc(%u)", tk->DebugInfo(), id_);
     newQueue_.push(tk);
+    newQueue_.AssertLink();
 
     if (IsWaiting()) {
         waiting_ = false;
@@ -35,6 +36,7 @@ void Processer::AddTaskRunnable(SList<Task> && slist)
 {
     DebugPrint(dbg_scheduler, "task(num=%d) add into proc(%u)", (int)slist.size(), id_);
     newQueue_.push(std::move(slist));
+    newQueue_.AssertLink();
 
     if (IsWaiting()) {
         waiting_ = false;
@@ -196,6 +198,7 @@ bool Processer::AddNewTasks()
     if (newQueue_.emptyUnsafe()) return false;
 
     runnableQueue_.push(newQueue_.pop_all());
+    newQueue_.AssertLink();
     return true;
 }
 
@@ -222,7 +225,9 @@ SList<Task> Processer::Steal(std::size_t n)
 {
     if (n > 0) {
         // steal some
+        newQueue_.AssertLink();
         auto slist = newQueue_.pop_back(n);
+        newQueue_.AssertLink();
         if (slist.size() >= n)
             return slist;
 
@@ -245,7 +250,9 @@ SList<Task> Processer::Steal(std::size_t n)
         return slist2;
     } else {
         // steal all
+        newQueue_.AssertLink();
         auto slist = newQueue_.pop_all();
+        newQueue_.AssertLink();
 
         std::unique_lock<TaskQueue::lock_t> lock(runnableQueue_.LockRef());
         bool pushRunningTask = false, pushNextTask = false;
@@ -291,6 +298,8 @@ Processer::SuspendEntry Processer::SuspendBySelf(Task* tk)
     assert(tk->state_ == TaskState::runnable);
 
     tk->state_ = TaskState::block;
+    uint64_t id = ++ TaskRefSuspendId(tk);
+
     runnableQueue_.next(runningTask_, nextTask_);
     if (!nextTask_ && addNewQuota_ > 0) {
         if (AddNewTasks()) {
@@ -298,7 +307,6 @@ Processer::SuspendEntry Processer::SuspendBySelf(Task* tk)
             -- addNewQuota_;
         }
     }
-    uint64_t id = ++ TaskRefSuspendId(tk);
     runnableQueue_.erase(runningTask_);
     waitQueue_.push(runningTask_);
     return SuspendEntry{ WeakPtr<Task>(tk), id };
@@ -323,7 +331,7 @@ bool Processer::WakeupBySelf(IncursivePtr<Task> const& tkPtr, uint64_t id)
         std::unique_lock<TaskQueue::lock_t> lock(waitQueue_.LockRef());
         if (id != TaskRefSuspendId(tk)) return false;
         ++ TaskRefSuspendId(tk);
-        bool ret = waitQueue_.eraseWithoutLock(tk);
+        bool ret = waitQueue_.eraseWithoutLock(tk, true);
         assert(ret);
     }
 

@@ -12,6 +12,20 @@ struct TSQueueHook
     TSQueueHook* prev = nullptr;
     TSQueueHook* next = nullptr;
     void *check_ = nullptr;
+
+    ALWAYS_INLINE void link(TSQueueHook* theNext) {
+        assert(next == nullptr);
+        assert(theNext->prev == nullptr);
+        next = theNext;
+        theNext->prev = this;
+    }
+
+    ALWAYS_INLINE void unlink(TSQueueHook* theNext) {
+        assert(next == theNext);
+        assert(theNext->prev == this);
+        next = nullptr;
+        theNext->prev = nullptr;
+    }
 };
 
 // 侵入式双向链表
@@ -91,7 +105,7 @@ public:
             return ;
         }
 
-        tail_->next = other.head_;
+        tail_->link(other.head_);
         tail_ = other.tail_;
         count_ += other.count_;
         other.stealed();
@@ -119,8 +133,7 @@ public:
 
         count_ -= n;
         head_ = (T*)pos->next;
-        head_->prev = nullptr;
-        pos->next = nullptr;
+        pos->unlink(head_);
         return o;
     }
 
@@ -261,11 +274,10 @@ public:
         TSQueueHook *hook = static_cast<TSQueueHook*>(element);
         assert(hook->next == nullptr);
         assert(hook->prev == nullptr);
-        tail_->next = hook;
-        hook->prev = tail_;
+        tail_->link(hook);
+        tail_ = hook;
         hook->next = nullptr;
         hook->check_ = check_;
-        tail_ = hook;
         ++ count_;
         IncrementRef(element);
     }
@@ -289,15 +301,18 @@ public:
     ALWAYS_INLINE void push(SList<T> && elements)
     {
         if (elements.empty()) return ;
+        LockGuard lock(lock_);
         assert(elements.head_->prev == nullptr);
         assert(elements.tail_->next == nullptr);
-        LockGuard lock(lock_);
+        TSQueueHook* listHead = elements.head_;
         count_ += elements.size();
-        tail_->next = elements.head();
-        elements.head()->prev = tail_;
-        elements.tail()->next = nullptr;
-        tail_ = elements.tail();
+        tail_->link(listHead);
+        tail_ = elements.tail_;
         elements.stealed();
+#if LIBGO_DEBUG
+        for (TSQueueHook* pos = listHead; pos; pos = pos->next)
+            pos->check_ = check_;
+#endif
     }
 
     // O(n), 慎用.
@@ -309,8 +324,15 @@ public:
         TSQueueHook* first = head_->next;
         TSQueueHook* last = first;
         uint32_t c = 1;
-        for (; c < n && last->next; ++c)
+#if LIBGO_DEBUG
+        first->check_ = nullptr;
+#endif
+        for (; c < n && last->next; ++c) {
             last = last->next;
+#if LIBGO_DEBUG
+            last->check_ = nullptr;
+#endif
+        }
         if (last == tail_) tail_ = head_;
         head_->next = last->next;
         if (last->next) last->next->prev = head_;
@@ -332,8 +354,16 @@ public:
         TSQueueHook* last = tail_;
         TSQueueHook* first = last;
         uint32_t c = 1;
-        for (; c < n && first->prev && first->prev != head_; ++c)
+#if LIBGO_DEBUG
+        first->check_ = nullptr;
+#endif
+        for (; c < n && first->prev != head_; ++c) {
+            assert(first->prev != nullptr);
             first = first->prev;
+#if LIBGO_DEBUG
+            first->check_ = nullptr;
+#endif
+        }
         tail_ = first->prev;
         first->prev = tail_->next = nullptr;
         count_ -= c;
@@ -368,7 +398,10 @@ public:
 
     ALWAYS_INLINE bool eraseWithoutLock(T* hook, bool check = false)
     {
-        if (check && hook->check_ != (void*)check_) return false;
+        if (check && hook->check_ != check_) return false;
+#if LIBGO_DEBUG
+        assert(hook->check_ == check_);
+#endif
         assert(hook->prev != nullptr);
         assert(hook == tail_ || hook->next != nullptr);
         if (hook->prev) hook->prev->next = hook->next;
@@ -379,6 +412,22 @@ public:
         -- count_;
         DecrementRef((T*)hook);
         return true;
+    }
+
+    ALWAYS_INLINE void AssertLink()
+    {
+#if LIBGO_DEBUG
+        LockGuard lock(lock_);
+        if (head_ == tail_) return ;
+        assert(!!head_);
+        assert(!!tail_);
+        TSQueueHook* pos = tail_;
+        int n = 0;
+        for (; pos != head_; pos = pos->prev, ++n) {
+            assert(!!pos->prev);
+        }
+        assert(pos == head_);
+#endif
     }
 };
 
