@@ -1,6 +1,7 @@
 #pragma once
 #include "libgo.h"
 #include <thread>
+#include "gtest/gtest.h"
 
 struct startLibgo {
     startLibgo() {
@@ -27,6 +28,30 @@ inline void __WaitUntilNoTask(int line, std::size_t val = 0) {
 inline void DumpTaskCount() {
     printf("TaskCount: %d\n", (int)g_Scheduler.TaskCount());
 }
+
+struct GTimer {
+    GTimer() : tp_(co::FastSteadyClock::now()) {}
+
+    co::FastSteadyClock::duration duration() {
+        return co::FastSteadyClock::now() - tp_;
+    }
+
+    int ms() {
+        return std::chrono::duration_cast<std::chrono::milliseconds>(
+                co::FastSteadyClock::now() - tp_).count();
+    }
+
+private:
+    co::FastSteadyClock::time_point tp_;
+};
+
+#define DEFAULT_DEVIATION 50
+#define TIMER_CHECK(t, val, deviation) \
+        do { \
+            auto c = t.ms(); \
+            EXPECT_GT(c, val - 1); \
+            EXPECT_LT(c, val + deviation); \
+        } while (0)
 
 #ifdef _WIN32
 #include <stdlib.h>
