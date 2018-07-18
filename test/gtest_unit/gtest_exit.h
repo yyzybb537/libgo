@@ -1,14 +1,23 @@
 #pragma once
-#include "libgo.h"
+#include "../../libgo/libgo.h"
 #include <thread>
 #include "gtest/gtest.h"
 
+#ifndef TEST_MIN_THREAD
+#define TEST_MIN_THREAD 4
+#endif
+
+#ifndef TEST_MAX_THREAD
+#define TEST_MAX_THREAD 4
+#endif
+
 struct startLibgo {
     startLibgo() {
-        std::thread([]{
-                g_Scheduler.Start(4, 4);
-            }).detach();
+        pThread = new std::thread([]{
+                g_Scheduler.Start(TEST_MIN_THREAD, TEST_MAX_THREAD);
+            });
     }
+    std::thread *pThread;
 };
 
 startLibgo __startLibgo;

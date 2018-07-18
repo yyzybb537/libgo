@@ -338,6 +338,10 @@ private:
 template <>
 class Channel<void> : public Channel<std::nullptr_t>
 {
+public:
+    explicit Channel(std::size_t capacity = 0)
+        : Channel<std::nullptr_t>(capacity)
+    {}
 };
 
 template <typename T>
