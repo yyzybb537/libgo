@@ -12,3 +12,11 @@ tutorial/build/
 test/util/out.exe
 test/util/a.out
 test/golang/libgo_test
+libgo/context/*.S
+
+third_party/boost.context/b2
+third_party/boost.context/bin.v2/
+third_party/boost.context/bjam
+third_party/boost.context/bootstrap.log
+third_party/boost.context/project-config.jam
+third_party/boost.context/project-config.jam.*
