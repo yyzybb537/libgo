@@ -5,13 +5,10 @@
 third_party/gtest/*
 libgo/common/cmake_config.h
 vs_proj/vs201*
-tools/libgo.conf
-
 .ycm_extra_conf.py
 .ycm_extra_conf.pyc
 build/
 tutorial/build/
-
 test/util/out.exe
 test/util/a.out
 test/golang/libgo_test
