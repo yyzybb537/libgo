@@ -8,16 +8,16 @@ class Context
 {
 public:
     Context(fn_t fn, intptr_t vp, std::size_t stackSize)
-        : fn_(fn), stackSize_(stackSize)
+        : fn_(fn), vp_(vp), stackSize_(stackSize)
     {
-        stack_ = (char*)StackAllocator::get_malloc_fn()(stackSize_);
+        stack_ = (char*)StackTraits::MallocFunc()(stackSize_);
         DebugPrint(dbg_task, "valloc stack. size=%u ptr=%p",
                 stackSize_, stack_);
 
-        ctx_ = make_fcontext(stack_, stackSize_, fn_);
+        ctx_ = make_fcontext(stack_ + stackSize_, stackSize_, fn_);
 
-        uint32_t protectPage = GetProtectStackPageSize();
-        if (protectPage && UnprotectStack(stack_, stackSize_, protectPage))
+        int protectPage = StackTraits::GetProtectStackPageSize();
+        if (protectPage && StackTraits::ProtectStack(stack_, stackSize_, protectPage))
             protectPage_ = protectPage;
     }
     ~Context()
@@ -25,8 +25,8 @@ public:
         if (stack_) {
             DebugPrint(dbg_task, "free stack. ptr=%p", stack_);
             if (protectPage_)
-                UnprotectStack(stack_, stackSize_, protectPage_);
-            StackAllocator::get_free_fn()(stack_);
+                StackTraits::UnprotectStack(stack_, protectPage_);
+            StackTraits::FreeFunc()(stack_);
             stack_ = NULL;
         }
     }
@@ -58,7 +58,7 @@ private:
     intptr_t vp_;
     char* stack_ = nullptr;
     uint32_t stackSize_ = 0;
-    uint32_t protectPage_ = 0;
+    int protectPage_ = 0;
 };
 
 } // namespace co

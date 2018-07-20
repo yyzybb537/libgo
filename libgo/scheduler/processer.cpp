@@ -48,9 +48,6 @@ void Processer::Process()
 {
     GetCurrentProcesser() = this;
 
-    ContextScopedGuard guard;
-    (void)guard;
-
     for (;;)
     {
         runnableQueue_.front(runningTask_);
@@ -76,12 +73,9 @@ void Processer::Process()
             if (g_Scheduler.GetTaskListener())
                 g_Scheduler.GetTaskListener()->onSwapIn(runningTask_->id_);
             ++switchCount_;
-            if (!runningTask_->SwapIn()) {
-                fprintf(stderr, "swapcontext error:%s\n", strerror(errno));
-                runningTask_ = nullptr;
-                runningTask_->DecrementRef();
-                ThrowError(eCoErrorCode::ec_swapcontext_failed);
-            }
+
+            runningTask_->SwapIn();
+
             DebugPrint(dbg_switch, "leave task(%s) state=%d", runningTask_->DebugInfo(), (int)runningTask_->state_);
 
             switch (runningTask_->state_) {
@@ -154,10 +148,7 @@ void Processer::CoYield()
     if (g_Scheduler.GetTaskListener())
         g_Scheduler.GetTaskListener()->onSwapOut(tk->id_);
 
-    if (!tk->SwapOut()) {
-        fprintf(stderr, "swapcontext error:%s\n", strerror(errno));
-        ThrowError(eCoErrorCode::ec_yield_failed);
-    }
+    tk->SwapOut();
 }
 
 Task* Processer::GetCurrentTask()

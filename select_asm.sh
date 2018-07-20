@@ -4,12 +4,10 @@ cd $1
 work=`pwd`
 
 cd $work/third_party/boost.context
-./bootstrap.sh > /dev/null
-objs=`./b2 -n --with-context link=static | grep "compile.asm" | awk '{print $2}'`
-for obj in $objs
-do
-    obj_name=`basename $obj`
-    source=`echo $obj_name | cut -d\. -f1`.S
-    source=$work/third_party/boost.context/libs/context/src/asm/$source
-    cp $source $work/libgo/context
-done
+test -f b2 || ./bootstrap.sh > /dev/null
+obj=`./b2 -an --with-context link=static | grep "compile.asm" | awk '{print $2}' | grep $2`
+obj_name=`basename $obj`
+source=`echo $obj_name | cut -d\. -f1`.S
+file=$work/third_party/boost.context/libs/context/src/asm/$source
+cp $file $work/libgo/context
+echo -n $work/libgo/context/$source

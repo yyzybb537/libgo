@@ -3,6 +3,8 @@ cmake_minimum_required(VERSION 2.8)
 ###################################################################################
 project(libgo)
 
+enable_language(C ASM)
+
 if (CMAKE_BUILD_TYPE)
 else()
     set(CMAKE_BUILD_TYPE RELEASE)
@@ -46,13 +48,14 @@ configure_file(${PROJECT_SOURCE_DIR}/libgo/common/cmake_config.h.in ${PROJECT_SO
 message("----------------------------------")
 
 if (UNIX)
-    set(CMAKE_CXX_FLAGS "-std=c++11 -fPIC -Wall -pthread ${CMAKE_CXX_FLAGS}")
-    set(CMAKE_CXX_FLAGS_DEBUG "-g -pg ${CMAKE_CXX_FLAGS}")
+    set(CMAKE_CXX_FLAGS "-std=c++11 -fPIC -Wall -m64 ${CMAKE_CXX_FLAGS}")
+    set(CMAKE_CXX_FLAGS_DEBUG "-g ${CMAKE_CXX_FLAGS}")
     set(CMAKE_CXX_FLAGS_RELEASE "-g -O3 ${CMAKE_CXX_FLAGS}")
 
-    ENABLE_LANGUAGE(ASM)
+    set(CMAKE_ASM_SOURCE_FILE_EXTENSIONS S)
     message("--> select asm source file, please wait about 5 seconds ...")
-    execute_process(COMMAND "${PROJECT_SOURCE_DIR}/select_asm.sh" "${PROJECT_SOURCE_DIR}")
+    execute_process(COMMAND "${PROJECT_SOURCE_DIR}/select_asm.sh" "${PROJECT_SOURCE_DIR}" "jump" OUTPUT_VARIABLE jump_asm_file)
+    execute_process(COMMAND "${PROJECT_SOURCE_DIR}/select_asm.sh" "${PROJECT_SOURCE_DIR}" "make" OUTPUT_VARIABLE make_asm_file)
 elseif (WIN32)
     # windows platform
     add_definitions(-D_CRT_SECURE_NO_WARNINGS)
@@ -79,6 +82,11 @@ endif()
 set(TARGET "libgo")
 set(STATIC_T "libgo_static")
 
+message("asm_files: ${asm_files}")
+message("CO_SRC_LIST: ${CO_SRC_LIST}")
+list(APPEND CO_SRC_LIST ${jump_asm_file})
+list(APPEND CO_SRC_LIST ${make_asm_file})
+message("CO_SRC_LIST: ${CO_SRC_LIST}")
 add_library("${STATIC_T}" STATIC ${CO_SRC_LIST})
 set_target_properties("${STATIC_T}" PROPERTIES OUTPUT_NAME "${TARGET}")
 
@@ -86,6 +94,13 @@ if (UNIX)
     install(TARGETS ${STATIC_T} LIBRARY DESTINATION "lib" ARCHIVE DESTINATION "lib")
     install(DIRECTORY ${PROJECT_SOURCE_DIR}/libgo/ DESTINATION "include/libgo" FILES_MATCHING PATTERN "*.h")
         #PATTERN "windows" EXCLUDE
+
+    set(SHARED_T "libgo_dynamic")
+    add_library("${SHARED_T}" SHARED ${CO_SRC_LIST})
+    set_target_properties("${SHARED_T}" PROPERTIES COMPILE_FLAGS "-DCO_DYNAMIC_LINK")
+    set_target_properties("${SHARED_T}" PROPERTIES OUTPUT_NAME "${TARGET}")
+    target_link_libraries("${SHARED_T}" ${LINK_LIBS} -ldl)
+    install(TARGETS ${SHARED_T} LIBRARY DESTINATION "lib" ARCHIVE DESTINATION "lib")
 
     add_custom_target(debug
         COMMAND ${CMAKE_COMMAND} -DCMAKE_BUILD_TYPE=DEBUG ${CMAKE_SOURCE_DIR}
