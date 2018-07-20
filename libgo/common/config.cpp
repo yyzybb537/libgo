@@ -1,13 +1,13 @@
 #include "config.h"
-#include "../context/context.h"
+#include "../context/fcontext.h"
 #include <string.h>
 
 namespace co
 {
     CoroutineOptions::CoroutineOptions()
-        : protect_stack_page(StackAllocator::get_protect_stack_page()),
-        stack_malloc_fn(StackAllocator::get_malloc_fn()),
-        stack_free_fn(StackAllocator::get_free_fn())
+        : protect_stack_page(StackTraits::GetProtectStackPageSize()),
+        stack_malloc_fn(StackTraits::MallocFunc()),
+        stack_free_fn(StackTraits::FreeFunc())
     {
     }
 

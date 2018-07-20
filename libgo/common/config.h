@@ -131,7 +131,7 @@ struct CoroutineOptions
     // 栈顶设置保护内存段的内存页数量(仅linux下有效)(默认为0, 即:不设置)
     // 在栈顶内存对齐后的前几页设置为protect属性.
     // 所以开启此选项时, stack_size不能少于protect_stack_page+1页
-    uint32_t & protect_stack_page;
+    int & protect_stack_page;
 
     // 设置栈内存管理(malloc/free)
     // 使用fiber做协程底层时无效

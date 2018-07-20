@@ -1,8 +1,8 @@
 #pragma once
 #include "../common/config.h"
-#include "../context/context.h"
 #include "../common/ts_queue.h"
 #include "../common/anys.h"
+#include "../context/context.h"
 
 namespace co
 {
@@ -56,27 +56,28 @@ struct Task
 //    // cls变量表
 //    CLSMap cls_map_;
 
-//    explicit Task(TaskF const& fn, std::size_t stack_size,
-//            const char* file, int lineno);
-
     Task(TaskF const& fn, std::size_t stack_size);
     ~Task();
 
-//    void InitLocation(const char* file, int lineno);
-
-    ALWAYS_INLINE bool SwapIn()
+    ALWAYS_INLINE void SwapIn()
     {
-        return ctx_.SwapIn();
+        ctx_.SwapIn();
     }
-    ALWAYS_INLINE bool SwapOut()
+    ALWAYS_INLINE void SwapTo(Task* other)
     {
-        return ctx_.SwapOut();
+        ctx_.SwapTo(other->ctx_);
+    }
+    ALWAYS_INLINE void SwapOut()
+    {
+        ctx_.SwapOut();
     }
 
     const char* DebugInfo();
 
 private:
     void Run();
+
+    static void StaticRun(intptr_t vp);
 
     Task(Task const&) = delete;
     Task(Task &&) = delete;

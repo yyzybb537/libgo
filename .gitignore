@@ -20,3 +20,6 @@ third_party/boost.context/bjam
 third_party/boost.context/bootstrap.log
 third_party/boost.context/project-config.jam
 third_party/boost.context/project-config.jam.*
+third_party/boost.context/tools/build/src/engine/bin.linuxx86_64/*
+third_party/boost.context/stage/
+

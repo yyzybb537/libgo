@@ -73,8 +73,14 @@ void Task::Run()
     Scheduler::getInstance().CoYield();
 }
 
+void Task::StaticRun(intptr_t vp)
+{
+    Task* tk = (Task*)vp;
+    tk->Run();
+}
+
 Task::Task(TaskF const& fn, std::size_t stack_size)
-    : ctx_(stack_size, [this]{Run();}), fn_(fn)
+    : ctx_(&Task::StaticRun, (intptr_t)this, stack_size), fn_(fn)
 {
 //    DebugPrint(dbg_task, "task(%s) construct. this=%p", DebugInfo(), this);
 }

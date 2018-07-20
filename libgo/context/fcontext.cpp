@@ -1,6 +1,4 @@
-#pragma once
-
-#include "../common/config.h"
+#include "fcontext.h"
 #include <memory>
 #include <string.h>
 
@@ -10,27 +8,27 @@
 
 namespace co
 {
-    static stack_malloc_fn_t& StackTraits::MallocFunc()
+    stack_malloc_fn_t& StackTraits::MallocFunc()
     {
         static stack_malloc_fn_t fn = &::std::malloc;
         return fn;
     }
-    static stack_free_fn_t& StackTraits::FreeFunc()
+    stack_free_fn_t& StackTraits::FreeFunc()
     {
         static stack_free_fn_t fn = &::std::free;
         return fn;
     }
-    static int& StackTraits::GetProtectStackPageSize()
+    int& StackTraits::GetProtectStackPageSize()
     {
         static int size = 0;
         return size;
     }
 #if __linux__
-    static bool StackTraits::ProtectStack(void* stack, std::size_t size, int pageSize)
+    bool StackTraits::ProtectStack(void* stack, std::size_t size, int pageSize)
     {
         if (!pageSize) return false;
 
-        if (size <= getpagesize() * (pageSize + 1))
+        if ((int)size <= getpagesize() * (pageSize + 1))
             return false;
 
         void *protect_page_addr = ((std::size_t)stack & 0xfff) ? (void*)(((std::size_t)stack & ~(std::size_t)0xfff) + 0x1000) : stack;
@@ -44,7 +42,7 @@ namespace co
             return true;
         }
     }
-    static void StackTraits::UnprotectStack(void *stack, uint32_t pageSize)
+    void StackTraits::UnprotectStack(void *stack, int pageSize)
     {
         if (!pageSize) return ;
 
@@ -58,12 +56,12 @@ namespace co
         }
     }
 #else //__linux__
-    static bool StackTraits::ProtectStack(void* stack, std::size_t size, int pageSize)
+    bool StackTraits::ProtectStack(void* stack, std::size_t size, int pageSize)
     {
         return false;
     }
 
-    static void StackTraits::UnprotectStack(void *stack, uint32_t pageSize)
+    void StackTraits::UnprotectStack(void *stack, int pageSize)
     {
         return ;
     }
