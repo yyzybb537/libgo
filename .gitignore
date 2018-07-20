@@ -14,3 +14,4 @@ tutorial/build/
 
 test/util/out.exe
 test/util/a.out
+test/golang/libgo_test

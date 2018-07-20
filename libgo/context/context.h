@@ -1,78 +1,64 @@
 #pragma once
-
 #include "../common/config.h"
-#include "../common/error.h"
-#include <functional>
-#include <memory>
-#include <string.h>
+#include "fcontext.h"
 
-#if __linux__
-#include <sys/mman.h>
-#endif
+namespace co {
 
-namespace co
+class Context
 {
-    struct StackAllocator
+public:
+    Context(fn_t fn, intptr_t vp, std::size_t stackSize)
+        : fn_(fn), stackSize_(stackSize)
     {
-        static stack_malloc_fn_t& get_malloc_fn()
-        {
-            static stack_malloc_fn_t stack_malloc_fn = &::std::malloc;
-            return stack_malloc_fn;
-        }
-        static stack_free_fn_t& get_free_fn()
-        {
-            static stack_free_fn_t stack_free_fn = &::std::free;
-            return stack_free_fn;
-        }
-        static uint32_t& get_protect_stack_page()
-        {
-            static uint32_t protect_stack_page = 0;
-            return protect_stack_page;
-        }
-#if __linux__
-        static bool protect_stack(void *top, std::size_t stack_size,
-                uint32_t page)
-        {
-            if (!page) return false;
+        stack_ = (char*)StackAllocator::get_malloc_fn()(stackSize_);
+        DebugPrint(dbg_task, "valloc stack. size=%u ptr=%p",
+                stackSize_, stack_);
 
-            if (stack_size <= getpagesize() * (page + 1))
-                ThrowError(eCoErrorCode::ec_protect_stack_failed);
+        ctx_ = make_fcontext(stack_, stackSize_, fn_);
 
-            void *protect_page_addr = ((std::size_t)top & 0xfff) ? (void*)(((std::size_t)top & ~(std::size_t)0xfff) + 0x1000) : top;
-            if (-1 == mprotect(protect_page_addr, getpagesize() * page, PROT_NONE)) {
-                DebugPrint(dbg_task, "origin_addr:%p, align_addr:%p, page_size:%d, protect_page:%u, protect stack top error: %s",
-                        top, protect_page_addr, getpagesize(), page, strerror(errno));
-                return false;
-            } else {
-                DebugPrint(dbg_task, "origin_addr:%p, align_addr:%p, page_size:%d, protect_page:%u, protect stack success.",
-                        top, protect_page_addr, page, getpagesize());
-                return true;
-            }
+        uint32_t protectPage = GetProtectStackPageSize();
+        if (protectPage && UnprotectStack(stack_, stackSize_, protectPage))
+            protectPage_ = protectPage;
+    }
+    ~Context()
+    {
+        if (stack_) {
+            DebugPrint(dbg_task, "free stack. ptr=%p", stack_);
+            if (protectPage_)
+                UnprotectStack(stack_, stackSize_, protectPage_);
+            StackAllocator::get_free_fn()(stack_);
+            stack_ = NULL;
         }
-        static void unprotect_stack(void *top, uint32_t page)
-        {
-            if (!page) return ;
+    }
 
-            void *protect_page_addr = ((std::size_t)top & 0xfff) ? (void*)(((std::size_t)top & ~(std::size_t)0xfff) + 0x1000) : top;
-            if (-1 == mprotect(protect_page_addr, getpagesize() * page, PROT_READ|PROT_WRITE)) {
-                DebugPrint(dbg_task, "origin_addr:%p, align_addr:%p, page_size:%d, protect_page:%u, protect stack top error: %s",
-                        top, protect_page_addr, getpagesize(), page, strerror(errno));
-            } else {
-                DebugPrint(dbg_task, "origin_addr:%p, align_addr:%p, page_size:%d, protect_page:%u, protect stack success.",
-                        top, protect_page_addr, page, getpagesize());
-            }
-        }
-#endif
-    };
+    ALWAYS_INLINE void SwapIn()
+    {
+        jump_fcontext(&GetTlsContext(), ctx_, vp_);
+    }
 
-} //namespace co
+    ALWAYS_INLINE void SwapTo(Context & other)
+    {
+        jump_fcontext(&ctx_, other.ctx_, other.vp_);
+    }
 
-#if USE_BOOST_CONTEXT
-# include "ctx_boost_context/context.h"
-#elif USE_UCONTEXT
-# include "ctx_ucontext/context.h"
-#elif USE_FIBER
-# include "ctx_win_fiber/context.h"
-#else
-# error "No context sets."
-#endif
+    ALWAYS_INLINE void SwapOut()
+    {
+        jump_fcontext(&ctx_, GetTlsContext(), 0);
+    }
+
+    fcontext_t& GetTlsContext()
+    {
+        static thread_local fcontext_t tls_context;
+        return tls_context;
+    }
+
+private:
+    fcontext_t ctx_;
+    fn_t fn_;
+    intptr_t vp_;
+    char* stack_ = nullptr;
+    uint32_t stackSize_ = 0;
+    uint32_t protectPage_ = 0;
+};
+
+} // namespace co
