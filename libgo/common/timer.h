@@ -5,15 +5,16 @@
 #include "ts_queue.h"
 #include "spinlock.h"
 #include "util.h"
+#include "dbg_timer.h"
 
 namespace co
 {
 
 template <typename F>
-class Timer
+class Timer : public IdCounter<Timer<F>>
 {
 public:
-    struct Element : public TSQueueHook, public RefObject , public ObjectCounter<Element>
+    struct Element : public TSQueueHook, public RefObject, public ObjectCounter<Element>, public IdCounter<Element>
     {
         F cb_;
         LFLock active_;
@@ -86,9 +87,18 @@ public:
 
     std::size_t GetPoolSize();
 
+    // 设置定时器
     TimerId StartTimer(FastSteadyClock::duration dur, F const& cb);
+    TimerId StartTimer(FastSteadyClock::time_point tp, F const& cb);
     
+    // 循环执行触发检查
     void ThreadRun();
+
+    // 执行一次触发检查
+    void RunOnce();
+
+    // 检查下一次触发还需要多久
+    FastSteadyClock::time_point NextTrigger(FastSteadyClock::duration max);
 
 private:
     void Init();
@@ -170,94 +180,192 @@ void Timer<F>::SetPoolSize(int max, int reserve)
     }
 }
 
-    template <typename F>
+template <typename F>
 std::size_t Timer<F>::GetPoolSize()
 {
     return pool_.size();
 }
 
-    template <typename F>
+template <typename F>
 typename Timer<F>::TimerId Timer<F>::StartTimer(FastSteadyClock::duration dur, F const& cb)
 {
+    return StartTimer(FastSteadyClock::now() + dur, cb);
+}
+
+template <typename F>
+typename Timer<F>::TimerId Timer<F>::StartTimer(FastSteadyClock::time_point tp, F const& cb)
+{
     Element* element = NewElement();
-    element->init(cb, FastSteadyClock::now() + dur);
+    element->init(cb, tp);
     TimerId timerId(element);
 
     Dispatch(element, false);
     return timerId;
 }
 
-    template <typename F>
+template <typename F>
 void Timer<F>::ThreadRun()
 {
     for (;;) {
-        Trigger(completeSlot_);
+        RunOnce();
 
-        auto now = FastSteadyClock::now();
-
-        uint64_t durVal = std::chrono::duration_cast<FastSteadyClock::duration>(
-                now - begin_).count() / precision_.count();
-        Point & p = *(Point*)&durVal;
-
-        // 先步进point_. (此处为ABBA线程同步)
-        // A: 步进point_ (volatile)
-        // B: slot.lock
-        Point last;
-        last.p64 = point_.p64;
-        point_.p64 = p.p64;
-
-        // 寻找此次需要转动的最大刻度
-        int topLevel = 0;
-        for (int i = 7; i >= 0; --i) {
-            if (p.p8[i] > last.p8[i]) {
-                topLevel = i;
-                break;
-            }
-        }
-
-        //        printf("p %lu -> %lu. topLevel=%d\n", last.p64, p.p64, topLevel);
-
-        // 低于此刻度的, 都可以直接trigger了
-        for (int i = 0; i < topLevel; ++i) {
-            for (auto & slot : slots_[i])
-                Trigger(slot);
-        }
-
-        // 已经划过的顶级刻度
-        for (int i = last.p8[topLevel]; i < p.p8[topLevel]; ++i) {
-            Trigger(slots_[topLevel][i]);
-        }
-
-        // 拆分最后一个顶级刻度
-        if (topLevel > 0) {
-            Slot & slot = slots_[topLevel][p.p8[topLevel]];
-            Dispatch(slot, now);
-        }
-
+//        auto s = FastSteadyClock::now();
         std::this_thread::sleep_for(precision_);
-        //        std::this_thread::sleep_for(std::chrono::seconds(1));
+//        auto e = FastSteadyClock::now();
+//        DebugPrint(dbg_timer, "[id=%ld]Thread sleep %ld us", this->getId(),
+//                std::chrono::duration_cast<std::chrono::microseconds>(e - s).count());
     }
 }
 
-    template <typename F>
+template <typename F>
+void Timer<F>::RunOnce()
+{
+    DbgTimer dt(dbg_timer);
+
+    Trigger(completeSlot_);
+    DBG_TIMER_CHECK(dt);
+
+    auto now = FastSteadyClock::now();
+    DBG_TIMER_CHECK(dt);
+
+    uint64_t destVal = std::chrono::duration_cast<FastSteadyClock::duration>(
+            now - begin_).count() / precision_.count();
+    Point & destPoint = *(Point*)&destVal;
+    if (destPoint.p64 <= point_.p64) return ;
+    DBG_TIMER_CHECK(dt);
+
+    Point delta;
+    delta.p64 = destPoint.p64 - point_.p64;
+
+    Point last;
+    last.p64 = point_.p64;
+    point_.p64 = destPoint.p64;
+    DBG_TIMER_CHECK(dt);
+
+    // 寻找此次需要转动的最大刻度
+    int topLevel = 0;
+    for (int i = 7; i >= 0; --i) {
+        if (delta.p8[i] > 0) {
+            topLevel = i;
+            break;
+        }
+    }
+    DBG_TIMER_CHECK(dt);
+
+    DebugPrint(dbg_timer, "[id=%ld]RunOnce point:<%d><%d><%d> ----> <%d><%d><%d>", this->getId(),
+            (int)last.p8[0], (int)last.p8[1], (int)last.p8[2],
+            (int)point_.p8[0], (int)point_.p8[1], (int)point_.p8[2]);
+    DBG_TIMER_CHECK(dt);
+
+    // 低于此刻度的, 都可以直接trigger了
+    for (int i = 0; i < topLevel; ++i) {
+        for (auto & slot : slots_[i])
+            Trigger(slot);
+    }
+    DBG_TIMER_CHECK(dt);
+
+    // 已经划过的顶级刻度
+    for (int k = 0; k < delta.p8[topLevel]; ++k) {
+        int j = (last.p8[topLevel] + k) & 0xff;
+        Trigger(slots_[topLevel][j]);
+    }
+    DBG_TIMER_CHECK(dt);
+
+    int splitLevel = ((int)last.p8[topLevel] + delta.p8[topLevel]) > 0xff ? topLevel + 1 : topLevel;
+
+    // 拆分最后一个刻度
+    if (splitLevel > 0) {
+        Slot & slot = slots_[splitLevel][point_.p8[splitLevel]];
+        Dispatch(slot, now);
+    }
+    DBG_TIMER_CHECK(dt);
+
+    DebugPrint(dbg_timer, "[id=%ld]RunOnce Done. DbgTimer: %s", this->getId(), dt.ToString().c_str());
+}
+
+template <typename F>
+FastSteadyClock::time_point Timer<F>::NextTrigger(FastSteadyClock::duration max)
+{
+    if (max.count() == 0) return FastSteadyClock::now();
+    if (!completeSlot_.empty()) return FastSteadyClock::now();
+
+    auto dest = FastSteadyClock::now() + max;
+    uint64_t durVal = std::chrono::duration_cast<FastSteadyClock::duration>(
+            dest - begin_).count() / precision_.count();
+    Point & p = *(Point*)&durVal;
+    Point last;
+    last.p64 = point_.p64;
+    auto lastTime = last.p64 * precision_ + begin_;
+    if (last.p64 >= p.p64) return FastSteadyClock::now();
+
+    // 寻找此次需要检查的最大刻度
+    int topLevel = 0;
+    for (int i = 7; i >= 0; --i) {
+        if (last.p8[i] < p.p8[i]) {
+            topLevel = i;
+            break;
+        }
+    }
+
+    // 从小刻度到大刻度依次检查
+    for (int i = 0; i < topLevel; ++i) {
+        for (int k = 0; k < 256; ++k) {
+            int j = (k + last.p8[i]) & 0xff;
+            if (!slots_[i][j].empty()) {
+                p.p8[i] = j;
+
+                for (int m = i+1; m < 8; ++m) {
+                    p.p8[m] = last.p8[m] = 0;
+                }
+
+                // 进位
+                if (j < last.p8[i])
+                    p.p8[i+1] = 1;
+
+                goto check_done;
+            }
+        }
+    }
+
+    for (int j = last.p8[topLevel]; j < p.p8[topLevel]; ++j) {
+        if (!slots_[topLevel][j].empty()) {
+            p.p8[topLevel] = j;
+            goto check_done;
+        }
+    }
+
+check_done:
+    if (p.p64 > last.p64) 
+        return (p.p64 - last.p64) * precision_ + lastTime;
+
+    return FastSteadyClock::now();
+}
+
+template <typename F>
 void Timer<F>::Trigger(Slot & slot)
 {
     SList<Element> slist = slot.pop_all();
     for (Element & element : slist) {
         slist.erase(&element);
+        DebugPrint(dbg_timer, "[id=%ld]Timer trigger element=%ld precision= %d us",
+                this->getId(), element.getId(),
+                (int)std::chrono::duration_cast<std::chrono::microseconds>(FastSteadyClock::now() - element.tp_).count());
         element.call();
         element.DecrementRef();
     }
     slist.clear();
 }
 
-    template <typename F>
+template <typename F>
 void Timer<F>::Dispatch(Slot & slot, FastSteadyClock::time_point now)
 {
     SList<Element> slist = slot.pop_all();
     for (Element & element : slist) {
         slist.erase(&element);
         if (element.tp_ <= now) {
+            DebugPrint(dbg_timer, "[id=%ld]Timer trigger element=%ld precision= %d us",
+                    this->getId(), element.getId(),
+                    (int)std::chrono::duration_cast<std::chrono::microseconds>(FastSteadyClock::now() - element.tp_).count());
             element.call();
             element.DecrementRef();
         } else {
@@ -267,15 +375,25 @@ void Timer<F>::Dispatch(Slot & slot, FastSteadyClock::time_point now)
     slist.clear();
 }
 
-    template <typename F>
+template <typename F>
 void Timer<F>::Dispatch(Element * element, bool mainloop)
 {
-    uint64_t durVal = std::chrono::duration_cast<FastSteadyClock::duration>(
-            element->tp_ - begin_).count() / precision_.count();
-    if (!mainloop && durVal < point_.p64) {
+sync_retry:
+    Point last;
+    last.p64 = point_.p64;
+    FastSteadyClock::time_point lastTime(begin_ + last.p64 * precision_);
+
+    if (!mainloop && element->tp_ <= lastTime) {
         completeSlot_.push(element);
+
+        DebugPrint(dbg_timer, "[id=%ld]Timer Dispatch mainloop=%d element=%ld into completeSlot",
+                this->getId(), (int)mainloop, element->getId());
         return ;
     }
+
+    uint64_t durNanos = std::chrono::duration_cast<FastSteadyClock::duration>(
+            element->tp_ - lastTime).count();
+    uint64_t durVal = durNanos / precision_.count();
 
     Point & p = *(Point*)&durVal;
     int level = 0;
@@ -283,7 +401,7 @@ void Timer<F>::Dispatch(Element * element, bool mainloop)
     for (int i = 7; i >= 0; --i) {
         if (p.p8[i] > 0) {
             level = i;
-            offset = p.p8[i];
+            offset = (p.p8[i] + last.p8[i]) & 0xff;
             break;
         }
     }
@@ -291,15 +409,20 @@ void Timer<F>::Dispatch(Element * element, bool mainloop)
     auto & wheel = slots_[level];
     auto & slot = wheel[offset];
 
-    std::unique_lock<typename Slot::lock_t> lock(slot.LockRef());
-    if (!mainloop && durVal < point_.p64) {
-        lock.unlock();
-        completeSlot_.push(element);
-        return ;
+    {
+        std::unique_lock<typename Slot::lock_t> lock(slot.LockRef());
+        if (last.p64 != point_.p64) {
+            goto sync_retry;
+        }
+
+        slot.pushWithoutLock(element);
+        element->slot_ = &slot;
     }
-    slot.pushWithoutLock(element);
-    element->slot_ = &slot;
-    return ;
+
+    DebugPrint(dbg_timer, "[id=%ld]Timer Dispatch mainloop=%d element=%ld durNanos=%ld point:<%d><%d><%d> slot:[L=%d][%d]",
+            this->getId(), (int)mainloop, element->getId(), (long)durNanos,
+            (int)last.p8[0], (int)last.p8[1], (int)last.p8[2],
+            (int)level, (int)offset);
 }
 
 template <typename F>

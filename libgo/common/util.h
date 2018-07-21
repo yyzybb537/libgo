@@ -212,6 +212,8 @@ private:
     T* ptr_;
 };
 
+// 弱指针
+// 注意：弱指针和对象池不可一起使用, 弱指针无法区分已经归还到池的对象.
 template <typename T>
 class WeakPtr
 {
@@ -225,7 +227,7 @@ public:
         reset(ptr);
     }
     WeakPtr(WeakPtr const& other) : impl_(other.impl_), ptr_(other.ptr_) {
-        impl_->IncrementWeak();
+        if (impl_) impl_->IncrementWeak();
     }
     WeakPtr(WeakPtr && other) : impl_(nullptr), ptr_(nullptr) {
         swap(other);
@@ -238,6 +240,7 @@ public:
             ptr_ = other.ptr_;
             impl_->IncrementWeak();
         }
+        return *this;
     }
     ~WeakPtr() {
         reset();
@@ -374,6 +377,27 @@ private:
         static atomic_t<long> c;
         return c;
     }
+};
+
+// ID
+template <typename T>
+struct IdCounter
+{
+    IdCounter() { id_ = ++counter(); }
+    IdCounter(IdCounter const&) { id_ = ++counter(); }
+    IdCounter(IdCounter &&) { id_ = ++counter(); }
+
+    long getId() const {
+        return id_;
+    }
+
+private:
+    static atomic_t<long>& counter() {
+        static atomic_t<long> c;
+        return c;
+    }
+
+    long id_;
 };
 
 ///////////////////////////////////////

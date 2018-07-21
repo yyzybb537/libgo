@@ -78,7 +78,4 @@ int main()
 
     go []{ test_channel(10000, 10000); };
     WaitUntilNoTask();
-
-    go []{ test_channel(5000000, 5000000); };
-    WaitUntilNoTask();
 }

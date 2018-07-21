@@ -6,7 +6,6 @@
 #include <condition_variable>
 #include <mutex>
 #include <atomic>
-#include "../timer/timer.h"
 
 namespace co {
 

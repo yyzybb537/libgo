@@ -4,6 +4,7 @@
 #include "sync/channel.h"
 #include "sync/co_mutex.h"
 #include "sync/co_rwmutex.h"
+#include "timer/timer.h"
 //#include "defer/defer.h"
 
 #define go ::co::__go(__FILE__, __LINE__)-
@@ -35,17 +36,16 @@ using ::co::co_wmutex;
 // co_chan
 using ::co::co_chan;
 
-//// co timer *
-//typedef ::co::TimerId co_timer_id;
-//using ::co::co_timer_add;
-//using ::co::co_timer_cancel;
-//using ::co::co_timer_block_cancel;
-//
+// co_timer
+typedef ::co::CoTimer co_timer;
+typedef ::co::CoTimer::TimerId co_timer_id;
+
 //// co_await
 //#define co_await(type) ::co::__async_wait<type>()-
 
-//// co_main
-//#define co_main(...) extern "C" int __coroutine_main_function(__VA_ARGS__)
+// co_main
+#define co_main(...) extern "C" int __coroutine_main_function(__VA_ARGS__)
+
 //
 //// co_debugger
 //#define co_debugger ::co::CoDebugger::getInstance()
