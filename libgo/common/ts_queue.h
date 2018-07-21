@@ -240,9 +240,21 @@ public:
         if (out) out->check_ = check_;
     }
 
+    ALWAYS_INLINE T* frontWithoutLock()
+    {
+        T* out = (T*)head_->next;
+        if (out) out->check_ = check_;
+        return out;
+    }
+
     ALWAYS_INLINE void next(T* ptr, T*& out)
     {
         LockGuard lock(lock_);
+        nextWithoutLock(ptr, out);
+    }
+
+    ALWAYS_INLINE void nextWithoutLock(T* ptr, T*& out)
+    {
         out = (T*)ptr->next;
         if (out) out->check_ = check_;
     }
@@ -302,6 +314,12 @@ public:
     {
         if (elements.empty()) return ;
         LockGuard lock(lock_);
+        pushWithoutLock(std::move(elements));
+    }
+
+    ALWAYS_INLINE void pushWithoutLock(SList<T> && elements)
+    {
+        if (elements.empty()) return ;
         assert(elements.head_->prev == nullptr);
         assert(elements.tail_->next == nullptr);
         TSQueueHook* listHead = elements.head_;

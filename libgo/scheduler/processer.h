@@ -15,6 +15,7 @@ namespace co {
 class Processer
 {
     friend class Scheduler;
+    friend class Task;
 private:
     // 线程ID
     int id_;
@@ -28,7 +29,7 @@ private:
     Task* nextTask_{nullptr};
 
     // 每轮调度只加有限次数新协程, 防止新协程创建新协程产生死循环
-    int addNewQuota_ = 0;
+    int addNewQuota_ = 1;
 
     // 当前正在运行的协程本次调度开始的时间戳(Dispatch线程专用)
     volatile int64_t markTick_ = 0;
@@ -113,11 +114,15 @@ private:
     /// --------------------------------------
 
 private:
+    void OnSwapIn(Task *tk, bool bSwitch = true);
+
+    void RingNext();
+
     void WaitCondition();
 
     void GC();
 
-    bool AddNewTasks();
+    bool AddNewTasks(bool lock = true);
 
     // 调度线程打标记, 用于检测阻塞
     void Mark();

@@ -65,90 +65,106 @@ void Processer::Process()
 
         DebugPrint(dbg_scheduler, "Run [Proc(%d) QueueSize:%lu] --------------------------", id_, RunnableSize());
 
-        addNewQuota_ = 1;
-        while (runningTask_) {
-            runningTask_->state_ = TaskState::runnable;
-            runningTask_->proc_ = this;
-            DebugPrint(dbg_switch, "enter task(%s)", runningTask_->DebugInfo());
-            if (g_Scheduler.GetTaskListener())
-                g_Scheduler.GetTaskListener()->onSwapIn(runningTask_->id_);
-            ++switchCount_;
-
-            runningTask_->SwapIn();
-
-            DebugPrint(dbg_switch, "leave task(%s) state=%d", runningTask_->DebugInfo(), (int)runningTask_->state_);
-
-            switch (runningTask_->state_) {
-                case TaskState::runnable:
-                    {
-                        std::unique_lock<TaskQueue::lock_t> lock(runnableQueue_.LockRef());
-                        auto next = (Task*)runningTask_->next;
-                        if (next) {
-                            runningTask_ = next;
-                            runningTask_->check_ = runnableQueue_.check_;
-                        }
-                        lock.unlock();
-
-                        if (!next && addNewQuota_ > 0) {
-                            if (AddNewTasks()) {
-                                runnableQueue_.next(runningTask_, runningTask_);
-                                -- addNewQuota_;
-                            }
-                        }
-                    }
-                    break;
-
-                case TaskState::block:
-                    {
-                        std::unique_lock<TaskQueue::lock_t> lock(runnableQueue_.LockRef());
-                        runningTask_ = nextTask_;
-                        nextTask_ = nullptr;
-                    }
-                    break;
-
-                case TaskState::done:
-                default:
-                    {
-                        runnableQueue_.next(runningTask_, nextTask_);
-                        if (!nextTask_ && addNewQuota_ > 0) {
-                            if (AddNewTasks()) {
-                                runnableQueue_.next(runningTask_, nextTask_);
-                                -- addNewQuota_;
-                            }
-                        }
-
-                        DebugPrint(dbg_task, "task(%s) done.", runningTask_->DebugInfo());
-                        runnableQueue_.erase(runningTask_);
-                        if (gcQueue_.size() > 16)
-                            GC();
-                        gcQueue_.push(runningTask_);
-                        if (runningTask_->eptr_) {
-                            std::exception_ptr ep = runningTask_->eptr_;
-                            std::rethrow_exception(ep);
-                        }
-
-                        std::unique_lock<TaskQueue::lock_t> lock(runnableQueue_.LockRef());
-                        runningTask_ = nextTask_;
-                        nextTask_ = nullptr;
-                    }
-                    break;
-            }
-        }
+        runningTask_->SwapIn();
     }
+}
+
+void Processer::RingNext()
+{
+    std::unique_lock<TaskQueue::lock_t> lock(runnableQueue_.LockRef());
+    runnableQueue_.nextWithoutLock(runningTask_, nextTask_);
+    if (nextTask_) return ;
+
+    if (addNewQuota_ > 0) {
+        if (AddNewTasks(false)) {
+            runnableQueue_.nextWithoutLock(runningTask_, nextTask_);
+        }
+
+        --addNewQuota_;
+        if (nextTask_) return ;
+    }
+
+    // ring to head
+    Task* front = runnableQueue_.frontWithoutLock();
+    if (front != runningTask_)
+        nextTask_ = front;
+
+    addNewQuota_ = 1;
 }
 
 void Processer::CoYield()
 {
     Task *tk = GetCurrentTask();
     assert(tk);
+    assert(tk == runningTask_);
 
-    DebugPrint(dbg_yield, "yield task(%s) state=%d", tk->DebugInfo(), (int)tk->state_);
+    DebugPrint(dbg_yield, "leave task(%s) state=%d", tk->DebugInfo(), (int)tk->state_);
     ++ TaskRefYieldCount(tk);
+
+    switch (tk->state_) {
+        case TaskState::runnable:
+            RingNext();
+            break;
+
+        case TaskState::block:
+            break;
+
+        case TaskState::done:
+        default:
+            {
+                RingNext();
+
+                DebugPrint(dbg_task, "task(%s) done.", tk->DebugInfo());
+                runnableQueue_.erase(tk);
+                if (gcQueue_.size() > 16)
+                    GC();
+                gcQueue_.push(tk);
+                if (tk->eptr_) {
+                    std::exception_ptr ep = tk->eptr_;
+                    std::rethrow_exception(ep);
+                }
+            }
+            break;
+    }
 
     if (g_Scheduler.GetTaskListener())
         g_Scheduler.GetTaskListener()->onSwapOut(tk->id_);
 
-    tk->SwapOut();
+    // 切出
+    bool bSwitch = true;
+    if (nextTask_) {
+        tk->SwapTo(nextTask_);
+    } else {
+        if (tk->state_ != TaskState::runnable)
+            tk->SwapOut();
+        else {
+            addNewQuota_ = 1;
+            bSwitch = false;
+        }
+    }
+
+    // 切入
+    OnSwapIn(tk, bSwitch);
+}
+
+void Processer::OnSwapIn(Task *tk, bool bSwitch)
+{
+    tk->state_ = TaskState::runnable;
+    tk->proc_ = this;
+
+    if (bSwitch)
+    {
+        std::unique_lock<TaskQueue::lock_t> lock(runnableQueue_.LockRef());
+        runningTask_ = tk;
+        nextTask_ = nullptr;
+    }
+
+    DebugPrint(dbg_switch, "enter task(%s)", tk->DebugInfo());
+    ++switchCount_;
+
+
+    if (g_Scheduler.GetTaskListener())
+        g_Scheduler.GetTaskListener()->onSwapIn(tk->id_);
 }
 
 Task* Processer::GetCurrentTask()
@@ -184,11 +200,14 @@ void Processer::GC()
     list.clear();
 }
 
-bool Processer::AddNewTasks()
+bool Processer::AddNewTasks(bool lock)
 {
     if (newQueue_.emptyUnsafe()) return false;
 
-    runnableQueue_.push(newQueue_.pop_all());
+    if (lock)
+        runnableQueue_.push(newQueue_.pop_all());
+    else
+        runnableQueue_.pushWithoutLock(newQueue_.pop_all());
     newQueue_.AssertLink();
     return true;
 }
@@ -291,13 +310,7 @@ Processer::SuspendEntry Processer::SuspendBySelf(Task* tk)
     tk->state_ = TaskState::block;
     uint64_t id = ++ TaskRefSuspendId(tk);
 
-    runnableQueue_.next(runningTask_, nextTask_);
-    if (!nextTask_ && addNewQuota_ > 0) {
-        if (AddNewTasks()) {
-            runnableQueue_.next(runningTask_, nextTask_);
-            -- addNewQuota_;
-        }
-    }
+    RingNext();
     runnableQueue_.erase(runningTask_);
     waitQueue_.push(runningTask_);
     return SuspendEntry{ WeakPtr<Task>(tk), id };

@@ -76,6 +76,7 @@ void Task::Run()
 void Task::StaticRun(intptr_t vp)
 {
     Task* tk = (Task*)vp;
+    Processer::GetCurrentProcesser()->OnSwapIn(tk);
     tk->Run();
 }
 
