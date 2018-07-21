@@ -16,23 +16,22 @@ struct StackTraits
     static void UnprotectStack(void* stack, int pageSize);
 };
 
-typedef void (*fn_t)(intptr_t);
-
 } // namespace co
 
-#include "../../third_party/boost.context/boost/context/fcontext.hpp"
-using boost::context::fcontext_t;
-using boost::context::jump_fcontext;
-using boost::context::make_fcontext;
+//#include "../../third_party/boost.context/boost/context/fcontext.hpp"
+//using boost::context::fcontext_t;
+//using boost::context::jump_fcontext;
+//using boost::context::make_fcontext;
 
-//extern "C"
-//{
-//
-//typedef void* fcontext_t;
-//
-//intptr_t jump_fcontext(fcontext_t * ofc, fcontext_t nfc,
-//        intptr_t vp, bool preserve_fpu = false);
-//
-//fcontext_t make_fcontext(void* stack, std::size_t size, fn_t fn);
-//
-//} // extern "C"
+extern "C"
+{
+
+typedef void* fcontext_t;
+typedef void (*fn_t)(intptr_t);
+
+intptr_t jump_fcontext(fcontext_t * ofc, fcontext_t nfc,
+        intptr_t vp, bool preserve_fpu = false);
+
+fcontext_t make_fcontext(void* stack, std::size_t size, fn_t fn);
+
+} // extern "C"

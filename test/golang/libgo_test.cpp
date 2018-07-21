@@ -1,5 +1,6 @@
 #include <chrono>
 #include <iostream>
+#include <atomic>
 #include <string>
 #include "../../libgo/libgo.h"
 #define TEST_MIN_THREAD 1
@@ -7,7 +8,7 @@
 #include "../gtest_unit/gtest_exit.h"
 using namespace std;
 
-static const int N = 1000000;
+static const int N = 10000000;
 
 template <typename T>
 void dump(string name, int n, T start, T end)
@@ -15,6 +16,17 @@ void dump(string name, int n, T start, T end)
     cout << name << "    " << n << "      " << 
         chrono::duration_cast<chrono::nanoseconds>(end - start).count() / n << " ns/op" << endl;
 //    cout << "ok. cost " << chrono::duration_cast<chrono::milliseconds>(end - start).count() << " ms" << endl;
+}
+
+void test_atomic()
+{
+    auto start = chrono::steady_clock::now();
+    std::atomic_long val{0};
+    for (int i = 0; i < N; ++i) {
+        val += i;
+    }
+    auto end = chrono::steady_clock::now();
+    dump("std::atomic.add", N, start, end);
 }
 
 void test_switch(int coro)
@@ -50,6 +62,8 @@ void test_channel(int capa, int n)
 
 int main()
 {
+    test_atomic();
+
     go []{ test_switch(1); };
     WaitUntilNoTask();
 
