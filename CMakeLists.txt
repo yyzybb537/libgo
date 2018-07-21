@@ -54,8 +54,8 @@ if (UNIX)
 
     set(CMAKE_ASM_SOURCE_FILE_EXTENSIONS S)
     message("--> select asm source file, please wait about 5 seconds ...")
-    execute_process(COMMAND "${PROJECT_SOURCE_DIR}/select_asm.sh" "${PROJECT_SOURCE_DIR}" "jump" OUTPUT_VARIABLE jump_asm_file)
-    execute_process(COMMAND "${PROJECT_SOURCE_DIR}/select_asm.sh" "${PROJECT_SOURCE_DIR}" "make" OUTPUT_VARIABLE make_asm_file)
+    execute_process(COMMAND "${PROJECT_SOURCE_DIR}/third_party/select_asm.sh" "${PROJECT_SOURCE_DIR}" "jump" OUTPUT_VARIABLE jump_asm_file)
+    execute_process(COMMAND "${PROJECT_SOURCE_DIR}/third_party/select_asm.sh" "${PROJECT_SOURCE_DIR}" "make" OUTPUT_VARIABLE make_asm_file)
 elseif (WIN32)
     # windows platform
     add_definitions(-D_CRT_SECURE_NO_WARNINGS)
@@ -82,11 +82,8 @@ endif()
 set(TARGET "libgo")
 set(STATIC_T "libgo_static")
 
-message("asm_files: ${asm_files}")
-message("CO_SRC_LIST: ${CO_SRC_LIST}")
 list(APPEND CO_SRC_LIST ${jump_asm_file})
 list(APPEND CO_SRC_LIST ${make_asm_file})
-message("CO_SRC_LIST: ${CO_SRC_LIST}")
 add_library("${STATIC_T}" STATIC ${CO_SRC_LIST})
 set_target_properties("${STATIC_T}" PROPERTIES OUTPUT_NAME "${TARGET}")
 
