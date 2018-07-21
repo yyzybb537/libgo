@@ -10,55 +10,65 @@
 using namespace co;
 using std::cout;
 using std::endl;
+using std::chrono::seconds;
+using std::chrono::milliseconds;
 
-double second_duration(std::chrono::system_clock::time_point start)
-{
-    auto now = std::chrono::system_clock::now();
-    auto duration = now - start;
-    return std::chrono::duration_cast<std::chrono::milliseconds>(duration).count() / 1000.0;
-}
+co_timer timer(true);
 
+/*
 TEST(Timer, OnTime1)
 {
-//    g_Scheduler.GetOptions().debug = dbg_timer;
-    auto start = std::chrono::system_clock::now();
+    g_Scheduler.GetOptions().debug = dbg_timer;
+    GTimer gtimer;
     int c = 1;
-    co_timer_add(std::chrono::seconds(1), [&]{
+    co_chan<void> q(1);
+    const int ms = 100;
+    timer.ExpireAt(milliseconds(ms), [&]{
             --c;
-            EXPECT_LT(std::abs(1.0 - second_duration(start)), 0.2);
+            TIMER_CHECK(gtimer, ms, 20);
+            q << nullptr;
             });
-    while (c)
-        g_Scheduler.Run();
+
+    q >> nullptr;
+    EXPECT_EQ(c, 0);
+    g_Scheduler.GetOptions().debug = dbg_none;
 }
+*/
 
 TEST(Timer, OnTime2)
 {
-//    g_Scheduler.GetOptions().debug = dbg_timer;
-    auto start = std::chrono::system_clock::now();
-    int c = 100, cc = c;
-    for (float i = 0; i < c; i+=1)
-        co_timer_add(std::chrono::milliseconds((int)(1000 + i * 1000/c)), [&, i]{
-                --c;
-                EXPECT_LT(std::abs(1 + i/cc - second_duration(start)), 0.05);
+//    g_Scheduler.GetOptions().debug = dbg_timer | dbg_channel;
+    GTimer gtimer;
+    int c = 100;
+    co_chan<void> q(c);
+    const int ms = 100;
+    for (int i = 0; i < c; i++)
+        timer.ExpireAt(std::chrono::milliseconds(ms + i), [&, i]{
+                TIMER_CHECK(gtimer, ms + i, 50);
+                DebugPrint(g_Scheduler.GetOptions().debug, "q <- %d\n", i);
+                q << nullptr;
                 });
-
-    while (c)
-        g_Scheduler.Run();
+    for (int i = 0; i < c; i++) {
+        q >> nullptr;
+        DebugPrint(g_Scheduler.GetOptions().debug, "q -> %d\n", i);
+    }
+//    g_Scheduler.GetOptions().debug = dbg_none;
 }
 
+/*
 TEST(Timer, OnTime3)
 {
-    g_Scheduler.GetOptions().debug = dbg_none;
-    int c = 10000;
-    for (float i = 0; i < c; i+=1)
-        co_timer_add(std::chrono::seconds(1), [&, i]{
-                --c;
+    GTimer gtimer;
+    int c = 1000;
+    co_chan<void> q(c);
+    const int ms = 100;
+    for (int i = 0; i < c; i++)
+        timer.ExpireAt(std::chrono::milliseconds(ms), [&]{
+                TIMER_CHECK(gtimer, ms, 20);
+                q << nullptr;
                 });
-
-    auto start = std::chrono::system_clock::now();
-    while (c)
-        g_Scheduler.Run();
-    EXPECT_LT(second_duration(start), 2.0);
+    for (int i = 0; i < c; i++)
+        q >> nullptr;
 }
 
 using ::testing::TestWithParam;
@@ -170,3 +180,4 @@ TEST(Timer, wait_resolution)
         g_Scheduler.Run();
     EXPECT_LT(second_duration(start), 0.627 + 0.005);   // 误差不超过5ms
 }
+*/

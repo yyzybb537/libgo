@@ -26,39 +26,42 @@ inline void __WaitUntilNoTask(int line, std::size_t val = 0) {
     int i = 0;
     while (g_Scheduler.TaskCount() > val) {
         usleep(1000);
-        if (++i % 3000 == 0) {
+        if (++i == 5000) {
             printf("LINE: %d, TaskCount: %d\n", line, (int)g_Scheduler.TaskCount());
         }
     }
 }
 
-#define WaitUntilNoTask(n, ...) __WaitUntilNoTask(__LINE__, ##__VA_ARGS__)
+#define WaitUntilNoTask() __WaitUntilNoTask(__LINE__)
+#define WaitUntilNoTaskN(n) __WaitUntilNoTask(__LINE__, n)
 
 inline void DumpTaskCount() {
     printf("TaskCount: %d\n", (int)g_Scheduler.TaskCount());
 }
 
-struct GTimer {
-    GTimer() : tp_(co::FastSteadyClock::now()) {}
+template <typename Clock>
+struct GTimerT {
+    GTimerT() : tp_(Clock::now()) {}
 
-    co::FastSteadyClock::duration duration() {
-        return co::FastSteadyClock::now() - tp_;
+    typename Clock::duration duration() {
+        return Clock::now() - tp_;
     }
 
     int ms() {
         return std::chrono::duration_cast<std::chrono::milliseconds>(
-                co::FastSteadyClock::now() - tp_).count();
+                Clock::now() - tp_).count();
     }
 
 private:
-    co::FastSteadyClock::time_point tp_;
+    typename Clock::time_point tp_;
 };
+typedef GTimerT<co::FastSteadyClock> GTimer;
 
 #define DEFAULT_DEVIATION 50
 #define TIMER_CHECK(t, val, deviation) \
         do { \
             auto c = t.ms(); \
-            EXPECT_GT(c, val - 1); \
+            EXPECT_GT(c, val - 2); \
             EXPECT_LT(c, val + deviation); \
         } while (0)
 

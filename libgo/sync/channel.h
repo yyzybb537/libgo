@@ -20,6 +20,11 @@ public:
         impl_.reset(new ChannelImpl(capacity));
     }
 
+    void SetDbgMask(uint64_t mask)
+    {
+        impl_->SetDbgMask(mask);
+    }
+
     Channel const& operator<<(T t) const
     {
         impl_->Push(t, true, std::chrono::seconds(0));
@@ -95,12 +100,13 @@ public:
     }
 
 private:
-    class ChannelImpl
+    class ChannelImpl : public IdCounter<ChannelImpl>
     {
         LFLock lock_;
         std::size_t capacity_;
         bool closed_;
         std::deque<T> queue_;
+        uint64_t dbg_mask_;
 
         struct Entry {
             Processer::SuspendEntry entry_;
@@ -121,14 +127,21 @@ private:
 
     public:
         explicit ChannelImpl(std::size_t capacity)
-            : capacity_(capacity), closed_(false)
+            : capacity_(capacity), closed_(false), dbg_mask_(dbg_all)
         {
+            DebugPrint(dbg_mask_ & dbg_channel, "[id=%ld] Channel init. capacity=%lu", this->getId(), capacity);
         }
 
         ~ChannelImpl() {
+            DebugPrint(dbg_mask_ & dbg_channel, "[id=%ld] Channel destory.", this->getId());
+
             assert(lock_.try_lock());
             assert(isEmpty(wQueue_));
             assert(isEmpty(rQueue_));
+        }
+
+        void SetDbgMask(uint64_t mask) {
+            dbg_mask_ = mask;
         }
 
         bool isEmpty(std::queue<Entry> & waitQueue) {
@@ -158,28 +171,43 @@ private:
         template <typename Duration>
         bool Push(T t, bool bWait, Duration dur)
         {
+            DebugPrint(dbg_mask_ & dbg_channel, "[id=%ld] Push(bWait=%d, dur=%ld ms)", this->getId(),
+                    (int)bWait, (long)std::chrono::duration_cast<std::chrono::milliseconds>(dur).count());
+
+            // native thread不支持Timedxxx接口
+            assert(dur.count() == 0 || g_Scheduler.IsCoroutine());
+
             std::unique_lock<LFLock> lock(lock_);
-            if (closed_)
+            if (closed_) {
+                DebugPrint(dbg_mask_ & dbg_channel, "[id=%ld] Push return false, be closed.", this->getId());
                 return false;
+            }
 
             if (capacity_ > 0) {
                 if (queue_.size() < capacity_) {
                     queue_.emplace_back(t);
-                    Notify(op_read);
+                    int notified = Notify(op_read);
+                    DebugPrint(dbg_mask_ & dbg_channel, "[id=%ld] Push return true, with capacity. size=%d, Notify=%d",
+                            this->getId(), (int)queue_.size(), notified);
                     return true;
                 }
 
                 bool ok = false;
                 if (bWait)
                     Wait(op_write, lock, &t, &ok, dur);
+
+                DebugPrint(dbg_mask_ & dbg_channel, "[id=%ld] Push return %s, capacity full. size=%d",
+                        this->getId(), ok ? "true" : "false", (int)queue_.size());
                 return ok;
             } else {
                 // 无缓冲
                 if (!rQueue_.empty()) {
                     assert(queue_.empty());
                     queue_.emplace_back(t);
-                    if (Notify(op_read))
+                    if (Notify(op_read)) {
+                        DebugPrint(dbg_mask_ & dbg_channel, "[id=%ld] Push return true, zero capacity. Notified=1", this->getId());
                         return true;
+                    }
 
                     // 没有正在读等待的协程, 写入的数据清除, 让Pop来触发
                     queue_.clear();
@@ -188,6 +216,9 @@ private:
                 bool ok = false;
                 if (bWait)
                     Wait(op_write, lock, &t, &ok, dur);
+
+                DebugPrint(dbg_mask_ & dbg_channel, "[id=%ld] Push return %s, zero capacity.",
+                        this->getId(), ok ? "true" : "false");
                 return ok;
             }
         }
@@ -196,37 +227,56 @@ private:
         template <typename Duration>
         bool Pop(T & t, bool bWait, Duration dur)
         {
+            DebugPrint(dbg_mask_ & dbg_channel, "[id=%ld] Pop(bWait=%d, dur=%ld ms)", this->getId(),
+                    (int)bWait, (long)std::chrono::duration_cast<std::chrono::milliseconds>(dur).count());
+
+            // native thread不支持Timedxxx接口
+            assert(dur.count() == 0 || g_Scheduler.IsCoroutine());
+
             std::unique_lock<LFLock> lock(lock_);
             if (capacity_ > 0) {
                 if (!queue_.empty()) {
                     t = queue_.front();
                     queue_.pop_front();
-                    Notify(op_write);
+                    int notified = Notify(op_write);
+                    DebugPrint(dbg_mask_ & dbg_channel, "[id=%ld] Pop return true, with capacity. size=%d, Notify=%d",
+                            this->getId(), (int)queue_.size() + 1, notified);
                     return true;
                 }
 
-                if (closed_)
+                if (closed_) {
+                    DebugPrint(dbg_mask_ & dbg_channel, "[id=%ld] Pop return false, be closed.", this->getId());
                     return false;
+                }
 
                 bool ok = false;
                 if (bWait)
                     Wait(op_read, lock, &t, &ok, dur);
+
+                DebugPrint(dbg_mask_ & dbg_channel, "[id=%ld] Pop return %s, capacity empty. size=%d",
+                        this->getId(), ok ? "true" : "false", (int)queue_.size());
                 return ok;
             } else {
                 // 无缓冲
-                if (closed_)
+                if (closed_) {
+                    DebugPrint(dbg_mask_ & dbg_channel, "[id=%ld] Pop return false, zero capacity, be closed.", this->getId());
                     return false;
+                }
 
                 if (Notify(op_write)) {
                     assert(!queue_.empty());
                     t = queue_.front();
                     queue_.pop_front();
+                    DebugPrint(dbg_mask_ & dbg_channel, "[id=%ld] Pop return true, zero capacity. Notified=1", this->getId());
                     return true;
                 }
 
                 bool ok = false;
                 if (bWait)
                     Wait(op_read, lock, &t, &ok, dur);
+
+                DebugPrint(dbg_mask_ & dbg_channel, "[id=%ld] Pop return %s, zero capacity.",
+                        this->getId(), ok ? "true" : "false");
                 return ok;
             }
         }
@@ -235,6 +285,8 @@ private:
         {
             std::unique_lock<LFLock> lock(lock_);
             if (closed_) return ;
+
+            DebugPrint(dbg_mask_ & dbg_channel, "[id=%ld] Channel Closed. size=%d", this->getId(), (int)queue_.size());
 
             closed_ = true;
             std::queue<Entry> *pQueues[2] = {&rQueue_, &wQueue_};
@@ -249,8 +301,13 @@ private:
                         *entry.ok_ = false;
 
                     if (entry.entry_) {
-                        Processer::Wakeup(entry.entry_);
+                        if (Processer::Wakeup(entry.entry_)) {
+                            DebugPrint(dbg_mask_ & dbg_channel, "[id=%ld] close wakeup coroutine.", this->getId());
+                        } else {
+                            DebugPrint(dbg_mask_ & dbg_channel, "[id=%ld] close zombies coroutine.", this->getId());
+                        }
                     } else {
+                        DebugPrint(dbg_mask_ & dbg_channel, "[id=%ld] close wakeup native thread.", this->getId());
                         pCv[i]->notify_one();
                     }
                 }
@@ -262,6 +319,8 @@ private:
         {
             auto & waitQueue = op == op_read ? rQueue_ : wQueue_;
             if (g_Scheduler.GetCurrentTask()) {
+                DebugPrint(dbg_mask_ & dbg_channel, "[id=%ld] channel coroutine wait. dur=%ld ns",
+                        this->getId(), (long)std::chrono::duration_cast<std::chrono::nanoseconds>(dur).count());
                 if (dur.count() == 0)
                     waitQueue.push(Entry{Processer::Suspend(), ptr, ok});
                 else 
@@ -273,6 +332,8 @@ private:
                 lock.unlock();
                 g_Scheduler.CoYield();
             } else {
+                DebugPrint(dbg_mask_ & dbg_channel, "[id=%ld] channel native thread wait. dur=%ld ms",
+                        this->getId(), (long)std::chrono::duration_cast<std::chrono::milliseconds>(dur).count());
                 waitQueue.push(Entry{Processer::SuspendEntry{}, ptr, ok});
                 auto & cv = op == op_read ? rCv_ : wCv_;
                 cv.wait(lock);
@@ -302,10 +363,14 @@ private:
                 if (entry.entry_) {
                     if (Processer::Wakeup(entry.entry_)) {
                         ok = true;
+                        DebugPrint(dbg_mask_ & dbg_channel, "[id=%ld] notify wakeup coroutine.", this->getId());
+                    } else {
+                        DebugPrint(dbg_mask_ & dbg_channel, "[id=%ld] notify zombies coroutine.", this->getId());
                     }
                 } else {
                     auto & cv = op == op_read ? rCv_ : wCv_;
                     cv.notify_one();
+                    DebugPrint(dbg_mask_ & dbg_channel, "[id=%ld] notify wakeup native thread.", this->getId());
                     ok = true;
                 }
 
