@@ -116,7 +116,7 @@ if (UNIX)
         COMMENT "Switch CMAKE_BUILD_TYPE to Release"
     )
 
-    set(PROFILE_FLAGS "-g -pg -O3 -std=c++11 -Wall -fPIC")
+    set(PROFILE_FLAGS "-pg ${CMAKE_CXX_FLAGS_${CMAKE_BUILD_TYPE}}")
 
     #message("PROFILE_FLAGS: ${PROFILE_FLAGS}")
     add_custom_target(profile
