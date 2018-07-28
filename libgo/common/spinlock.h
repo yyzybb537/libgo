@@ -41,7 +41,7 @@ struct LFLock
 {
     std::atomic_flag flag;
 
-    LFLock() : flag{ATOMIC_FLAG_INIT}
+    LFLock() : flag{false}
     {
     }
 
@@ -53,7 +53,11 @@ struct LFLock
     // PS: 这是一个可能没有内存一致性的接口, 使用的时候要小心cpu缓存不能及时刷新的问题.
     ALWAYS_INLINE bool is_lock()
     {
+#if defined(__linux__)
         return flag._M_i;
+#elif defined(__APPLE__)
+        return flag.__a_;
+#endif
     }
 
     ALWAYS_INLINE bool try_lock()
@@ -102,7 +106,7 @@ struct LFLock2
 
     ALWAYS_INLINE bool is_lock()
     {
-        return state.load(std::memory_order_acq_rel);
+        return state;
     }
 };
 

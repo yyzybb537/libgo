@@ -2,7 +2,6 @@
 #include "cmake_config.h"
 #include <unordered_map>
 #include <list>
-#include <sys/epoll.h>
 #include <errno.h>
 #include <string.h>
 #include <cstdlib>

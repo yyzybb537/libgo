@@ -7,7 +7,6 @@
 #include <time.h>
 #include "ref.h"
 #include <thread>
-#include <sys/sysinfo.h>
 #if __linux__
 #include <sys/time.h>
 #endif
@@ -92,7 +91,7 @@ void Scheduler::Start(int minThreadNumber, int maxThreadNumber)
         throw std::logic_error("libgo repeated call Scheduler::Start");
 
     if (minThreadNumber < 1)
-       minThreadNumber = get_nprocs();
+       minThreadNumber = std::thread::hardware_concurrency();
 
     if (maxThreadNumber == 0 || maxThreadNumber < minThreadNumber)
         maxThreadNumber = minThreadNumber;

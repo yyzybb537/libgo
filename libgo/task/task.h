@@ -21,7 +21,7 @@ typedef std::function<void()> TaskF;
 struct TaskGroupKey {};
 typedef Anys<TaskGroupKey> TaskAnys;
 
-struct Processer;
+class Processer;
 struct Task
     : public TSQueueHook, public SharedRefObject
 {
