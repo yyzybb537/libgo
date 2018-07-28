@@ -1,6 +1,5 @@
 #pragma once
 #include "config.h"
-#include <bits/shared_ptr_base.h>
 
 namespace co
 {
