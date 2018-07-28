@@ -2,7 +2,7 @@
 
 echo "------------- libgo ---------------"
 isMac=`uname -a | grep Darwin -c || echo -n`
-if [ "$isMac" == "1" ]
+if [ "$isMac" -eq "1" ]
 then
     g++ libgo_test.cpp -std=c++11 -O3 -o libgo_test -I../../third_party/gtest/include -L../../build -llibgo -pthread && ./libgo_test
 else
