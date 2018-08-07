@@ -1,4 +1,12 @@
 TODO:
+调度器改成多个(1个默认的全局调度器+多个用户自定义调度器), 去除全局访问点, go增加参数指定调度器.
+增加可以与async模型配合使用的协程池, 用户可以将同步网络操作或其他阻塞的请求投递进来(比如:mysql操作),
+    将用户的主循环也放入协程中执行, epollwait变成poll2个fd, 一个epollfd, 一个callback-fd, 以便快速响应.
+    触发后在hook过的用户的epollwait/kqueue/iocp里面调用callback, 以此保证callback和触发点在同一个或同一组线程
+    投递时：if (!channel.TryPush(xx)) go { func(xx); while (co_num < maxPoolNum) { channel >> x; func(x); }}
+实现一个连接池, 与协程池搭配使用, 简化mysql\hiredis等库的使用方式.
+以glibc的静、动态链接方式来区分hook实现方法, 而不是libgo库本身.(try:优先尝试dlysm, 失败后再用__xxx的方式)
+
 环切(runnable状态)搭配星切, 提升协程切换性能
     A）使用环切调度替代现在的星切调度(CoYeild时选择下一个切换目标)，必要时才切换回线程处理epoll、定时器、sleep等逻辑，同时协调好多线程调度
     B）调度器的Run函数里面做了很多协程切换之外的事情，尽量降低这部分在非必要时的cpu消耗，比如：有任务加入定时器是设置一个tls标记为true，只有标记为true时才去处理定时器相关逻辑。
