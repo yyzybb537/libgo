@@ -1,5 +1,4 @@
 TODO:
-调度器改成多个(1个默认的全局调度器+多个用户自定义调度器), 去除全局访问点, go增加参数指定调度器.
 增加可以与async模型配合使用的协程池, 用户可以将同步网络操作或其他阻塞的请求投递进来(比如:mysql操作),
     将用户的主循环也放入协程中执行, epollwait变成poll2个fd, 一个epollfd, 一个callback-fd, 以便快速响应.
     触发后在hook过的用户的epollwait/kqueue/iocp里面调用callback, 以此保证callback和触发点在同一个或同一组线程
@@ -13,7 +12,8 @@ TODO:
     C）调度器中的runnable队列使用了自旋锁，没有竞争时对原子变量的操作也是比较昂贵的，runnable队列可以优化成多写一读，仅在写入端加锁的队列。
 协程对象Task内存布局调优，tls池化，每个池使用多写一读链表队列，申请时仅在当前线程的池中申请，可以免锁，释放时均衡每个线程的池水水位，可以塞入其他线程的池中。
 支持同时等待多个Channel
-mac分支合并到master中
+优化sync库(仿照futex的实现)
+master分支兼容macos
 解决第三方库、glibc++ exception使用tls的隐患(pthread_xxx_specific ?)
 
 DONE:
@@ -57,3 +57,4 @@ hook __poll, 源syscall使用__libc_poll, 以支持gethostbyname系列函数
 用户调用过poll的fd应该设置对应的readable\writable, 降低io的latency
 go dispatch(xx) stack(xxx) malloc-free(xx,yy) func;用这种灵活的语法替代go_dispatch这种老旧的方式。
 协程亲缘性
+调度器改成多个(1个默认的全局调度器+多个用户自定义调度器), 去除全局访问点, go增加参数指定调度器.

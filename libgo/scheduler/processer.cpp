@@ -9,8 +9,8 @@ namespace co {
 
 int Processer::s_check_ = 0;
 
-Processer::Processer(int id)
-    : id_(id)
+Processer::Processer(Scheduler * scheduler, int id)
+    : scheduler_(scheduler), id_(id)
 {
 }
 
@@ -18,6 +18,12 @@ Processer* & Processer::GetCurrentProcesser()
 {
     static thread_local Processer *proc = nullptr;
     return proc;
+}
+
+Scheduler* Processer::GetCurrentScheduler()
+{
+    auto proc = GetCurrentProcesser();
+    return proc ? proc->scheduler_ : nullptr;
 }
 
 void Processer::AddTaskRunnable(Task *tk)
@@ -70,8 +76,8 @@ void Processer::Process()
             runningTask_->state_ = TaskState::runnable;
             runningTask_->proc_ = this;
             DebugPrint(dbg_switch, "enter task(%s)", runningTask_->DebugInfo());
-            if (g_Scheduler.GetTaskListener())
-                g_Scheduler.GetTaskListener()->onSwapIn(runningTask_->id_);
+            if (scheduler_->GetTaskListener())
+                scheduler_->GetTaskListener()->onSwapIn(runningTask_->id_);
             ++switchCount_;
 
             runningTask_->SwapIn();
@@ -137,6 +143,12 @@ void Processer::Process()
     }
 }
 
+void Processer::StaticCoYield()
+{
+    auto proc = GetCurrentProcesser();
+    if (proc) proc->CoYield();
+}
+
 void Processer::CoYield()
 {
     Task *tk = GetCurrentTask();
@@ -145,15 +157,21 @@ void Processer::CoYield()
     DebugPrint(dbg_yield, "yield task(%s) state=%d", tk->DebugInfo(), (int)tk->state_);
     ++ TaskRefYieldCount(tk);
 
-    if (g_Scheduler.GetTaskListener())
-        g_Scheduler.GetTaskListener()->onSwapOut(tk->id_);
+    if (scheduler_->GetTaskListener())
+        scheduler_->GetTaskListener()->onSwapOut(tk->id_);
 
     tk->SwapOut();
 }
 
 Task* Processer::GetCurrentTask()
 {
-    return runningTask_;
+    auto proc = GetCurrentProcesser();
+    return proc ? proc->runningTask_ : nullptr;
+}
+
+bool Processer::IsCoroutine()
+{
+    return !!GetCurrentTask();
 }
 
 std::size_t Processer::RunnableSize()
@@ -267,7 +285,7 @@ SList<Task> Processer::Steal(std::size_t n)
 
 Processer::SuspendEntry Processer::Suspend()
 {
-    Task* tk = g_Scheduler.GetCurrentTask();
+    Task* tk = GetCurrentTask();
     assert(tk);
     assert(tk->proc_);
     return tk->proc_->SuspendBySelf(tk);
@@ -276,7 +294,7 @@ Processer::SuspendEntry Processer::Suspend()
 Processer::SuspendEntry Processer::Suspend(FastSteadyClock::duration dur)
 {
     SuspendEntry entry = Suspend();
-    g_Scheduler.GetTimer().StartTimer(dur,
+    GetCurrentScheduler()->GetTimer().StartTimer(dur,
             [entry]() mutable {
                 Processer::Wakeup(entry);
             });

@@ -1,18 +1,11 @@
 #pragma once
 #include "../scheduler/scheduler.h"
-//#include <libgo/channel.h>
-//#include <libgo/thread_pool.h>
-//#include <libgo/co_rwmutex.h>
-//#include <libgo/debugger.h>
-//#include <libgo/co_local_storage.h>
-//#if __linux__
-//#include "linux_glibc_hook.h"
-//#endif
 
 namespace co
 {
 
 enum {
+    opt_scheduler,
     opt_stack_size,
     opt_dispatch,
     opt_affinity,
@@ -20,6 +13,14 @@ enum {
 
 template <int OptType>
 struct __go_option;
+
+template <>
+struct __go_option<opt_scheduler>
+{
+    Scheduler* scheduler_;
+    explicit __go_option(Scheduler* scheduler) : scheduler_(scheduler) {}
+    explicit __go_option(Scheduler& scheduler) : scheduler_(&scheduler) {}
+};
 
 template <>
 struct __go_option<opt_stack_size>
@@ -39,6 +40,7 @@ struct __go
 {
     __go(const char* file, int lineno)
     {
+        scheduler_ = nullptr;
         opt_.file_ = file;
         opt_.lineno_ = lineno;
     }
@@ -46,7 +48,15 @@ struct __go
     template <typename Function>
     ALWAYS_INLINE void operator-(Function const& f)
     {
-        Scheduler::getInstance().CreateTask(f, opt_);
+        if (!scheduler_) scheduler_ = Processer::GetCurrentScheduler();
+        if (!scheduler_) scheduler_ = &Scheduler::getInstance();
+        scheduler_->CreateTask(f, opt_);
+    }
+
+    ALWAYS_INLINE __go& operator-(__go_option<opt_scheduler> const& opt)
+    {
+        scheduler_ = opt.scheduler_;
+        return *this;
     }
 
     ALWAYS_INLINE __go& operator-(__go_option<opt_stack_size> const& opt)
@@ -62,34 +72,9 @@ struct __go
     }
 
     TaskOpt opt_;
+    Scheduler* scheduler_;
 };
 
-//// co_channel
-//template <typename T>
-//using co_chan = Channel<T>;
-//
-//// co_timer_add will returns timer_id; The timer_id type is co::TimerId, it's a shared_ptr.
-//template <typename Arg, typename F>
-//inline TimerId co_timer_add(Arg const& duration_or_timepoint, F const& callback) {
-//    return g_Scheduler.ExpireAt(duration_or_timepoint, callback);
-//}
-//
-//// co_timer_cancel will returns boolean type;
-////   if cancel successfully it returns true,
-////   else it returns false;
-//inline bool co_timer_cancel(TimerId timer_id) {
-//    return g_Scheduler.CancelTimer(timer_id);
-//}
-//
-//// co_timer_block_cancel will returns boolean type;
-////   if cancel successfully it returns true,
-////   else it returns false;
-////
-//// This function will block wait timer occurred done, if cancel error.
-//inline bool co_timer_block_cancel(TimerId timer_id) {
-//    return g_Scheduler.BlockCancelTimer(timer_id);
-//}
-//
 //template <typename R>
 //struct __async_wait
 //{

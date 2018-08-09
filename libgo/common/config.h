@@ -147,10 +147,10 @@ struct CoroutineOptions
     }
 };
 
-extern int codebug_GetCurrentProcessID();
-extern int codebug_GetCurrentThreadID();
-extern std::string codebug_GetCurrentTime();
-extern const char* BaseFile(const char* file);
+int GetCurrentProcessID();
+int GetCurrentThreadID();
+std::string GetCurrentTime();
+const char* BaseFile(const char* file);
 
 } //namespace co
 
@@ -158,8 +158,8 @@ extern const char* BaseFile(const char* file);
     do { \
         if (UNLIKELY(::co::CoroutineOptions::getInstance().debug & (type))) { \
             fprintf(::co::CoroutineOptions::getInstance().debug_output, "[%s][%05d][%04d]%s:%d:(%s)\t " fmt "\n", \
-                    ::co::codebug_GetCurrentTime().c_str(),\
-                    ::co::codebug_GetCurrentProcessID(), ::co::codebug_GetCurrentThreadID(), \
+                    ::co::GetCurrentTime().c_str(),\
+                    ::co::GetCurrentProcessID(), ::co::GetCurrentThreadID(), \
                     ::co::BaseFile(__FILE__), __LINE__, __FUNCTION__, ##__VA_ARGS__); \
             fflush(::co::CoroutineOptions::getInstance().debug_output); \
         } \

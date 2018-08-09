@@ -2,6 +2,7 @@
 #include "../common/config.h"
 #include "../common/spinlock.h"
 #include "../common/timer.h"
+#include "../scheduler/scheduler.h"
 #include "../scheduler/processer.h"
 #include "../sync/channel.h"
 
@@ -16,7 +17,7 @@ class CoTimer {
         typedef Timer<func_t> base_t;
         typedef base_t::TimerId TimerId;
 
-        CoTimerImpl(bool highResolution = false);
+        explicit CoTimerImpl(FastSteadyClock::duration precision);
         ~CoTimerImpl();
 
         TimerId ExpireAt(FastSteadyClock::duration dur, func_t const& cb);
@@ -28,7 +29,8 @@ class CoTimer {
     private:
         LFLock lock_;
 
-        bool highResolution_;
+        // 精度
+        FastSteadyClock::duration precision_;
 
         Channel<void> trigger_{1};
 
@@ -40,7 +42,17 @@ public:
     typedef CoTimerImpl::TimerId TimerId;
 
 public:
-    explicit CoTimer(bool highResolution = false);
+    template <typename Rep, typename Period>
+    explicit CoTimer(std::chrono::duration<Rep, Period> dur, Scheduler * scheduler = nullptr)
+        : impl_(new CoTimerImpl(std::chrono::duration_cast<FastSteadyClock::duration>(dur)))
+    {
+        Initialize(scheduler);
+    }
+
+    explicit CoTimer(Scheduler * scheduler = nullptr)
+        : CoTimer(std::chrono::milliseconds(1), scheduler)
+    {}
+
     ~CoTimer();
 
     TimerId ExpireAt(FastSteadyClock::duration dur, func_t const& cb);
@@ -55,6 +67,8 @@ public:
 private:
     CoTimer(CoTimer const&) = delete;
     CoTimer& operator=(CoTimer const&) = delete;
+
+    void Initialize(Scheduler * scheduler);
 
 private:
     std::shared_ptr<CoTimerImpl> impl_;

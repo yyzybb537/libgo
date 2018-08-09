@@ -11,20 +11,20 @@
 #define TEST_MAX_THREAD 4
 #endif
 
-struct startLibgo {
-    startLibgo() {
-        pThread = new std::thread([]{
-                g_Scheduler.Start(TEST_MIN_THREAD, TEST_MAX_THREAD);
+struct startScheduler {
+    startScheduler(co::Scheduler & scheduler) {
+        pThread = new std::thread([&]{
+                scheduler.Start(TEST_MIN_THREAD, TEST_MAX_THREAD);
             });
     }
     std::thread *pThread;
 };
 
-startLibgo __startLibgo;
+startScheduler __startScheduler(g_Scheduler);
 
-inline void __WaitUntilNoTask(int line, std::size_t val = 0) {
+inline void __WaitUntilNoTask(co::Scheduler & scheduler, int line, std::size_t val = 0) {
     int i = 0;
-    while (g_Scheduler.TaskCount() > val) {
+    while (scheduler.TaskCount() > val) {
         usleep(1000);
         if (++i == 5000) {
             printf("LINE: %d, TaskCount: %d\n", line, (int)g_Scheduler.TaskCount());
@@ -32,8 +32,10 @@ inline void __WaitUntilNoTask(int line, std::size_t val = 0) {
     }
 }
 
-#define WaitUntilNoTask() __WaitUntilNoTask(__LINE__)
-#define WaitUntilNoTaskN(n) __WaitUntilNoTask(__LINE__, n)
+#define WaitUntilNoTask() __WaitUntilNoTask(g_Scheduler, __LINE__)
+#define WaitUntilNoTaskN(n) __WaitUntilNoTask(g_Scheduler, __LINE__, n)
+
+#define WaitUntilNoTaskS(scheduler) __WaitUntilNoTask(scheduler, __LINE__)
 
 inline void DumpTaskCount() {
     printf("TaskCount: %d\n", (int)g_Scheduler.TaskCount());

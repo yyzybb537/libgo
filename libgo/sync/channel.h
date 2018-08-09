@@ -175,7 +175,7 @@ private:
                     (int)bWait, (long)std::chrono::duration_cast<std::chrono::milliseconds>(dur).count());
 
             // native thread不支持Timedxxx接口
-            assert(dur.count() == 0 || g_Scheduler.IsCoroutine());
+            assert(dur.count() == 0 || Processer::IsCoroutine());
 
             std::unique_lock<LFLock> lock(lock_);
             if (closed_) {
@@ -231,7 +231,7 @@ private:
                     (int)bWait, (long)std::chrono::duration_cast<std::chrono::milliseconds>(dur).count());
 
             // native thread不支持Timedxxx接口
-            assert(dur.count() == 0 || g_Scheduler.IsCoroutine());
+            assert(dur.count() == 0 || Processer::IsCoroutine());
 
             std::unique_lock<LFLock> lock(lock_);
             if (capacity_ > 0) {
@@ -318,7 +318,7 @@ private:
         void Wait(Op op, std::unique_lock<LFLock> & lock, T * ptr, bool * ok, Duration dur)
         {
             auto & waitQueue = op == op_read ? rQueue_ : wQueue_;
-            if (g_Scheduler.GetCurrentTask()) {
+            if (Processer::IsCoroutine()) {
                 DebugPrint(dbg_mask_ & dbg_channel, "[id=%ld] channel coroutine wait. dur=%ld ns",
                         this->getId(), (long)std::chrono::duration_cast<std::chrono::nanoseconds>(dur).count());
                 if (dur.count() == 0)
@@ -330,7 +330,7 @@ private:
                             ok});
 
                 lock.unlock();
-                g_Scheduler.CoYield();
+                Processer::StaticCoYield();
             } else {
                 DebugPrint(dbg_mask_ & dbg_channel, "[id=%ld] channel native thread wait. dur=%ld ms",
                         this->getId(), (long)std::chrono::duration_cast<std::chrono::milliseconds>(dur).count());

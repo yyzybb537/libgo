@@ -11,19 +11,19 @@
 
 // create coroutine options
 #define co_stack(size) ::co::__go_option<::co::opt_stack_size>{size}-
-//#define co_dispatch(thread_id_or_type) ::co::__go_option<::co::opt_dispatch>{thread_id_or_type}-
-//#define co_affinity() ::co::__go_option<::co::opt_affinity>{true}-
+#define co_scheduler(pScheduler) ::co::__go_option<::co::opt_scheduler>{pScheduler}-
 
 #define go_stack(size) go co_stack(size)
-//#define go_dispatch(thread_id_or_type) go co_dispatch(thread_id_or_type)
 
-#define co_yield do { g_Scheduler.CoYield(); } while (0)
+#define co_yield do { Processer::StaticCoYield(); } while (0)
 
 // coroutine sleep, never blocks current thread.
-//#define co_sleep(milliseconds) do { g_Scheduler.SleepSwitch(milliseconds); } while (0)
+#define co_sleep(milliseconds) do { usleep(1000 * milliseconds); } while (0)
 
 // co_sched
 #define co_sched g_Scheduler
+
+#define co_opt ::co::CoroutineOptions::getInstance()
 
 // co_mutex
 using ::co::co_mutex;

@@ -23,11 +23,11 @@ void CoMutex::lock()
         return ;
     }
 
-    if (g_Scheduler.GetCurrentTask()) {
+    if (Processer::IsCoroutine()) {
         // 协程
         queue_.push(Processer::Suspend());
         lock.unlock();
-        g_Scheduler.CoYield();
+        Processer::StaticCoYield();
     } else {
         // 原生线程
         queue_.push(Processer::SuspendEntry{});
