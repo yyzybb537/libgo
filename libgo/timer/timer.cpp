@@ -6,8 +6,8 @@
 namespace co
 {
 
-CoTimer::CoTimerImpl::CoTimerImpl(bool highResolution)
-    : highResolution_(highResolution)
+CoTimer::CoTimerImpl::CoTimerImpl(FastSteadyClock::duration precision)
+    : precision_(precision)
 {
 //    trigger_.SetDbgMask(0);
 }
@@ -27,7 +27,7 @@ void CoTimer::CoTimerImpl::RunInCoroutine()
 
         std::unique_lock<LFLock> lock(lock_);
 
-        auto nextTime = NextTrigger(std::chrono::milliseconds(10));
+        auto nextTime = NextTrigger(precision_);
         auto now = FastSteadyClock::now();
         auto nextDuration = nextTime > now ? nextTime - now : FastSteadyClock::duration(0);
         DebugPrint(dbg_timer, "wait trigger nextDuration=%d ns", (int)std::chrono::duration_cast<std::chrono::nanoseconds>(nextDuration).count());
@@ -50,10 +50,9 @@ CoTimer::CoTimerImpl::ExpireAt(FastSteadyClock::duration dur, func_t const& cb)
     DebugPrint(dbg_timer, "add timer dur=%d", (int)std::chrono::duration_cast<std::chrono::milliseconds>(dur).count());
 
     auto id = StartTimer(dur, cb);
-    if (!highResolution_) return id;
 
     // 强制唤醒, 提高精准度
-    if (dur < std::chrono::milliseconds(10)) {
+    if (dur <= precision_) {
         std::unique_lock<LFLock> lock(lock_, std::defer_lock);
         if (lock.try_lock()) return id;
 
@@ -63,10 +62,10 @@ CoTimer::CoTimerImpl::ExpireAt(FastSteadyClock::duration dur, func_t const& cb)
     return id;
 }
 
-CoTimer::CoTimer(bool highResolution) : impl_(new CoTimerImpl(highResolution))
+void CoTimer::Initialize(Scheduler * scheduler)
 {
     auto ptr = impl_;
-    go [ptr] {
+    go co_scheduler(scheduler) [ptr] {
         ptr->RunInCoroutine();
     };
 }

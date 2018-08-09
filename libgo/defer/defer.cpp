@@ -11,7 +11,7 @@ namespace co
 
     dismisser*& dismisser::GetLastDefer()
     {
-        Task* tk = Scheduler::getInstance().GetCurrentTask();
+        Task* tk = Processer::GetCurrentTask();
         if (tk) {
             return reinterpret_cast<dismisser*&>(tk->defer_cls_);
         }

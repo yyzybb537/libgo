@@ -7,9 +7,6 @@
 #include <time.h>
 #include "ref.h"
 #include <thread>
-#if __linux__
-#include <sys/time.h>
-#endif
 #if WITH_SAFE_SIGNAL
 #include "hook_signal.h"
 #endif
@@ -25,7 +22,7 @@ inline atomic_t<unsigned long long> & GetTaskIdFactory()
     return factory;
 }
 
-Scheduler::Scheduler()
+static int LibgoInitialize()
 {
 //    coroutine_hook_init();
 
@@ -35,8 +32,13 @@ Scheduler::Scheduler()
     TaskRefInit(Location);
     TaskRefInit(DebugInfo);
     TaskRefInit(SuspendId);
+    return 0;
+}
 
-    processers_.push_back(new Processer(0));
+Scheduler::Scheduler()
+{
+    static int val = LibgoInitialize();
+    processers_.push_back(new Processer(this, val));
 }
 
 Scheduler::~Scheduler()
@@ -45,7 +47,7 @@ Scheduler::~Scheduler()
 
 void Scheduler::CreateTask(TaskF const& fn, TaskOpt const& opt)
 {
-    Task* tk = new Task(fn, opt.stack_size_ ? opt.stack_size_ : GetOptions().stack_size);
+    Task* tk = new Task(fn, opt.stack_size_ ? opt.stack_size_ : CoroutineOptions::getInstance().stack_size);
 //    printf("new tk = %p  impl = %p\n", tk, tk->impl_);
     tk->SetDeleter(Deleter(&Scheduler::DeleteTask, this));
     tk->id_ = ++GetTaskIdFactory();
@@ -70,19 +72,12 @@ void Scheduler::DeleteTask(RefObject* tk, void* arg)
 
 bool Scheduler::IsCoroutine()
 {
-    return !!GetCurrentTask();
+    return !!Processer::GetCurrentTask();
 }
 
 bool Scheduler::IsEmpty()
 {
     return taskCount_ == 0;
-}
-
-void Scheduler::CoYield()
-{
-    auto proc = Processer::GetCurrentProcesser();
-    if (proc)
-        proc->CoYield();
 }
 
 void Scheduler::Start(int minThreadNumber, int maxThreadNumber)
@@ -128,7 +123,7 @@ void Scheduler::Start(int minThreadNumber, int maxThreadNumber)
 
 void Scheduler::NewProcessThread()
 {
-    auto p = new Processer(processers_.size());
+    auto p = new Processer(this, processers_.size());
     DebugPrint(dbg_scheduler, "---> Create Processer(%d)", p->id_);
     std::thread t([p]{
             p->Process();
@@ -143,7 +138,7 @@ void Scheduler::DispatcherThread()
     typedef std::size_t idx_t;
     for (;;) {
         // TODO: 用condition_variable降低cpu使用率
-        std::this_thread::sleep_for(std::chrono::microseconds(GetOptions().dispatcher_thread_cycle_us));
+        std::this_thread::sleep_for(std::chrono::microseconds(CoroutineOptions::getInstance().dispatcher_thread_cycle_us));
 
         // 1.收集负载值, 收集阻塞状态, 打阻塞标记, 唤醒处于等待状态但是有任务的P
         idx_t pcount = processers_.size();
@@ -312,48 +307,21 @@ uint32_t Scheduler::TaskCount()
 
 uint64_t Scheduler::GetCurrentTaskID()
 {
-    Task* tk = GetCurrentTask();
+    Task* tk = Processer::GetCurrentTask();
     return tk ? tk->id_ : 0;
 }
 
 uint64_t Scheduler::GetCurrentTaskYieldCount()
 {
-    Task* tk = GetCurrentTask();
+    Task* tk = Processer::GetCurrentTask();
     return tk ? TaskRefYieldCount(tk) : 0;
 }
 
 void Scheduler::SetCurrentTaskDebugInfo(std::string const& info)
 {
-    Task* tk = GetCurrentTask();
+    Task* tk = Processer::GetCurrentTask();
     if (!tk) return ;
     TaskRefDebugInfo(tk) = info;
-}
-
-const char* Scheduler::GetCurrentTaskDebugInfo()
-{
-    Task* tk = GetCurrentTask();
-    return tk ? tk->DebugInfo() : "";
-}
-
-int Scheduler::GetCurrentThreadID()
-{
-    auto proc = Processer::GetCurrentProcesser();
-    return proc ? proc->Id() : -1;
-}
-
-int Scheduler::GetCurrentProcessID()
-{
-#if __linux__
-    return getpid();
-#else
-    return 0;
-#endif 
-}
-
-Task* Scheduler::GetCurrentTask()
-{
-    auto proc = Processer::GetCurrentProcesser();
-    return proc ? proc->GetCurrentTask() : nullptr;
 }
 
 //bool Scheduler::CancelTimer(TimerId timer_id)
@@ -383,30 +351,5 @@ Task* Scheduler::GetCurrentTask()
 //
 //    return *thread_pool_;
 //}
-
-int codebug_GetCurrentProcessID()
-{
-    return g_Scheduler.GetCurrentProcessID();
-}
-int codebug_GetCurrentThreadID()
-{
-    return g_Scheduler.GetCurrentThreadID();
-}
-std::string codebug_GetCurrentTime()
-{
-#if __linux__
-    struct tm local;
-    struct timeval tv;
-    gettimeofday(&tv, NULL);
-    localtime_r(&tv.tv_sec, &local);
-    char buffer[128];
-    snprintf(buffer, sizeof(buffer), "%04d-%02d-%02d %02d:%02d:%02d.%06lu",
-            local.tm_year+1900, local.tm_mon+1, local.tm_mday, 
-            local.tm_hour, local.tm_min, local.tm_sec, tv.tv_usec);
-    return std::string(buffer);
-#else
-    return std::string();
-#endif
-}
 
 } //namespace co

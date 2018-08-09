@@ -36,11 +36,11 @@ void CoRWMutex::RLock()
         }
     }
 
-    if (g_Scheduler.GetCurrentTask()) {
+    if (Processer::IsCoroutine()) {
         // 协程
         rQueue_.push(Processer::Suspend());
         lock.unlock();
-        g_Scheduler.CoYield();
+        Processer::StaticCoYield();
     } else {
         // 原生线程
         rQueue_.push(Processer::SuspendEntry{});
@@ -74,11 +74,11 @@ void CoRWMutex::WLock()
         return ;
     }
 
-    if (g_Scheduler.GetCurrentTask()) {
+    if (Processer::IsCoroutine()) {
         // 协程
         wQueue_.push(Processer::Suspend());
         lock.unlock();
-        g_Scheduler.CoYield();
+        Processer::StaticCoYield();
     } else {
         // 原生线程
         wQueue_.push(Processer::SuspendEntry{});

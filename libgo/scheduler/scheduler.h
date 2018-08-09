@@ -23,10 +23,10 @@ class Scheduler
     friend class Processer;
 
 public:
-    static Scheduler& getInstance();
+    Scheduler();
+    ~Scheduler();
 
-    // 获取配置选项
-    CoroutineOptions& GetOptions();
+    static Scheduler& getInstance();
 
     // 创建一个协程
     void CreateTask(TaskF const& fn, TaskOpt const& opt);
@@ -36,9 +36,6 @@ public:
 
     // 是否没有协程可执行
     bool IsEmpty();
-
-    // 当前协程让出执行权
-    void CoYield();
 
     // 启动调度器
     // @minThreadNumber : 最小调度线程数, 为0时, 设置为cpu核心数.
@@ -59,22 +56,7 @@ public:
     // 设置当前协程调试信息, 打印调试信息时将回显
     void SetCurrentTaskDebugInfo(std::string const& info);
 
-    // 获取当前协程的调试信息, 返回的内容包括用户自定义的信息和协程ID
-    const char* GetCurrentTaskDebugInfo();
-
-    // 获取当前线程ID.(按执行调度器调度的顺序计)
-    int GetCurrentThreadID();
-
-    // 获取当前进程ID.
-    int GetCurrentProcessID();
-
-public:
-    Task* GetCurrentTask();
-
 private:
-    Scheduler();
-    ~Scheduler();
-
     Scheduler(Scheduler const&) = delete;
     Scheduler(Scheduler &&) = delete;
     Scheduler& operator=(Scheduler const&) = delete;
@@ -160,11 +142,6 @@ namespace co
     {
         static Scheduler obj;
         return obj;
-    }
-
-    ALWAYS_INLINE CoroutineOptions& Scheduler::GetOptions()
-    {
-        return CoroutineOptions::getInstance();
     }
 
 } //namespace co

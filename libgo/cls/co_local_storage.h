@@ -9,7 +9,7 @@ extern CLSMap* GetThreadLocalCLSMap();
 
 template <typename T, typename ... Args>
 T& GetSpecific(CLSLocation loc, Args && ... args) {
-    Task* task = Scheduler::getInstance().GetCurrentTask();
+    Task* task = Processer::GetCurrentTask();
     CLSMap *m = nullptr;
     if (!task) {
         m = GetThreadLocalCLSMap();

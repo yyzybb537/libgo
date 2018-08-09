@@ -70,7 +70,7 @@ void Task::Run()
     }
 
     state_ = TaskState::done;
-    Scheduler::getInstance().CoYield();
+    Processer::StaticCoYield();
 }
 
 void Task::StaticRun(intptr_t vp)
@@ -95,6 +95,8 @@ Task::~Task()
 
 const char* Task::DebugInfo()
 {
+    if (this == nullptr) return "";
+
     return TaskDebugInfo(this);
 }
 

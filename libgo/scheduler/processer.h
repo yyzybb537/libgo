@@ -9,12 +9,17 @@
 
 namespace co {
 
+class Scheduler;
+
 // 协程执行器
 // 对应一个线程, 负责本线程的协程调度, 非线程安全.
 class Processer
 {
     friend class Scheduler;
+
 private:
+    Scheduler * scheduler_;
+
     // 线程ID
     int id_;
 
@@ -54,15 +59,18 @@ private:
 public:
     ALWAYS_INLINE int Id() { return id_; }
 
-    // 协程切出
-    void CoYield();
+    static Processer* & GetCurrentProcesser();
+
+    static Scheduler* GetCurrentScheduler();
 
     // 获取当前正在执行的协程
-    Task* GetCurrentTask();
+    static Task* GetCurrentTask();
 
-    // 待执行的协程数量
-    // 暂兼用于负载指数
-    std::size_t RunnableSize();
+    // 是否在协程中
+    static bool IsCoroutine();
+
+    // 协程切出
+    static void StaticCoYield();
 
     // 挂起标识
     struct SuspendEntry {
@@ -84,9 +92,13 @@ public:
     /// --------------------------------------
     // for friend class Scheduler
 private:
-    explicit Processer(int id);
+    explicit Processer(Scheduler * scheduler, int id);
 
-    static Processer* & GetCurrentProcesser();
+    // 待执行的协程数量
+    // 暂兼用于负载指数
+    std::size_t RunnableSize();
+
+    void CoYield();
 
     // 新创建、阻塞后触发的协程add进来
     void AddTaskRunnable(Task *tk);
