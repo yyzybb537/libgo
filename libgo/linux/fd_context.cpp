@@ -265,10 +265,6 @@ add_into_reactor_result FileDescriptorCtx::add_into_reactor(int poll_events,
                     EPOLL_CTL_MOD, fd_, events, is_socket() || is_epoll(),
                     is_et_mode());
             if (res == -1) {
-                if (errno == ENOENT) {
-                    assert(false);  // add和del之间有锁在控制, 不应该走到这里.
-                }
-
                 return add_into_reactor_result::failed;
             }
         }
