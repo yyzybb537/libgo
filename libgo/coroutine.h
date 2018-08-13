@@ -5,6 +5,7 @@
 #include "sync/co_mutex.h"
 #include "sync/co_rwmutex.h"
 #include "timer/timer.h"
+#include "scheduler/processer.h"
 //#include "defer/defer.h"
 
 #define go ::co::__go(__FILE__, __LINE__)-
@@ -15,7 +16,7 @@
 
 #define go_stack(size) go co_stack(size)
 
-#define co_yield do { Processer::StaticCoYield(); } while (0)
+#define co_yield do { ::co::Processer::StaticCoYield(); } while (0)
 
 // coroutine sleep, never blocks current thread.
 #define co_sleep(milliseconds) do { usleep(1000 * milliseconds); } while (0)
