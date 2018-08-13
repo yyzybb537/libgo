@@ -75,6 +75,7 @@ aux_source_directory(${PROJECT_SOURCE_DIR}/libgo/task CO_SRC_LIST)
 aux_source_directory(${PROJECT_SOURCE_DIR}/libgo/scheduler CO_SRC_LIST)
 aux_source_directory(${PROJECT_SOURCE_DIR}/libgo/sync CO_SRC_LIST)
 aux_source_directory(${PROJECT_SOURCE_DIR}/libgo/timer CO_SRC_LIST)
+aux_source_directory(${PROJECT_SOURCE_DIR}/libgo/netio/unix CO_SRC_LIST)
 
 if (NOT DISABLE_HOOK)
     #aux_source_directory(${PROJECT_SOURCE_DIR}/libgo/hook CO_SRC_LIST)

@@ -78,6 +78,10 @@ public:
         uint64_t id_;
 
         explicit operator bool() const { return !!tk_; }
+
+        friend bool operator==(SuspendEntry const& lhs, SuspendEntry const& rhs) {
+            return lhs.tk_ == rhs.tk_ && lhs.id_ == rhs.id_;
+        }
     };
 
     // 挂起当前协程

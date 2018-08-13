@@ -282,6 +282,11 @@ public:
         return !!impl_;
     }
 
+    template <typename U>
+    friend bool operator==(WeakPtr<U> const& lhs, WeakPtr<U> const& rhs) {
+        return lhs.impl_ == rhs.impl_ && lhs.ptr_ == rhs.ptr_;
+    }
+
     long use_count() {
         return impl_ ? (long)impl_->reference_ : 0;
     }

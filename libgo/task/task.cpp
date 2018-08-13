@@ -95,7 +95,7 @@ Task::~Task()
 
 const char* Task::DebugInfo()
 {
-    if (this == nullptr) return "";
+    if (this == nullptr) return "nil";
 
     return TaskDebugInfo(this);
 }
