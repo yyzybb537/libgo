@@ -152,11 +152,28 @@ int GetCurrentThreadID();
 std::string GetCurrentTime();
 const char* BaseFile(const char* file);
 
+class ErrnoStore {
+public:
+    ErrnoStore() : errno_(errno), restored_(false) {}
+    ~ErrnoStore() {
+        Restore();
+    }
+    void Restore() {
+        if (restored_) return ;
+        restored_ = true;
+        errno = errno_;
+    }
+private:
+    int errno_;
+    bool restored_;
+};
+
 } //namespace co
 
 #define DebugPrint(type, fmt, ...) \
     do { \
         if (UNLIKELY(::co::CoroutineOptions::getInstance().debug & (type))) { \
+            ::co::ErrnoStore es; \
             fprintf(::co::CoroutineOptions::getInstance().debug_output, "[%s][%05d][%04d]%s:%d:(%s)\t " fmt "\n", \
                     ::co::GetCurrentTime().c_str(),\
                     ::co::GetCurrentProcessID(), ::co::GetCurrentThreadID(), \
