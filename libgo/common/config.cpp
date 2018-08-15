@@ -2,11 +2,14 @@
 #include "../context/fcontext.h"
 #include "../scheduler/processer.h"
 #include <string.h>
+#include <poll.h>
 #ifdef __linux__
 #include <sys/time.h>
 #endif
 
 namespace co {
+
+std::mutex gDbgLock;
 
 CoroutineOptions::CoroutineOptions()
     : protect_stack_page(StackTraits::GetProtectStackPageSize()),
@@ -56,6 +59,22 @@ std::string GetCurrentTime()
 #else
     return std::string();
 #endif
+}
+
+const char* PollEvent2Str(short int event)
+{
+    event &= POLLIN|POLLOUT|POLLERR;
+    switch (event) {
+        LIBGO_E2S_DEFINE(POLLIN);
+        LIBGO_E2S_DEFINE(POLLOUT);
+        LIBGO_E2S_DEFINE(POLLERR);
+        LIBGO_E2S_DEFINE(POLLIN|POLLOUT);
+        LIBGO_E2S_DEFINE(POLLIN|POLLERR);
+        LIBGO_E2S_DEFINE(POLLOUT|POLLERR);
+        LIBGO_E2S_DEFINE(POLLIN|POLLOUT|POLLERR);
+        default:
+        return "Zero";
+    }
 }
 
 } //namespace co

@@ -3,10 +3,51 @@
 #include <sys/socket.h>
 #include "hook.h"
 #include <fcntl.h>
+#include <poll.h>
+#include <sys/epoll.h>
 
 namespace co {
 
+const char* FdType2Str(eFdType fdType)
+{
+    switch (fdType) {
+        LIBGO_E2S_DEFINE(eFdType::eSocket);
+        LIBGO_E2S_DEFINE(eFdType::ePipe);
+        default:
+            return "Unkown FdType";
+    }
+}
+
+uint32_t PollEvent2EpollEvent(short int pollEvent)
+{
+    uint32_t epollEvent = 0;
+    if (pollEvent & POLLIN)
+        epollEvent |= EPOLLIN;
+    if (pollEvent & POLLOUT)
+        epollEvent |= EPOLLOUT;
+    if (pollEvent & POLLERR)
+        epollEvent |= EPOLLERR;
+    if (pollEvent & POLLHUP)
+        epollEvent |= EPOLLHUP;
+    return epollEvent;
+}
+
+short int EpollEvent2PollEvent(uint32_t epollEvent)
+{
+    short int pollEvent = 0;
+    if (epollEvent & EPOLLIN)
+        pollEvent |= POLLIN;
+    if (epollEvent & EPOLLOUT)
+        pollEvent |= POLLOUT;
+    if (epollEvent & EPOLLERR)
+        pollEvent |= POLLERR;
+    if (epollEvent & EPOLLHUP)
+        pollEvent |= POLLHUP;
+    return pollEvent;
+}
+
 FdContext::FdContext(int fd, eFdType fdType, bool isNonBlocking, SocketAttribute sockAttr)
+    : ReactorElement(fd)
 {
     fd_ = fd;
     fdType_ = fdType;
@@ -15,6 +56,8 @@ FdContext::FdContext(int fd, eFdType fdType, bool isNonBlocking, SocketAttribute
     tcpConnectTimeout_ = 0;
     recvTimeout_ = 0;
     sendTimeout_ = 0;
+    DebugPrint(dbg_fd_ctx, "create FdContext(fd = %d, type = %s, isNonBlocking = %d, attr(%d,%d,%d)",
+            fd, FdType2Str(fdType), (int)isNonBlocking, sockAttr_.domain_, sockAttr.type_, sockAttr_.protocol_);
 }
 bool FdContext::IsSocket()
 {
@@ -101,6 +144,7 @@ FdContextPtr FdContext::Clone(int newFd)
 void FdContext::OnClose()
 {
     ReactorElement::OnClose();
+    DebugPrint(dbg_fd_ctx, "close FdContext(fd = %d)", fd_);
 }
 
 } // namespace co

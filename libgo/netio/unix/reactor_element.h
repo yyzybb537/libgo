@@ -27,11 +27,11 @@ public:
     };
     typedef std::vector<Entry> EntryList;
 
-    short int Add(short int pollEvent, Entry const& entry);
+    explicit ReactorElement(int fd);
 
-    void Rollback(short int pollEvent, Entry const& entry);
+    bool Add(int epfd, short int pollEvent, Entry const& entry);
 
-    void Trigger(short int pollEvent);
+    void Trigger(int epfd, short int pollEvent);
 
 protected:
     void OnClose();
@@ -40,8 +40,13 @@ protected:
 
     void TriggerListWithoutLock(short int revent, EntryList & entryList);
 
+    void Rollback(EntryList & entryList, Entry const& entry);
+
 private:
     std::mutex mtx_;
+
+    int fd_;
+    short int event_ = 0;
 
     EntryList in_;
     EntryList out_;

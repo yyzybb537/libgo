@@ -154,7 +154,8 @@ void Processer::CoYield()
     Task *tk = GetCurrentTask();
     assert(tk);
 
-    DebugPrint(dbg_yield, "yield task(%s) state=%d", tk->DebugInfo(), (int)tk->state_);
+    DebugPrint(dbg_yield, "yield task(%s) state = %s", tk->DebugInfo(), GetTaskStateName(tk->state_));
+
     ++ TaskRefYieldCount(tk);
 
     if (scheduler_->GetTaskListener())
@@ -316,6 +317,9 @@ Processer::SuspendEntry Processer::SuspendBySelf(Task* tk)
             -- addNewQuota_;
         }
     }
+
+    DebugPrint(dbg_suspend, "tk(%s) Suspend. nextTask(%s)", tk->DebugInfo(), nextTask_->DebugInfo());
+
     runnableQueue_.erase(runningTask_);
     waitQueue_.push(runningTask_);
     return SuspendEntry{ WeakPtr<Task>(tk), id };
@@ -339,6 +343,7 @@ bool Processer::WakeupBySelf(IncursivePtr<Task> const& tkPtr, uint64_t id)
     {
         std::unique_lock<TaskQueue::lock_t> lock(waitQueue_.LockRef());
         if (id != TaskRefSuspendId(tk)) return false;
+        DebugPrint(dbg_suspend, "tk(%s) Wakeup. tk->state_ = %s", tk->DebugInfo(), GetTaskStateName(tk->state_));
         ++ TaskRefSuspendId(tk);
         bool ret = waitQueue_.eraseWithoutLock(tk, true);
         assert(ret);

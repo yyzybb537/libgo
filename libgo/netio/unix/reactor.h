@@ -23,11 +23,6 @@ public:
     void Run();
 
 private:
-    uint32_t PollEvent2EpollEvent(short int pollEvent);
-
-    short int EpollEvent2PollEvent(uint32_t epollEvent);
-    
-private:
     int epfd_;
 
     static std::vector<Reactor*> sReactors_;

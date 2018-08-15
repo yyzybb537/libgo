@@ -11,6 +11,7 @@ enum class eFdType : uint8_t {
     eSocket,
     ePipe,
 };
+const char* FdType2Str(eFdType fdType);
 
 struct SocketAttribute {
     int domain_ = -1;
@@ -24,6 +25,9 @@ struct SocketAttribute {
     bool Initialized() const { return domain_ != -1; }
 };
 
+uint32_t PollEvent2EpollEvent(short int pollEvent);
+
+short int EpollEvent2PollEvent(uint32_t epollEvent);
 
 template <typename R, typename F, typename ... Args>
 static R CallWithoutINTR(F f, Args && ... args)

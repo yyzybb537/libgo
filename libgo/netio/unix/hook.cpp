@@ -78,8 +78,10 @@ namespace co {
 
         if (nfds == negative_fd_n) {
             // co sleep
-            if (timeout > 0)
+            if (timeout > 0) {
                 Processer::Suspend(std::chrono::milliseconds(timeout));
+                Processer::StaticCoYield();
+            }
             return 0;
         }
         // --------------------------------
@@ -97,8 +99,11 @@ namespace co {
         memset(arrRevents, 0, sizeof(short int) * nfds);
         std::shared_ptr<short int> revents(arrRevents, [](short int* p){ delete[] p; });
 
-        Processer::SuspendEntry entry =
-            timeout > 0 ? Processer::Suspend(std::chrono::milliseconds(timeout)) : Processer::Suspend();
+        Processer::SuspendEntry entry;
+        if (timeout > 0)
+            entry = Processer::Suspend(std::chrono::milliseconds(timeout));
+        else
+            entry = Processer::Suspend();
 
         // add file descriptor into epoll or poll.
         bool added = false;
@@ -108,7 +113,7 @@ namespace co {
             if (pfd.fd < 0)
                 continue;
 
-            if (Reactor::Select(pfd.fd).Add(pfd.fd, pfd.events, Reactor::Entry(entry, revents, i)) != 0) {
+            if (!Reactor::Select(pfd.fd).Add(pfd.fd, pfd.events, Reactor::Entry(entry, revents, i))) {
                 // bad file descriptor
                 arrRevents[i] = POLLNVAL;
                 continue;
@@ -122,6 +127,8 @@ namespace co {
             for (nfds_t i = 0; i < nfds; ++i)
                 fds[i].revents = arrRevents[i];
             errno = 0;
+            Processer::Wakeup(entry);
+            Processer::StaticCoYield();
             return nfds;
         }
 
@@ -641,6 +648,7 @@ int select(int nfds, fd_set *readfds, fd_set *writefds,
 
     if (!nfds) {
         Processer::Suspend(std::chrono::milliseconds(timeout_ms));
+        Processer::StaticCoYield();
         return 0;
     }
 
@@ -747,6 +755,7 @@ unsigned int sleep(unsigned int seconds)
         return sleep_f(seconds);
 
     Processer::Suspend(std::chrono::seconds(seconds));
+    Processer::StaticCoYield();
     return 0;
 }
 
@@ -763,6 +772,7 @@ int usleep(useconds_t usec)
         return usleep_f(usec);
 
     Processer::Suspend(std::chrono::microseconds(usec));
+    Processer::StaticCoYield();
     return 0;
 
 }
@@ -781,6 +791,7 @@ int nanosleep(const struct timespec *req, struct timespec *rem)
         return nanosleep_f(req, rem);
 
     Processer::Suspend(std::chrono::nanoseconds(req->tv_sec * 1000000000 + req->tv_nsec));
+    Processer::StaticCoYield();
     return 0;
 }
 
