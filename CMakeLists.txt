@@ -83,6 +83,7 @@ endif()
 
 set(TARGET "libgo")
 set(STATIC_T "libgo_static")
+set(STATIC_HOOK "static_hook")
 
 list(APPEND CO_SRC_LIST ${jump_asm_file})
 list(APPEND CO_SRC_LIST ${make_asm_file})
@@ -93,6 +94,8 @@ if (UNIX)
     install(TARGETS ${STATIC_T} LIBRARY DESTINATION "lib" ARCHIVE DESTINATION "lib")
     install(DIRECTORY ${PROJECT_SOURCE_DIR}/libgo/ DESTINATION "include/libgo" FILES_MATCHING PATTERN "*.h")
         #PATTERN "windows" EXCLUDE
+
+    add_library("${STATIC_HOOK}" STATIC "${PROJECT_SOURCE_DIR}/libgo/netio/unix/static_hook/static_hook.cpp")
 
     set(SHARED_T "libgo_dynamic")
     add_library("${SHARED_T}" SHARED ${CO_SRC_LIST})
