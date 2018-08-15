@@ -21,6 +21,7 @@
 #include <chrono>
 #include <memory>
 #include <queue>
+#include <algorithm>
 
 #define LIBGO_DEBUG 0
 

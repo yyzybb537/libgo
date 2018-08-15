@@ -30,6 +30,7 @@ bool ReactorElement::Add(int epfd, short int pollEvent, Entry const& entry)
 {
     std::unique_lock<std::mutex> lock(mtx_);
     EntryList & entryList = SelectList(pollEvent);
+    CheckExpire(entryList);
     entryList.push_back(entry);
     short int event = event_ | (pollEvent & (POLLIN | POLLOUT));
 
@@ -138,6 +139,13 @@ ReactorElement::EntryList & ReactorElement::SelectList(short int pollEvent)
         pEntry = &err_;
     }
     return *pEntry;
+}
+
+void ReactorElement::CheckExpire(EntryList & entryList)
+{
+    entryList.erase(std::remove_if(entryList.begin(), entryList.end(), [](Entry & entry){
+                    return entry.suspendEntry_.IsExpire();
+                }), entryList.end());
 }
 
 } // namespace co

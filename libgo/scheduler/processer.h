@@ -82,6 +82,10 @@ public:
         friend bool operator==(SuspendEntry const& lhs, SuspendEntry const& rhs) {
             return lhs.tk_ == rhs.tk_ && lhs.id_ == rhs.id_;
         }
+
+        bool IsExpire() const {
+            return Processer::IsExpire(*this);
+        }
     };
 
     // 挂起当前协程
@@ -92,6 +96,9 @@ public:
 
     // 唤醒协程
     static bool Wakeup(SuspendEntry const& entry);
+
+    // 测试一个SuspendEntry是否还可能有效
+    static bool IsExpire(SuspendEntry const& entry);
 
     /// --------------------------------------
     // for friend class Scheduler
