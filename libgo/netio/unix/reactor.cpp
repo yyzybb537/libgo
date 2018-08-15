@@ -41,17 +41,7 @@ bool Reactor::Add(int fd, short int pollEvent, Entry const& entry)
     FdContextPtr ctx = HookHelper::getInstance().GetFdContext(fd);
     if (!ctx) return false;
 
-    short int event = ctx->Add(pollEvent, entry);
-    struct epoll_event ev;
-    ev.events = PollEvent2EpollEvent(event) | EPOLLONESHOT;
-    ev.data.fd = fd;
-    int res = CallWithoutINTR<int>(::epoll_ctl, epfd_, EPOLL_CTL_ADD, fd, &ev);
-    if (res == -1 && errno != EEXIST) {
-        // add error.
-        ctx->Rollback(pollEvent, entry);
-        return false;
-    }
-    return true;
+    return ctx->Add(epfd_, pollEvent, entry);
 }
 
 void Reactor::Run()
@@ -59,39 +49,15 @@ void Reactor::Run()
     const int cEvent = 1024;
     struct epoll_event evs[cEvent];
     int n = CallWithoutINTR<int>(::epoll_wait, epfd_, evs, cEvent, 10);
-    for (int i = 0; i < n; ++n) {
+    for (int i = 0; i < n; ++i) {
         struct epoll_event & ev = evs[i];
         int fd = ev.data.fd;
         FdContextPtr ctx = HookHelper::getInstance().GetFdContext(fd);
         if (!ctx)
             continue;
 
-        ctx->Trigger(EpollEvent2PollEvent(ev.events));
+        ctx->Trigger(epfd_, EpollEvent2PollEvent(ev.events));
     }
-}
-
-uint32_t Reactor::PollEvent2EpollEvent(short int pollEvent)
-{
-    uint32_t epollEvent = 0;
-    if (pollEvent & POLLIN)
-        epollEvent |= EPOLLIN;
-    if (pollEvent & POLLOUT)
-        epollEvent |= EPOLLOUT;
-    if (pollEvent & POLLERR)
-        epollEvent |= EPOLLERR;
-    return epollEvent;
-}
-
-short int Reactor::EpollEvent2PollEvent(uint32_t epollEvent)
-{
-    short int pollEvent = 0;
-    if (epollEvent & EPOLLIN)
-        pollEvent |= POLLIN;
-    if (epollEvent & EPOLLOUT)
-        pollEvent |= POLLOUT;
-    if (epollEvent & EPOLLERR)
-        pollEvent |= POLLERR;
-    return pollEvent;
 }
 
 } // namespace co

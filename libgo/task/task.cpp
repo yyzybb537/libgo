@@ -11,6 +11,20 @@
 namespace co
 {
 
+const char* GetTaskStateName(TaskState state)
+{
+    switch (state) {
+    case TaskState::runnable:
+        return "Runnable";
+    case TaskState::block:
+        return "Block";
+    case TaskState::done:
+        return "Done";
+    default:
+        return "Unkown";
+    }
+}
+
 void Task::Run()
 {
     std::exception_ptr eptr;

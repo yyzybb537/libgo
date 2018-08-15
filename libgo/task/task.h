@@ -14,7 +14,7 @@ enum class TaskState
     done,
 };
 
-//std::string GetTaskStateName(TaskState state);
+const char* GetTaskStateName(TaskState state);
 
 typedef std::function<void()> TaskF;
 

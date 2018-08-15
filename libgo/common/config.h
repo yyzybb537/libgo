@@ -64,7 +64,7 @@ static const uint64_t dbg_scheduler         = 0x1 << 2;
 static const uint64_t dbg_task              = 0x1 << 3;
 static const uint64_t dbg_switch            = 0x1 << 4;
 static const uint64_t dbg_ioblock           = 0x1 << 5;
-static const uint64_t dbg_wait              = 0x1 << 6;
+static const uint64_t dbg_suspend           = 0x1 << 6;
 static const uint64_t dbg_exception         = 0x1 << 7;
 static const uint64_t dbg_syncblock         = 0x1 << 8;
 static const uint64_t dbg_timer             = 0x1 << 9;
@@ -151,6 +151,7 @@ int GetCurrentProcessID();
 int GetCurrentThreadID();
 std::string GetCurrentTime();
 const char* BaseFile(const char* file);
+const char* PollEvent2Str(short int event);
 
 class ErrnoStore {
 public:
@@ -168,12 +169,15 @@ private:
     bool restored_;
 };
 
+extern std::mutex gDbgLock;
+
 } //namespace co
 
 #define DebugPrint(type, fmt, ...) \
     do { \
         if (UNLIKELY(::co::CoroutineOptions::getInstance().debug & (type))) { \
             ::co::ErrnoStore es; \
+            std::unique_lock<std::mutex> lock(::co::gDbgLock); \
             fprintf(::co::CoroutineOptions::getInstance().debug_output, "[%s][%05d][%04d]%s:%d:(%s)\t " fmt "\n", \
                     ::co::GetCurrentTime().c_str(),\
                     ::co::GetCurrentProcessID(), ::co::GetCurrentThreadID(), \
@@ -182,3 +186,5 @@ private:
         } \
     } while(0)
 
+#define LIBGO_E2S_DEFINE(x) \
+    case x: return #x
