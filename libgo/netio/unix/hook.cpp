@@ -981,11 +981,13 @@ int fclose(FILE* fp)
     return fclose_f(fp);
 }
 
+/*
 int epoll_wait(int epfd, struct epoll_event *events, int maxevents, int timeout)
 {
     if (!epoll_wait_f) initHook();
     return libgo_epoll_wait(epfd, events, maxevents, timeout);
 }
+*/
 
 // safe signal
 #if WITH_SAFE_SIGNAL
@@ -995,53 +997,53 @@ sighandler_t signal(int signum, sighandler_t handler)
 }
 #endif
 
-extern int __pipe(int pipefd[2]);
-extern int __pipe2(int pipefd[2], int flags);
-extern int __socket(int domain, int type, int protocol);
-extern int __socketpair(int domain, int type, int protocol, int sv[2]);
-extern int __connect(int fd, const struct sockaddr *addr, socklen_t addrlen);
-extern ssize_t __read(int fd, void *buf, size_t count);
-extern ssize_t __readv(int fd, const struct iovec *iov, int iovcnt);
-extern ssize_t __recv(int sockfd, void *buf, size_t len, int flags);
-extern ssize_t __recvfrom(int sockfd, void *buf, size_t len, int flags,
+__attribute__ ((weak)) extern int __pipe(int pipefd[2]);
+__attribute__ ((weak)) extern int __pipe2(int pipefd[2], int flags);
+__attribute__ ((weak)) extern int __socket(int domain, int type, int protocol);
+__attribute__ ((weak)) extern int __socketpair(int domain, int type, int protocol, int sv[2]);
+__attribute__ ((weak)) extern int __connect(int fd, const struct sockaddr *addr, socklen_t addrlen);
+__attribute__ ((weak)) extern ssize_t __read(int fd, void *buf, size_t count);
+__attribute__ ((weak)) extern ssize_t __readv(int fd, const struct iovec *iov, int iovcnt);
+__attribute__ ((weak)) extern ssize_t __recv(int sockfd, void *buf, size_t len, int flags);
+__attribute__ ((weak)) extern ssize_t __recvfrom(int sockfd, void *buf, size_t len, int flags,
         struct sockaddr *src_addr, socklen_t *addrlen);
-extern ssize_t __recvmsg(int sockfd, struct msghdr *msg, int flags);
-extern ssize_t __write(int fd, const void *buf, size_t count);
-extern ssize_t __writev(int fd, const struct iovec *iov, int iovcnt);
-extern ssize_t __send(int sockfd, const void *buf, size_t len, int flags);
-extern ssize_t __sendto(int sockfd, const void *buf, size_t len, int flags,
+__attribute__ ((weak)) extern ssize_t __recvmsg(int sockfd, struct msghdr *msg, int flags);
+__attribute__ ((weak)) extern ssize_t __write(int fd, const void *buf, size_t count);
+__attribute__ ((weak)) extern ssize_t __writev(int fd, const struct iovec *iov, int iovcnt);
+__attribute__ ((weak)) extern ssize_t __send(int sockfd, const void *buf, size_t len, int flags);
+__attribute__ ((weak)) extern ssize_t __sendto(int sockfd, const void *buf, size_t len, int flags,
         const struct sockaddr *dest_addr, socklen_t addrlen);
-extern ssize_t __sendmsg(int sockfd, const struct msghdr *msg, int flags);
-extern int __libc_accept(int sockfd, struct sockaddr *addr, socklen_t *addrlen);
-extern int __libc_poll(struct pollfd *fds, nfds_t nfds, int timeout);
-extern int __select(int nfds, fd_set *readfds, fd_set *writefds,
+__attribute__ ((weak)) extern ssize_t __sendmsg(int sockfd, const struct msghdr *msg, int flags);
+__attribute__ ((weak)) extern int __libc_accept(int sockfd, struct sockaddr *addr, socklen_t *addrlen);
+__attribute__ ((weak)) extern int __libc_poll(struct pollfd *fds, nfds_t nfds, int timeout);
+__attribute__ ((weak)) extern int __select(int nfds, fd_set *readfds, fd_set *writefds,
                           fd_set *exceptfds, struct timeval *timeout);
-extern unsigned int __sleep(unsigned int seconds);
-extern int __nanosleep(const struct timespec *req, struct timespec *rem);
-extern int __close(int);
-extern int __fcntl(int __fd, int __cmd, ...);
-extern int __ioctl(int fd, unsigned long int request, ...);
-extern int __getsockopt(int sockfd, int level, int optname,
+__attribute__ ((weak)) extern unsigned int __sleep(unsigned int seconds);
+__attribute__ ((weak)) extern int __nanosleep(const struct timespec *req, struct timespec *rem);
+__attribute__ ((weak)) extern int __close(int);
+__attribute__ ((weak)) extern int __fcntl(int __fd, int __cmd, ...);
+__attribute__ ((weak)) extern int __ioctl(int fd, unsigned long int request, ...);
+__attribute__ ((weak)) extern int __getsockopt(int sockfd, int level, int optname,
         void *optval, socklen_t *optlen);
-extern int __setsockopt(int sockfd, int level, int optname,
+__attribute__ ((weak)) extern int __setsockopt(int sockfd, int level, int optname,
         const void *optval, socklen_t optlen);
-extern int __dup(int);
-extern int __dup2(int, int);
-extern int __dup3(int, int, int);
-extern int __usleep(useconds_t usec);
-extern int __new_fclose(FILE *fp);
-extern int __gethostbyname_r(const char *__restrict __name,
+__attribute__ ((weak)) extern int __dup(int);
+__attribute__ ((weak)) extern int __dup2(int, int);
+__attribute__ ((weak)) extern int __dup3(int, int, int);
+__attribute__ ((weak)) extern int __usleep(useconds_t usec);
+__attribute__ ((weak)) extern int __new_fclose(FILE *fp);
+__attribute__ ((weak)) extern int __gethostbyname_r(const char *__restrict __name,
 			    struct hostent *__restrict __result_buf,
 			    char *__restrict __buf, size_t __buflen,
 			    struct hostent **__restrict __result,
 			    int *__restrict __h_errnop);
-extern int __gethostbyname2_r(const char *name, int af,
+__attribute__ ((weak)) extern int __gethostbyname2_r(const char *name, int af,
         struct hostent *ret, char *buf, size_t buflen,
         struct hostent **result, int *h_errnop);
-extern int __gethostbyaddr_r(const void *addr, socklen_t len, int type,
+__attribute__ ((weak)) extern int __gethostbyaddr_r(const void *addr, socklen_t len, int type,
         struct hostent *ret, char *buf, size_t buflen,
         struct hostent **result, int *h_errnop);
-extern int __epoll_wait_nocancel(int epfd, struct epoll_event *events,
+__attribute__ ((weak)) extern int __epoll_wait_nocancel(int epfd, struct epoll_event *events,
         int maxevents, int timeout);
 
 // 某些版本libc.a中没有__usleep.
@@ -1057,12 +1059,8 @@ int __usleep(useconds_t usec)
 namespace co
 {
 
-extern void enableWeakSymbols();
-
 static int doInitHook()
 {
-    enableWeakSymbols();
-
     connect_f = (connect_t)dlsym(RTLD_NEXT, "connect");
     if (connect_f) {
         pipe_f = (pipe_t)dlsym(RTLD_NEXT, "pipe");
@@ -1101,6 +1099,7 @@ static int doInitHook()
         epoll_wait_f = (epoll_wait_t)dlsym(RTLD_NEXT, "epoll_wait");
     } else {
         pipe_f = &__pipe;
+        printf("use static hook. pipe_f=%p\n", (void*)pipe_f);
         pipe2_f = &__pipe2;
         socket_f = &__socket;
         socketpair_f = &__socketpair;
@@ -1136,7 +1135,8 @@ static int doInitHook()
         epoll_wait_f = &__epoll_wait_nocancel;
     }
 
-    if (!connect_f || !read_f || !write_f || !readv_f || !writev_f || !send_f
+    if (!pipe_f || !pipe2_f || !socket_f || !socketpair_f ||
+            !connect_f || !read_f || !write_f || !readv_f || !writev_f || !send_f
             || !sendto_f || !sendmsg_f || !accept_f || !poll_f || !select_f
             || !sleep_f|| !usleep_f || !nanosleep_f || !close_f || !fcntl_f || !setsockopt_f
             || !getsockopt_f || !dup_f || !dup2_f || !fclose_f || !gethostbyname_r_f
