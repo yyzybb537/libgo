@@ -325,6 +325,15 @@ Processer::SuspendEntry Processer::SuspendBySelf(Task* tk)
     return SuspendEntry{ WeakPtr<Task>(tk), id };
 }
 
+bool Processer::IsExpire(SuspendEntry const& entry)
+{
+    IncursivePtr<Task> tkPtr = entry.tk_.lock();
+    if (!tkPtr) return true;
+    if (tkPtr->proc_) return true;
+    if (entry.id_ != TaskRefSuspendId(tkPtr.get())) return true;
+    return false;
+}
+
 bool Processer::Wakeup(SuspendEntry const& entry)
 {
     IncursivePtr<Task> tkPtr = entry.tk_.lock();

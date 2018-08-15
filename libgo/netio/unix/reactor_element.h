@@ -42,6 +42,8 @@ protected:
 
     void Rollback(EntryList & entryList, Entry const& entry);
 
+    void CheckExpire(EntryList & entryList);
+
 private:
     std::mutex mtx_;
 
