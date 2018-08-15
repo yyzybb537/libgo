@@ -13,7 +13,6 @@
 #include <map>
 #include <stdarg.h>
 #include <poll.h>
-//#include "hook_signal.h"
 #include "../../scheduler/processer.h"
 #include "reactor.h"
 #include "hook_helper.h"
@@ -999,14 +998,6 @@ int epoll_wait(int epfd, struct epoll_event *events, int maxevents, int timeout)
     return libgo_epoll_wait(epfd, events, maxevents, timeout);
 }
 */
-
-// safe signal
-#if WITH_SAFE_SIGNAL
-sighandler_t signal(int signum, sighandler_t handler)
-{
-    return co::HookSignal::getInstance().SignalSyscall(signum, handler);
-}
-#endif
 
 __attribute__ ((weak)) extern int __pipe(int pipefd[2]);
 __attribute__ ((weak)) extern int __pipe2(int pipefd[2], int flags);
