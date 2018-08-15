@@ -4,15 +4,10 @@ TODO:
     触发后在hook过的用户的epollwait/kqueue/iocp里面调用callback, 以此保证callback和触发点在同一个或同一组线程
     投递时：if (!channel.TryPush(xx)) go { func(xx); while (co_num < maxPoolNum) { channel >> x; func(x); }}
 实现一个连接池, 与协程池搭配使用, 简化mysql\hiredis等库的使用方式.
-以glibc的静、动态链接方式来区分hook实现方法, 而不是libgo库本身.(try:优先尝试dlysm, 失败后再用__xxx的方式)
-
-环切(runnable状态)搭配星切, 提升协程切换性能
-    A）使用环切调度替代现在的星切调度(CoYeild时选择下一个切换目标)，必要时才切换回线程处理epoll、定时器、sleep等逻辑，同时协调好多线程调度
-    B）调度器的Run函数里面做了很多协程切换之外的事情，尽量降低这部分在非必要时的cpu消耗，比如：有任务加入定时器是设置一个tls标记为true，只有标记为true时才去处理定时器相关逻辑。
-    C）调度器中的runnable队列使用了自旋锁，没有竞争时对原子变量的操作也是比较昂贵的，runnable队列可以优化成多写一读，仅在写入端加锁的队列。
+Scheduler::Stop用于安全退出main函数
 协程对象Task内存布局调优，tls池化，每个池使用多写一读链表队列，申请时仅在当前线程的池中申请，可以免锁，释放时均衡每个线程的池水水位，可以塞入其他线程的池中。
 支持同时等待多个Channel
-优化sync库(仿照futex的实现)
+优化sync库(仿照futex的实现, 尝试无锁队列实现channel)
 master分支兼容macos
 解决第三方库、glibc++ exception使用tls的隐患(pthread_xxx_specific ?)
 
@@ -58,3 +53,8 @@ hook __poll, 源syscall使用__libc_poll, 以支持gethostbyname系列函数
 go dispatch(xx) stack(xxx) malloc-free(xx,yy) func;用这种灵活的语法替代go_dispatch这种老旧的方式。
 协程亲缘性
 调度器改成多个(1个默认的全局调度器+多个用户自定义调度器), 去除全局访问点, go增加参数指定调度器.
+环切(runnable状态)搭配星切, 提升协程切换性能
+    A）使用环切调度替代现在的星切调度(CoYeild时选择下一个切换目标)，必要时才切换回线程处理epoll、定时器、sleep等逻辑，同时协调好多线程调度
+    B）调度器的Run函数里面做了很多协程切换之外的事情，尽量降低这部分在非必要时的cpu消耗，比如：有任务加入定时器是设置一个tls标记为true，只有标记为true时才去处理定时器相关逻辑。
+    C）调度器中的runnable队列使用了自旋锁，没有竞争时对原子变量的操作也是比较昂贵的，runnable队列可以优化成多写一读，仅在写入端加锁的队列。
+以glibc的静、动态链接方式来区分hook实现方法, 而不是libgo库本身.(try:优先尝试dlysm, 失败后再用__xxx的方式)
