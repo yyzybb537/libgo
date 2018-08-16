@@ -63,7 +63,7 @@ public:
     // 如果池空了并且连接数达到上限, 则会等待
     // 返回的智能指针销毁时, 会自动将连接归还给池
     //
-    // @timeout: 等待超时时间, 例: std::chrono::seconds(1)
+    // @timeout: 等待超时时间, 仅在协程中有效, 例: std::chrono::seconds(1)
     ConnectionPtr Get(FastSteadyClock::duration timeout)
     {
         Connection* connection;

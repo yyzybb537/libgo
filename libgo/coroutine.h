@@ -8,6 +8,7 @@
 #include "scheduler/processer.h"
 #include "cls/co_local_storage.h"
 #include "pool/connection_pool.h"
+#include "pool/async_coroutine_pool.h"
 //#include "defer/defer.h"
 
 #define go ::co::__go(__FILE__, __LINE__)-

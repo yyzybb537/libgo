@@ -6,7 +6,8 @@ if [ "$isMac" -eq "1" ]
 then
     g++ libgo_test.cpp -std=c++11 -O3 -o libgo_test -I../../third_party/gtest/include -L../../build -llibgo -pthread && ./libgo_test
 else
-    g++ libgo_test.cpp -std=c++11 -O3 -o libgo_test -I../../third_party/gtest/include -L../../build -llibgo -static -pthread -Wl,--whole-archive -lpthread -Wl,--no-whole-archive && ./libgo_test
+    g++ libgo_test.cpp -std=c++11 -O3 -o libgo_test -I../../third_party/gtest/include -L../../build -llibgo -static \
+        -Wl,--whole-archive -lstatic_hook -lc -lpthread -Wl,--no-whole-archive -ldl 2>/dev/null && ./libgo_test
 fi
 echo "-----------------------------------"
 
