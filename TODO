@@ -4,7 +4,6 @@ TODO:
     触发后在hook过的用户的epollwait/kqueue/iocp里面调用callback, 以此保证callback和触发点在同一个或同一组线程
     投递时：if (!channel.TryPush(xx)) go { func(xx); while (co_num < maxPoolNum) { channel >> x; func(x); }}
 实现一个连接池, 与协程池搭配使用, 简化mysql\hiredis等库的使用方式.
-Scheduler::Stop用于安全退出main函数
 支持同时等待多个Channel
 优化sync库(仿照futex的实现, 尝试无锁队列实现channel)
 master分支兼容macos
@@ -60,3 +59,4 @@ go dispatch(xx) stack(xxx) malloc-free(xx,yy) func;用这种灵活的语法替�
 协程亲缘性
 调度器改成多个(1个默认的全局调度器+多个用户自定义调度器), 去除全局访问点, go增加参数指定调度器.
 以glibc的静、动态链接方式来区分hook实现方法, 而不是libgo库本身.(try:优先尝试dlysm, 失败后再用__xxx的方式)
+Scheduler::Stop用于安全退出main函数
