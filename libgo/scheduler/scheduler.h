@@ -18,6 +18,9 @@ struct TaskOpt
     const char* file_ = nullptr;
 };
 
+// 协程调度器
+// 负责管理1到N个调度线程, 调度从属协程.
+// 注意：用户创建的调度器在进程中, 总是应该拥有全局生命期.
 class Scheduler
 {
     friend class Processer;
@@ -43,6 +46,11 @@ public:
     //                    如果maxThreadNumber设置为一个较大的值, 则可以在协程中使用阻塞操作.
     void Start(int minThreadNumber = 1, int maxThreadNumber = 0);
     static const int s_ulimitedMaxThreadNumber = 40960;
+
+    // 停止调度 
+    // 注意: 停止后无法恢复, 仅用于安全退出.
+    //       如果某个调度线程被协程阻塞, 必须等待阻塞结束才能退出.
+    void Stop();
 
     // 当前协程总数量
     uint32_t TaskCount();
@@ -91,6 +99,8 @@ private:
     
     int minThreadNumber_ = 1;
     int maxThreadNumber_ = 1;
+
+    std::shared_ptr<bool> stop_;
 
     // ------------- 兼容旧版架构接口 -------------
 public:

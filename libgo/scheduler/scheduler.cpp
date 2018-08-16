@@ -23,6 +23,7 @@ inline atomic_t<unsigned long long> & GetTaskIdFactory()
 Scheduler::Scheduler()
 {
     LibgoInitialize();
+    stop_.reset(new bool(false));
     processers_.push_back(new Processer(this, 0));
 }
 
@@ -105,7 +106,16 @@ void Scheduler::Start(int minThreadNumber, int maxThreadNumber)
     DebugPrint(dbg_scheduler, "Scheduler::Start minThreadNumber_=%d, maxThreadNumber_=%d", minThreadNumber_, maxThreadNumber_);
     mainProc->Process();
 }
-
+void Scheduler::Stop()
+{
+    *stop_ = true;
+    size_t n = processers_.size();
+    for (size_t i = 0; i < n; ++i) {
+        auto p = processers_[i];
+        if (p)
+            p->NotifyCondition();
+    }
+}
 void Scheduler::NewProcessThread()
 {
     auto p = new Processer(this, processers_.size());

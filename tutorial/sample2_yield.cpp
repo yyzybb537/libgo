@@ -5,10 +5,7 @@
 #include "win_exit.h"
 #include <stdio.h>
 
-// 也可以使用co_main宏定义main函数, 
-// 此时, main函数也是执行在协程中, 不要再执行调度器!
-// 链接时需要增加参数：-llibgo_main
-co_main(int argc, char **argv)
+int main(int argc, char **argv)
 {
     // 在协程中使用co_yield关键字, 可以主动让出调度器执行权限,
     // 让调度器有机会去执行其他协程,
@@ -36,8 +33,11 @@ co_main(int argc, char **argv)
         printf("3\n");
         co_yield;
         printf("4\n");
+
+        co_sched.Stop();
     };
 
+    co_sched.Start();
     return 0;
 }
 
