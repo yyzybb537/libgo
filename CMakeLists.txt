@@ -82,6 +82,7 @@ aux_source_directory(${PROJECT_SOURCE_DIR}/libgo/scheduler CO_SRC_LIST)
 aux_source_directory(${PROJECT_SOURCE_DIR}/libgo/sync CO_SRC_LIST)
 aux_source_directory(${PROJECT_SOURCE_DIR}/libgo/timer CO_SRC_LIST)
 aux_source_directory(${PROJECT_SOURCE_DIR}/libgo/cls CO_SRC_LIST)
+aux_source_directory(${PROJECT_SOURCE_DIR}/libgo/pool CO_SRC_LIST)
 
 if (NOT DISABLE_HOOK)
     if (UNIX)
