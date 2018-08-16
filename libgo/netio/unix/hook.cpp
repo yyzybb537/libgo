@@ -17,6 +17,7 @@
 #include "reactor.h"
 #include "hook_helper.h"
 #include "../../sync/co_mutex.h"
+#include "../../cls/co_local_storage.h"
 using namespace co;
 
 // 设置阻塞式connect超时时间(-1无限时)
@@ -466,7 +467,7 @@ int __poll(struct pollfd *fds, nfds_t nfds, int timeout)
             (int)nfds, timeout,
             Processer::IsCoroutine() ? "In" : "Not in");
 
-    return poll_f(fds, nfds, timeout);
+    return libgo_poll(fds, nfds, timeout, true);
 }
 
 // --- This is invalid hook when gcc-5.4.
@@ -480,7 +481,7 @@ int __poll(struct pollfd *fds, nfds_t nfds, int timeout)
 //            Processer::IsCoroutine() ? "In" : "Not in");
 //    return &s;
 //}
-/*
+
 struct hostent* gethostbyname(const char* name)
 {
     Task* tk = Processer::GetCurrentTask();
@@ -631,7 +632,7 @@ int gethostbyaddr_r(const void *addr, socklen_t len, int type,
     std::unique_lock<CoMutex> lock(g_dns_mtx);
     return gethostbyaddr_r_f(addr, len, type, ret, buf, buflen, result, h_errnop);
 }
-*/
+
 // ---------------------------------------------------------------------------
 
 int select(int nfds, fd_set *readfds, fd_set *writefds,
@@ -772,9 +773,11 @@ int usleep(useconds_t usec)
     if (!usleep_f) initHook();
 
     Task* tk = Processer::GetCurrentTask();
-    DebugPrint(dbg_hook, "task(%s) hook usleep(microseconds=%u). %s coroutine.",
-            tk->DebugInfo(), usec,
-            Processer::IsCoroutine() ? "In" : "Not in");
+    if (tk) {
+        DebugPrint(dbg_hook, "task(%s) hook usleep(microseconds=%u). %s coroutine.",
+                tk->DebugInfo(), usec,
+                Processer::IsCoroutine() ? "In" : "Not in");
+    }
 
     if (!tk)
         return usleep_f(usec);
@@ -790,10 +793,12 @@ int nanosleep(const struct timespec *req, struct timespec *rem)
     if (!nanosleep_f) initHook();
 
     Task* tk = Processer::GetCurrentTask();
-    int timeout_ms = req->tv_sec * 1000 + req->tv_nsec / 1000000;
-    DebugPrint(dbg_hook, "task(%s) hook nanosleep(milliseconds=%d). %s coroutine.",
-            tk->DebugInfo(), timeout_ms,
-            Processer::IsCoroutine() ? "In" : "Not in");
+    if (tk) {
+        int timeout_ms = req->tv_sec * 1000 + req->tv_nsec / 1000000;
+        DebugPrint(dbg_hook, "task(%s) hook nanosleep(milliseconds=%d). %s coroutine.",
+                tk->DebugInfo(), timeout_ms,
+                Processer::IsCoroutine() ? "In" : "Not in");
+    }
 
     if (!tk)
         return nanosleep_f(req, rem);
