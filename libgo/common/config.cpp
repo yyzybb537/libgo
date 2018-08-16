@@ -5,6 +5,7 @@
 #include <poll.h>
 #ifdef __linux__
 #include <sys/time.h>
+#include <pthread.h>
 #endif
 
 #include "../scheduler/ref.h"
@@ -98,6 +99,10 @@ const char* PollEvent2Str(short int event)
         default:
         return "Zero";
     }
+}
+uint64_t NativeThreadID()
+{
+    return pthread_self();
 }
 
 } //namespace co

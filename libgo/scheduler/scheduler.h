@@ -48,9 +48,12 @@ public:
     static const int s_ulimitedMaxThreadNumber = 40960;
 
     // 停止调度 
-    // 注意: 停止后无法恢复, 仅用于安全退出.
+    // 注意: 停止后无法恢复, 仅用于安全退出main函数, 不保证终止所有线程.
     //       如果某个调度线程被协程阻塞, 必须等待阻塞结束才能退出.
     void Stop();
+
+    // 使用独立的定时器线程
+    void UseAloneTimerThread();
 
     // 当前协程总数量
     uint32_t TaskCount();
@@ -63,6 +66,8 @@ public:
 
     // 设置当前协程调试信息, 打印调试信息时将回显
     void SetCurrentTaskDebugInfo(std::string const& info);
+
+    typedef Timer<std::function<void()>> TimerType;
 
 private:
     Scheduler(Scheduler const&) = delete;
@@ -82,9 +87,9 @@ private:
 
     void NewProcessThread();
 
-    typedef Timer<std::function<void()>> TimerType;
+    inline TimerType & GetTimer() { return timer_ ? *timer_ : StaticGetTimer(); }
 
-    inline TimerType & GetTimer() { return timer_; }
+    TimerType & StaticGetTimer();
 
     // deque of Processer, write by start or dispatch thread
     Deque<Processer*> processers_;
@@ -95,7 +100,7 @@ private:
 
     volatile uint32_t lastActive_ = 0;
 
-    TimerType timer_;
+    TimerType *timer_ = nullptr;
     
     int minThreadNumber_ = 1;
     int maxThreadNumber_ = 1;
