@@ -7,6 +7,7 @@
 #include <chrono>
 #include <boost/any.hpp>
 #include "coroutine.h"
+#include "gtest_exit.h"
 using namespace std;
 using namespace co;
 
@@ -122,8 +123,8 @@ static timeval zero_timeout = {0, 0};
 
 TEST(Select, TimeoutIs0)
 {
-//    g_Scheduler.GetOptions().debug = dbg_all;
-//    g_Scheduler.GetOptions().debug_output = fopen("log", "w+");
+//    co_opt.debug = dbg_all;
+//    co_opt.debug_output = fopen("log", "w+");
     go [] {
         uint64_t yield_count = g_Scheduler.GetCurrentTaskYieldCount();
         select(0, NULL, NULL, NULL, &zero_timeout);
@@ -164,8 +165,7 @@ TEST(Select, TimeoutIs0)
         EXPECT_TRUE(FD_EQUAL(&x, &wfs));
         EXPECT_EQ(g_Scheduler.GetCurrentTaskYieldCount(), yield_count);
     };
-    g_Scheduler.RunUntilNoTask();
-    EXPECT_EQ(Task::GetTaskCount(), 0u);
+    WaitUntilNoTask();
 }
 
 TEST(Select, TimeoutIsF1)
@@ -201,8 +201,7 @@ TEST(Select, TimeoutIsF1)
         EXPECT_EQ(g_Scheduler.GetCurrentTaskYieldCount(), yield_count);
 
     };
-    g_Scheduler.RunUntilNoTask();
-    EXPECT_EQ(Task::GetTaskCount(), 0u);
+    WaitUntilNoTask();
 }
 
 TEST(Select, TimeoutIs1)
@@ -227,8 +226,7 @@ TEST(Select, TimeoutIs1)
         EXPECT_EQ(n, 2);
         EXPECT_EQ(g_Scheduler.GetCurrentTaskYieldCount(), yield_count);
     };
-    g_Scheduler.RunUntilNoTask();
-    EXPECT_EQ(Task::GetTaskCount(), 0u);
+    WaitUntilNoTask();
 
     go [] {
         fd_set rd_fds;
@@ -246,8 +244,7 @@ TEST(Select, TimeoutIs1)
         EXPECT_GT(c, 950);
         EXPECT_EQ(g_Scheduler.GetCurrentTaskYieldCount(), yield_count + 1);
     };
-    g_Scheduler.RunUntilNoTask();
-    EXPECT_EQ(Task::GetTaskCount(), 0u);
+    WaitUntilNoTask();
 }
 
 TEST(Select, Sleep)
@@ -263,8 +260,7 @@ TEST(Select, Sleep)
         EXPECT_GT(c, 950);
         EXPECT_EQ(g_Scheduler.GetCurrentTaskYieldCount(), 1u);
     };
-    g_Scheduler.RunUntilNoTask();
-    EXPECT_EQ(Task::GetTaskCount(), 0u);
+    WaitUntilNoTask();
 }
 
 TEST(Select, MultiThreads)
@@ -287,13 +283,5 @@ TEST(Select, MultiThreads)
             EXPECT_GT(c, 999);
             EXPECT_EQ(g_Scheduler.GetCurrentTaskYieldCount(), yield_count + 1);
         };
-    boost::thread_group tg;
-    for (int i = 0; i < 8; ++i)
-        tg.create_thread([] {
-                g_Scheduler.RunUntilNoTask();
-                });
-    tg.join_all();
-    if (Task::GetTaskCount()) // 可能会有一些Task还未删除，执行删除逻辑。
-        g_Scheduler.RunUntilNoTask();
-    EXPECT_EQ(Task::GetTaskCount(), 0u);
+    WaitUntilNoTask();
 }
