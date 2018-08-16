@@ -54,6 +54,8 @@ private:
     std::condition_variable cv_;
     std::atomic_bool waiting_{false};
 
+    std::shared_ptr<bool> stop_;
+
     static int s_check_;
 
 public:

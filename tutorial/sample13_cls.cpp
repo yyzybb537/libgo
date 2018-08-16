@@ -77,7 +77,7 @@ void oneLine() {
     cout << "oneLine -> "<< "a=" << a << ", b=" << b << ", c=" << c << endl;
 }
 
-int test() {
+void test() {
     cout << " ---- function ---- " << endl;
     go foo3;
 
@@ -95,9 +95,11 @@ int test() {
     car();
 
     oneLine();
+
+    co_sched.Stop();
 }
 
 int main() {
     go test;
-    co_sched.RunUntilNoTask();
+    co_sched.Start();
 }

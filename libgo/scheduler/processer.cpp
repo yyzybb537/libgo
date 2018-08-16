@@ -10,7 +10,7 @@ namespace co {
 int Processer::s_check_ = 0;
 
 Processer::Processer(Scheduler * scheduler, int id)
-    : scheduler_(scheduler), id_(id)
+    : scheduler_(scheduler), id_(id), stop_(scheduler->stop_)
 {
 }
 
@@ -54,7 +54,9 @@ void Processer::Process()
 {
     GetCurrentProcesser() = this;
 
-    for (;;)
+    bool & isStop = *stop_;
+
+    while (!isStop)
     {
         runnableQueue_.front(runningTask_);
 
@@ -72,7 +74,7 @@ void Processer::Process()
         DebugPrint(dbg_scheduler, "Run [Proc(%d) QueueSize:%lu] --------------------------", id_, RunnableSize());
 
         addNewQuota_ = 1;
-        while (runningTask_) {
+        while (runningTask_ && !isStop) {
             runningTask_->state_ = TaskState::runnable;
             runningTask_->proc_ = this;
             DebugPrint(dbg_switch, "enter task(%s)", runningTask_->DebugInfo());
