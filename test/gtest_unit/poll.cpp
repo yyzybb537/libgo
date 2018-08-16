@@ -40,6 +40,7 @@ static int fill_send_buffer(int fd)
 
 TEST(Poll, TimeoutIs0)
 {
+    ::co::CoroutineOptions::getInstance().debug = dbg_thread;
     go [] {
         int fds[2];
         int res = socketpair(AF_LOCAL, SOCK_STREAM, 0, fds);
@@ -422,9 +423,10 @@ TEST(PollTrigger, MultiPollTimeout1)
     }
     WaitUntilNoTask();
 
-    ::co::CoroutineOptions::getInstance().debug = 0;
+//    ::co::CoroutineOptions::getInstance().debug = 0;
     close(fds[0]);
     close(fds[1]);
+//    g_Scheduler.UseAloneTimerThread();
 }
 
 TEST(PollTrigger, MultiPollTimeout2)
@@ -473,7 +475,7 @@ TEST(PollTrigger, MultiPollTimeout2)
     }
     WaitUntilNoTask();
 
-    ::co::CoroutineOptions::getInstance().debug = 0;
+//    ::co::CoroutineOptions::getInstance().debug = 0;
     close(fds[0]);
     close(fds[1]);
 }
@@ -517,7 +519,7 @@ TEST(PollTrigger, MultiPollTrigger)
     };
     WaitUntilNoTask();
 
-    ::co::CoroutineOptions::getInstance().debug = 0;
+//    ::co::CoroutineOptions::getInstance().debug = 0;
     close(fds[0]);
     close(fds[1]);
 }
@@ -638,13 +640,5 @@ TEST(Poll, MultiThreads)
             close(fds[0]);
             close(fds[1]);
         };
-    printf("coroutines create done.\n");
-    boost::thread_group tg;
-    for (int i = 0; i < 8; ++i)
-        tg.create_thread([] {
-                WaitUntilNoTask();
-                });
-    tg.join_all();
-    printf("coroutines run done.\n");
     WaitUntilNoTask();
 }

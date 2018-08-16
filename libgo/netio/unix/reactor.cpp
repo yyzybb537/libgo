@@ -31,6 +31,7 @@ Reactor::Reactor()
     epfd_ = epoll_create(1024);
 
     std::thread thr([this]{
+                DebugPrint(dbg_thread, "Start epoll thread id: %lu", NativeThreadID());
                 for (;;) this->Run();
             });
     thr.detach();

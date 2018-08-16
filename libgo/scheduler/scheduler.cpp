@@ -87,13 +87,19 @@ void Scheduler::Start(int minThreadNumber, int maxThreadNumber)
     }
 
     // 唤醒协程的定时器线程
-    timer_.SetPoolSize(1000, 100);
-    std::thread([this]{ this->timer_.ThreadRun(); }).detach();
+    if (timer_) {
+        timer_->SetPoolSize(1000, 100);
+        std::thread([this]{ 
+                DebugPrint(dbg_thread, "Start alone timer(sched=%p) thread id: %lu", (void*)this, NativeThreadID());
+                this->timer_->ThreadRun(); 
+            }).detach();
+    }
 
     // 调度线程
     if (maxThreadNumber_ > 1) {
         DebugPrint(dbg_scheduler, "---> Create DispatcherThread");
         std::thread t([this]{
+                DebugPrint(dbg_thread, "Start dispatcher(sched=%p) thread id: %lu", (void*)this, NativeThreadID());
                 this->DispatcherThread();
                 });
         t.detach();
@@ -116,11 +122,43 @@ void Scheduler::Stop()
             p->NotifyCondition();
     }
 }
+void Scheduler::UseAloneTimerThread()
+{
+    TimerType * timer = new TimerType;
+
+    if (!started_.try_lock()) {
+        std::thread([this, timer]{ 
+                DebugPrint(dbg_thread, "Start alone timer(sched=%p) thread id: %lu", (void*)this, NativeThreadID());
+                timer->ThreadRun(); 
+                }).detach();
+    } else {
+        started_.unlock();
+    }
+
+    std::atomic_thread_fence(std::memory_order_acq_rel);
+    timer_ = timer;
+}
+
+static Scheduler::TimerType& staticGetTimer() {
+    static Scheduler::TimerType timer;
+    std::thread([&]{ 
+            DebugPrint(dbg_thread, "Start global timer thread id: %lu", NativeThreadID());
+            timer.ThreadRun(); 
+            }).detach();
+    return timer;
+}
+
+Scheduler::TimerType & Scheduler::StaticGetTimer() {
+    static TimerType & timer = staticGetTimer();
+    return timer;
+}
+
 void Scheduler::NewProcessThread()
 {
     auto p = new Processer(this, processers_.size());
     DebugPrint(dbg_scheduler, "---> Create Processer(%d)", p->id_);
-    std::thread t([p]{
+    std::thread t([this, p]{
+            DebugPrint(dbg_thread, "Start process(sched=%p) thread id: %lu", (void*)this, NativeThreadID());
             p->Process();
             });
     t.detach();
