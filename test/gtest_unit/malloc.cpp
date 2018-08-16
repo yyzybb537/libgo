@@ -23,8 +23,8 @@ void my_free(void *ptr)
 
 TEST(testMallocFree, testMallocFree)
 {
-    co_sched.GetOptions().stack_malloc_fn = &my_malloc;
-    co_sched.GetOptions().stack_free_fn = &my_free;
+    co_opt.stack_malloc_fn = &my_malloc;
+    co_opt.stack_free_fn = &my_free;
 
     EXPECT_EQ(malloc_c, 0);
     EXPECT_EQ(free_c, 0);
@@ -34,7 +34,7 @@ TEST(testMallocFree, testMallocFree)
     EXPECT_EQ(malloc_c, 1);
     EXPECT_EQ(free_c, 0);
 
-    co_sched.RunUntilNoTask();
+    WaitUntilNoTask();
 
     EXPECT_EQ(malloc_c, 1);
     EXPECT_EQ(free_c, 1);
@@ -45,7 +45,7 @@ TEST(testMallocFree, testMallocFree)
     EXPECT_EQ(malloc_c, 11);
     EXPECT_EQ(free_c, 1);
 
-    co_sched.RunUntilNoTask();
+    WaitUntilNoTask();
 
     EXPECT_EQ(malloc_c, 11);
     EXPECT_EQ(free_c, 11);
@@ -57,7 +57,7 @@ TEST(testMallocFree, testMallocFree)
     EXPECT_EQ(malloc_c, 12);
     EXPECT_EQ(free_c, 11);
 
-    co_sched.RunUntilNoTask();
+    WaitUntilNoTask();
 
     EXPECT_EQ(malloc_c, 13);
     EXPECT_EQ(free_c, 13);
