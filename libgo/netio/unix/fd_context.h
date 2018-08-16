@@ -50,14 +50,16 @@ public:
 
     bool IsNonBlocking();
 
+    void SetTcpConnectTimeout(int milliseconds);
+
     int GetTcpConnectTimeout();
 
-    int GetSocketTimeoutMS(int timeoutType);
+    long GetSocketTimeoutMicroSeconds(int timeoutType);
 
 public:
     void OnSetNonBlocking(bool isNonBlocking);
 
-    void OnSetSocketTimeout(int timeoutType, int milliseconds);
+    void OnSetSocketTimeout(int timeoutType, int microseconds);
 
     FdContextPtr Clone(int newFd);
 
@@ -72,8 +74,8 @@ private:
     SocketAttribute sockAttr_;
     bool isNonBlocking_;
     int tcpConnectTimeout_;
-    int recvTimeout_;
-    int sendTimeout_;
+    long recvTimeout_;
+    long sendTimeout_;
 };
 
 } // namespace co

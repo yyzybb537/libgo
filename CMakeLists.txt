@@ -99,7 +99,6 @@ if (UNIX)
 
     set(SHARED_T "libgo_dynamic")
     add_library("${SHARED_T}" SHARED ${CO_SRC_LIST})
-    set_target_properties("${SHARED_T}" PROPERTIES COMPILE_FLAGS "-DCO_DYNAMIC_LINK")
     set_target_properties("${SHARED_T}" PROPERTIES OUTPUT_NAME "${TARGET}")
     target_link_libraries("${SHARED_T}" ${LINK_LIBS} -ldl)
     install(TARGETS ${SHARED_T} LIBRARY DESTINATION "lib" ARCHIVE DESTINATION "lib")

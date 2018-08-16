@@ -6,6 +6,7 @@
 #include <chrono>
 #include <time.h>
 #include <poll.h>
+#include "gtest_exit.h"
 using namespace std;
 using namespace co;
 
@@ -59,8 +60,6 @@ struct Sleep : public TestWithParam<sleep_type>
 
 TEST_P(Sleep, sleep0)
 {
-//    g_Scheduler.GetOptions().debug = dbg_sleepblock;
-
     int c = 0, n = 2;
     for (int i = 0; i < n; ++i)
         go [&c, this]{
@@ -68,32 +67,23 @@ TEST_P(Sleep, sleep0)
             ++c;
         };
 
-    auto s = chrono::system_clock::now();
-    g_Scheduler.RunUntilNoTask();
-    auto e = chrono::system_clock::now();
-    auto dc = chrono::duration_cast<chrono::milliseconds>(e - s).count();
-    EXPECT_EQ(c, n);
-    EXPECT_LT(dc, 100);
+    GTimer gt;
+    WaitUntilNoTask();
+    TIMER_CHECK(gt, 0, 10);
 }
 
 TEST_P(Sleep, sleep1)
 {
-//    g_Scheduler.GetOptions().debug = dbg_sleepblock;
-
     int c = 0, n = 2;
     for (int i = 0; i < n; ++i)
         go [&c, this]{
-            do_sleep(type_, 1030);
+            do_sleep(type_, 1000);
             ++c;
         };
 
-    auto s = chrono::system_clock::now();
-    g_Scheduler.RunUntilNoTask();
-    auto e = chrono::system_clock::now();
-    auto dc = chrono::duration_cast<chrono::milliseconds>(e - s).count();
-    EXPECT_EQ(c, n);
-    EXPECT_LT(dc, 1100);
-    EXPECT_GT(dc, 999);
+    GTimer gt;
+    WaitUntilNoTask();
+    TIMER_CHECK(gt, 1000, 100);
 }
 
 INSTANTIATE_TEST_CASE_P(

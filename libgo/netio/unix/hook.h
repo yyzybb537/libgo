@@ -133,7 +133,7 @@ extern gethostbyaddr_r_t gethostbyaddr_r_f;
 } //extern "C"
 
 namespace co {
-    extern int setTcpConnectTimeout(int fd, int milliseconds);
+    extern bool setTcpConnectTimeout(int fd, int milliseconds);
 
     // libgo提供的协程版epoll_wait接口
     extern int libgo_epoll_wait(int epfd, struct epoll_event *events,

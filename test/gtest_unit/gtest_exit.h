@@ -45,6 +45,10 @@ template <typename Clock>
 struct GTimerT {
     GTimerT() : tp_(Clock::now()) {}
 
+    void reset() {
+        tp_ = Clock::now();
+    }
+
     typename Clock::duration duration() {
         return Clock::now() - tp_;
     }
