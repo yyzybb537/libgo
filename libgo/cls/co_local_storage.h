@@ -1,29 +1,72 @@
 #pragma once
-#include <libgo/config.h>
-#include <libgo/scheduler.h>
+#include "../common/config.h"
+#include "../common/any.h"
+#include "../scheduler/processer.h"
+#include "../task/task.h"
+#include <unordered_map>
+#include <typeinfo>
+#include <memory>
+#include <assert.h>
 #include <iostream>
 
 namespace co {
+
+struct CLSLocation {
+    int lineno_;
+    int counter_;
+    std::size_t file_;
+    std::size_t func_;
+//    const char* class_;
+
+    // if class == nil and func == nil, it's a global variable.
+    struct Hash {
+        std::size_t operator()(CLSLocation const& loc) const {
+            std::size_t h = std::hash<std::size_t>()(loc.file_)
+                + std::hash<std::size_t>()(loc.func_)
+                + std::hash<int>()(loc.lineno_)
+                + std::hash<int>()(loc.counter_);
+//            std::cout << "Hash return:" << h << std::endl;
+            return h;
+        }
+    };
+
+    friend bool operator==(CLSLocation const& lhs, CLSLocation const& rhs) {
+        bool ret = lhs.lineno_ == rhs.lineno_ &&
+            lhs.counter_ == rhs.counter_ &&
+            lhs.file_ == rhs.file_ &&
+            lhs.func_ == rhs.func_;
+//        std::cout << "operator== return:" << ret << std::endl;
+        return ret;
+    }
+};
+
+class CLSMap {
+    std::unordered_map<CLSLocation, any, CLSLocation::Hash> map_;
+
+public:
+    any& Get(CLSLocation loc) {
+        return map_[loc];
+    }
+};
+
+TaskRefDefine(CLSMap, ClsMap)
 
 extern CLSMap* GetThreadLocalCLSMap();
 
 template <typename T, typename ... Args>
 T& GetSpecific(CLSLocation loc, Args && ... args) {
-    Task* task = Processer::GetCurrentTask();
-    CLSMap *m = nullptr;
-    if (!task) {
-        m = GetThreadLocalCLSMap();
-    } else {
-        m = task->GetCLSMap();
+    Task* tk = Processer::GetCurrentTask();
+    CLSMap *m = tk ? &TaskRefClsMap(tk) : GetThreadLocalCLSMap();
+
+    any& val = m->Get(loc);
+    if (val.empty()) {
+//        std::cout << "Set<T> val:" << (void*)&val << ", m:" << (void*)m << std::endl;
+//        std::cout << "sizeof:" << sizeof...(args) << std::endl;
+        any newVal(T(std::forward<Args>(args)...));
+        val.swap(newVal);
     }
 
-    CLSAny& any = m->Get(loc);
-    if (any.empty()) {
-//        std::cout << "Set<T> any:" << (void*)&any << ", m:" << (void*)m << std::endl;
-//        std::cout << "sizeof:" << sizeof...(args) << std::endl;
-        any.Set<T>(std::forward<Args>(args)...);
-    }
-    return any.Cast<T>();
+    return any_cast<T&>(val);
 }
 
 template <typename T>
@@ -35,7 +78,11 @@ public:
         (void)GetSpecific<T>(loc_, std::forward<Args>(args)...);
     }
 
-    operator T&() const {
+    operator T const&() const {
+        return GetSpecific<T>(loc_);
+    }
+
+    operator T&() {
         return GetSpecific<T>(loc_);
     }
 };
@@ -50,7 +97,6 @@ CLSRef<T> MakeCLSRef(CLSLocation loc, Args && ... args) {
 
 #define CLS(type, ...) \
     co::MakeCLSRef<type>(GetCLSLocation(), ##__VA_ARGS__)
-//    co::GetSpecific<type>(GetCLSLocation(), ##__VA_ARGS__)
 
 #define CLS_REF(type) co::CLSRef<type>
 

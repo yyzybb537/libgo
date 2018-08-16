@@ -48,13 +48,10 @@
 namespace co
 {
 
-#if LIBGO_SINGLE_THREAD
-    template <typename T>
-    using atomic_t = T;
-#else
-    template <typename T>
-    using atomic_t = std::atomic<T>;
-#endif
+void LibgoInitialize();
+
+template <typename T>
+using atomic_t = std::atomic<T>;
 
 ///---- debugger flags
 static const uint64_t dbg_none              = 0;

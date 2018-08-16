@@ -7,7 +7,30 @@
 #include <sys/time.h>
 #endif
 
+#include "../scheduler/ref.h"
+#include "../cls/co_local_storage.h"
+
 namespace co {
+
+static int staticInitialize()
+{
+    // scheduler
+    TaskRefInit(Affinity);
+    TaskRefInit(YieldCount);
+    TaskRefInit(Location);
+    TaskRefInit(DebugInfo);
+    TaskRefInit(SuspendId);
+
+    // cls
+    TaskRefInit(ClsMap);
+    return 0;
+}
+
+void LibgoInitialize()
+{
+    static int ignore = staticInitialize();
+    (void)ignore;
+}
 
 std::mutex gDbgLock;
 
