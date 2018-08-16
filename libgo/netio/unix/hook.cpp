@@ -25,6 +25,15 @@ static thread_local CoMutex g_dns_mtx;
 namespace co {
     void initHook();
 
+    bool setTcpConnectTimeout(int fd, int milliseconds)
+    {
+        FdContextPtr ctx = HookHelper::getInstance().GetFdContext(fd);
+        if (!ctx) return false;
+
+        ctx->SetTcpConnectTimeout(milliseconds);
+        return true;
+    }
+
     int libgo_epoll_wait(int epfd, struct epoll_event *events, int maxevents, int timeout)
     {
         Task* tk = Processer::GetCurrentTask();
@@ -160,8 +169,8 @@ static ssize_t read_write_mode(int fd, OriginF fn, const char* hook_fn_name,
     if (!ctx || ctx->IsNonBlocking())
         return fn(fd, std::forward<Args>(args)...);
 
-    int socketTimeout = ctx->GetSocketTimeoutMS(timeout_so);
-    int pollTimeout = (socketTimeout == 0) ? -1 : socketTimeout;
+    long socketTimeout = ctx->GetSocketTimeoutMicroSeconds(timeout_so);
+    int pollTimeout = (socketTimeout == 0) ? -1 : (socketTimeout < 1000 ? 1 : socketTimeout / 1000);
 
     struct pollfd fds;
     fds.fd = fd;
@@ -933,8 +942,8 @@ int setsockopt(int sockfd, int level, int optname, const void *optval, socklen_t
             FdContextPtr ctx = HookHelper::getInstance().GetFdContext(sockfd);
             if (ctx) {
                 const timeval & tv = *(const timeval*)optval;
-                int milliseconds = tv.tv_sec * 1000 + tv.tv_usec / 1000000;
-                ctx->OnSetSocketTimeout(optname, milliseconds);
+                int microseconds = tv.tv_sec * 1000000 + tv.tv_usec;
+                ctx->OnSetSocketTimeout(optname, microseconds);
             }
         }
     }

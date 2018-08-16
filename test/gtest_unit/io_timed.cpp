@@ -4,9 +4,10 @@
 #include <sys/socket.h>
 #include <gtest/gtest.h>
 #include "coroutine.h"
-#include "linux/linux_glibc_hook.h"
+#include "netio/unix/hook.h"
 #include <sys/fcntl.h>
 #include <sys/types.h>
+#include "gtest_exit.h"
 using namespace std;
 using namespace co;
 
@@ -46,33 +47,27 @@ void timed()
 
     char buf[1024] = {};
     uint32_t yield_count = g_Scheduler.GetCurrentTaskYieldCount();
-    auto start = std::chrono::high_resolution_clock::now();
+    GTimer gt;
 retry:
-    start = std::chrono::high_resolution_clock::now();
+    gt.reset();
     ssize_t n = write(socketfd, buf, sizeof(buf));
     if (n > 0) {
         res += n;
         goto retry;
     }
     cout << "fill " << res << " bytes on write buffer." << endl;
-    auto end = std::chrono::high_resolution_clock::now();
-    auto milli = std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count();
     EXPECT_EQ(n, -1);
     EXPECT_EQ(errno, EAGAIN);
     EXPECT_EQ(g_Scheduler.GetCurrentTaskYieldCount(), yield_count + 1);
-    EXPECT_LT(milli, 550);
-    EXPECT_GT(milli, 499);
+    TIMER_CHECK(gt, 500, 50);
 
     yield_count = g_Scheduler.GetCurrentTaskYieldCount();
-    start = std::chrono::high_resolution_clock::now();
+    gt.reset();
     n = read(socketfd, buf, sizeof(buf));
-    end = std::chrono::high_resolution_clock::now();
-    milli = std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count();
     EXPECT_EQ(n, -1);
     EXPECT_EQ(errno, EAGAIN);
     EXPECT_EQ(g_Scheduler.GetCurrentTaskYieldCount(), yield_count + 1);
-    EXPECT_LT(milli, 1150);
-    EXPECT_GT(milli, 1099);
+    TIMER_CHECK(gt, 1100, 50);
 
     // set nonblock
     int flags = fcntl(socketfd, F_GETFL);
@@ -80,14 +75,12 @@ retry:
     EXPECT_EQ(res, 0);
 
     yield_count = g_Scheduler.GetCurrentTaskYieldCount();
-    start = std::chrono::high_resolution_clock::now();
+    gt.reset();
     n = read(socketfd, buf, sizeof(buf));
-    end = std::chrono::high_resolution_clock::now();
-    milli = std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count();
     EXPECT_EQ(n, -1);
     EXPECT_EQ(errno, EAGAIN);
     EXPECT_EQ(g_Scheduler.GetCurrentTaskYieldCount(), yield_count);
-    EXPECT_LT(milli, 10);
+    TIMER_CHECK(gt, 0, 30);
 }
 
 void connect_timeo()
@@ -101,18 +94,15 @@ void connect_timeo()
     addr.sin_addr.s_addr = inet_addr("8.8.8.0");
 
     // set connect timeout is 300 milliseconds.
-    co::set_connect_timeout(300);
+    ::co::setTcpConnectTimeout(socketfd, 300);
 
     uint32_t yield_count = g_Scheduler.GetCurrentTaskYieldCount();
-    auto start = std::chrono::high_resolution_clock::now();
+    GTimer gt;
     int n = connect(socketfd, (sockaddr*)&addr, sizeof(addr));
-    auto end = std::chrono::high_resolution_clock::now();
-    auto milli = std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count();
     EXPECT_EQ(n, -1);
     EXPECT_EQ(errno, ETIMEDOUT);
     EXPECT_EQ(g_Scheduler.GetCurrentTaskYieldCount(), yield_count + 1);
-    EXPECT_LT(milli, 350);
-    EXPECT_GT(milli, 299);
+    TIMER_CHECK(gt, 300, 50);
 
     close(socketfd);
     socketfd = socket(AF_INET, SOCK_STREAM, 0);
@@ -124,23 +114,21 @@ void connect_timeo()
     EXPECT_EQ(res, 0);
 
     yield_count = g_Scheduler.GetCurrentTaskYieldCount();
-    start = std::chrono::high_resolution_clock::now();
+    gt.reset();
     n = connect(socketfd, (sockaddr*)&addr, sizeof(addr));
-    end = std::chrono::high_resolution_clock::now();
-    milli = std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count();
     EXPECT_EQ(n, -1);
     EXPECT_EQ(errno, EINPROGRESS);
     EXPECT_EQ(g_Scheduler.GetCurrentTaskYieldCount(), yield_count);
-    EXPECT_LT(milli, 10);
+    TIMER_CHECK(gt, 0, 30);
 }
 
 TEST(IOTimed, Main)
 {
 //    g_Scheduler.GetOptions().debug = dbg_hook;
     go timed;
-    g_Scheduler.RunUntilNoTask();
+    WaitUntilNoTask();
 
     go connect_timeo;
-    g_Scheduler.RunUntilNoTask();
+    WaitUntilNoTask();
 }
 

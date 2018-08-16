@@ -103,11 +103,15 @@ bool FdContext::IsNonBlocking()
 {
     return isNonBlocking_;
 }
+void FdContext::SetTcpConnectTimeout(int milliseconds)
+{
+    tcpConnectTimeout_ = milliseconds;
+}
 int FdContext::GetTcpConnectTimeout()
 {
     return tcpConnectTimeout_;
 }
-int FdContext::GetSocketTimeoutMS(int timeoutType)
+long FdContext::GetSocketTimeoutMicroSeconds(int timeoutType)
 {
     switch (timeoutType) {
         case SO_RCVTIMEO:
@@ -119,15 +123,15 @@ int FdContext::GetSocketTimeoutMS(int timeoutType)
 
     return 0;
 }
-void FdContext::OnSetSocketTimeout(int timeoutType, int milliseconds)
+void FdContext::OnSetSocketTimeout(int timeoutType, int microseconds)
 {
     switch (timeoutType) {
         case SO_RCVTIMEO:
-            recvTimeout_ = milliseconds;
+            recvTimeout_ = microseconds;
             break;
 
         case SO_SNDTIMEO:
-            sendTimeout_ = milliseconds;
+            sendTimeout_ = microseconds;
             break;
     }
 }
