@@ -39,6 +39,12 @@ else()
     message ("  enable_hook: yes")
 endif()
 
+if (BUILD_DYNAMIC)
+    message ("  build dynamic lib: yes")
+else()
+    message ("  build dynamic lib: no")
+endif()
+
 message("-------------- Env ---------------")
 message("  CMAKE_SOURCE_DIR: ${CMAKE_SOURCE_DIR}")
 message("  CMAKE_BINARY_DIR: ${CMAKE_BINARY_DIR}")
@@ -101,11 +107,13 @@ if (UNIX)
 
     add_library("${STATIC_HOOK}" STATIC "${PROJECT_SOURCE_DIR}/libgo/netio/unix/static_hook/static_hook.cpp")
 
-    set(SHARED_T "libgo_dynamic")
-    add_library("${SHARED_T}" SHARED ${CO_SRC_LIST})
-    set_target_properties("${SHARED_T}" PROPERTIES OUTPUT_NAME "${TARGET}")
-    target_link_libraries("${SHARED_T}" ${LINK_LIBS} -ldl)
-    install(TARGETS ${SHARED_T} LIBRARY DESTINATION "lib" ARCHIVE DESTINATION "lib")
+    if (BUILD_DYNAMIC)
+        set(SHARED_T "libgo_dynamic")
+        add_library("${SHARED_T}" SHARED ${CO_SRC_LIST})
+        set_target_properties("${SHARED_T}" PROPERTIES OUTPUT_NAME "${TARGET}")
+        target_link_libraries("${SHARED_T}" ${LINK_LIBS} -ldl)
+        install(TARGETS ${SHARED_T} LIBRARY DESTINATION "lib" ARCHIVE DESTINATION "lib")
+    endif()
 
     add_custom_target(debug
         COMMAND ${CMAKE_COMMAND} -DCMAKE_BUILD_TYPE=DEBUG ${CMAKE_SOURCE_DIR}
@@ -140,4 +148,4 @@ elseif (WIN32)
     set_target_properties("${STATIC_T}" PROPERTIES COMPILE_FLAGS "/wd4819 /wd4267")
 endif()
 
-add_subdirectory(${PROJECT_SOURCE_DIR}/libgo/main)
+#add_subdirectory(${PROJECT_SOURCE_DIR}/libgo/main)
