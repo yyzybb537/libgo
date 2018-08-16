@@ -144,7 +144,7 @@ void CoRWMutex::TryWakeUp()
 bool CoRWMutex::IsLock()
 {
     std::unique_lock<LFLock> lock(lock_);
-    return !!lockState_;
+    return lockState_ == -1;
 }
 
 CoRWMutex::ReadView & CoRWMutex::Reader()
