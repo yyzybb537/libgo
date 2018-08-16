@@ -14,31 +14,16 @@
 namespace co
 {
 
-extern void coroutine_hook_init();
-
 inline atomic_t<unsigned long long> & GetTaskIdFactory()
 {
     static atomic_t<unsigned long long> factory;
     return factory;
 }
 
-static int LibgoInitialize()
-{
-//    coroutine_hook_init();
-
-    // register TaskAnys.
-    TaskRefInit(Affinity);
-    TaskRefInit(YieldCount);
-    TaskRefInit(Location);
-    TaskRefInit(DebugInfo);
-    TaskRefInit(SuspendId);
-    return 0;
-}
-
 Scheduler::Scheduler()
 {
-    static int val = LibgoInitialize();
-    processers_.push_back(new Processer(this, val));
+    LibgoInitialize();
+    processers_.push_back(new Processer(this, 0));
 }
 
 Scheduler::~Scheduler()

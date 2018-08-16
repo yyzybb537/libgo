@@ -6,6 +6,7 @@
 #include "sync/co_rwmutex.h"
 #include "timer/timer.h"
 #include "scheduler/processer.h"
+#include "cls/co_local_storage.h"
 //#include "defer/defer.h"
 
 #define go ::co::__go(__FILE__, __LINE__)-
@@ -47,14 +48,13 @@ typedef ::co::CoTimer::TimerId co_timer_id;
 // co_main
 #define co_main(...) extern "C" int __coroutine_main_function(__VA_ARGS__)
 
-//
 //// co_debugger
 //#define co_debugger ::co::CoDebugger::getInstance()
-//
-//// coroutine local storage
-//#define co_cls(type, ...) CLS(type, ##__VA_ARGS__)
-//#define co_cls_ref(type) CLS_REF(type)
-//
+
+// coroutine local storage
+#define co_cls(type, ...) CLS(type, ##__VA_ARGS__)
+#define co_cls_ref(type) CLS_REF(type)
+
 //// co_defer
 //#define co_defer auto LIBGO_PP_CAT(__defer_, __COUNTER__) = ::co::__defer_op()-
 ////#define co_last_defer() LIBGO_PP_CAT(__defer_, LIBGO_PP_DEC(__COUNTER__))
