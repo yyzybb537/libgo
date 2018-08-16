@@ -20,6 +20,11 @@ inline atomic_t<unsigned long long> & GetTaskIdFactory()
     return factory;
 }
 
+Scheduler* Scheduler::Create()
+{
+    return new Scheduler;
+}
+
 Scheduler::Scheduler()
 {
     LibgoInitialize();

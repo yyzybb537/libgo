@@ -8,8 +8,8 @@ using namespace std;
 using namespace co;
 
 Scheduler & sched2() {
-    static Scheduler obj;
-    return obj;
+    static Scheduler *obj = Scheduler::Create();
+    return *obj;
 }
 
 TEST(MultiScheduler, multiScheduler)

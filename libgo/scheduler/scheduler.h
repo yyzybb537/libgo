@@ -20,16 +20,15 @@ struct TaskOpt
 
 // 协程调度器
 // 负责管理1到N个调度线程, 调度从属协程.
-// 注意：用户创建的调度器在进程中, 总是应该拥有全局生命期.
+// 可以调用Create接口创建更多额外的调度器
 class Scheduler
 {
     friend class Processer;
 
 public:
-    Scheduler();
-    ~Scheduler();
+    ALWAYS_INLINE static Scheduler& getInstance();
 
-    static Scheduler& getInstance();
+    static Scheduler* Create();
 
     // 创建一个协程
     void CreateTask(TaskF const& fn, TaskOpt const& opt);
@@ -43,7 +42,8 @@ public:
     // 启动调度器
     // @minThreadNumber : 最小调度线程数, 为0时, 设置为cpu核心数.
     // @maxThreadNumber : 最大调度线程数, 为0时, 设置为minThreadNumber.
-    //                    如果maxThreadNumber设置为一个较大的值, 则可以在协程中使用阻塞操作.
+    //          如果maxThreadNumber大于minThreadNumber, 则当协程产生长时间阻塞时,
+    //          可以自动扩展调度线程数.
     void Start(int minThreadNumber = 1, int maxThreadNumber = 0);
     static const int s_ulimitedMaxThreadNumber = 40960;
 
@@ -70,6 +70,9 @@ public:
     typedef Timer<std::function<void()>> TimerType;
 
 private:
+    Scheduler();
+    ~Scheduler();
+
     Scheduler(Scheduler const&) = delete;
     Scheduler(Scheduler &&) = delete;
     Scheduler& operator=(Scheduler const&) = delete;
