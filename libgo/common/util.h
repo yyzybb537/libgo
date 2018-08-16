@@ -282,8 +282,7 @@ public:
         return !!impl_;
     }
 
-    template <typename U>
-    friend bool operator==(WeakPtr<U> const& lhs, WeakPtr<U> const& rhs) {
+    friend bool operator==(WeakPtr<T> const& lhs, WeakPtr<T> const& rhs) {
         return lhs.impl_ == rhs.impl_ && lhs.ptr_ == rhs.ptr_;
     }
 
