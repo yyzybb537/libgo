@@ -194,7 +194,7 @@ void printDebug() {
 
 TEST(testDns, testDns)
 {
-    co::CoroutineOptions::getInstance().debug = dbg_hook | dbg_yield;
+//    co::CoroutineOptions::getInstance().debug = dbg_hook | dbg_yield;
 
     int yield_c = 0;
 

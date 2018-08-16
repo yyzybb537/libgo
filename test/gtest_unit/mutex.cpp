@@ -14,11 +14,11 @@ TEST(Mutex, test_mutex)
     go []{
         std::cout << "start mutex test...\n" << std::endl;
     };
-    co_sched.RunUntilNoTask();
+    WaitUntilNoTask();
 
     co_mutex m;
 
-    go [=]()mutable {
+    go [&]()mutable {
         EXPECT_FALSE(m.is_lock());
         m.lock();
         EXPECT_TRUE(m.is_lock());
@@ -30,23 +30,20 @@ TEST(Mutex, test_mutex)
         m.unlock();
         EXPECT_FALSE(m.is_lock());
     };
-    co_sched.RunUntilNoTask();
+    WaitUntilNoTask();
 
     int *pv = new int(0);
     std::vector<int> *vec = new std::vector<int>;
     vec->reserve(100 * 100);
     for (int i = 0; i < 100; ++i)
-        go [=]()mutable {
+        go [&]()mutable {
             for (int i = 0; i < 100; ++i)
             {
                 std::unique_lock<co_mutex> lock(m);
                 vec->push_back(++*pv);
             }
         };
-    boost::thread_group tg;
-    for (int i = 0; i < 4; ++i)
-        tg.create_thread([]{co_sched.RunUntilNoTask();});
-    tg.join_all();
+    WaitUntilNoTask();
     for (int i = 0; i < (int)vec->size(); ++i)
     {
         EXPECT_EQ(i + 1, vec->at(i));
@@ -58,7 +55,7 @@ TEST(Mutex, test_rwmutex)
     co_rwmutex m;
 
     // reader view
-    go [=]()mutable {
+    go [&]()mutable {
         EXPECT_FALSE(m.reader().is_lock());
         m.reader().lock();
         EXPECT_FALSE(m.reader().is_lock());
@@ -72,10 +69,10 @@ TEST(Mutex, test_rwmutex)
         m.reader().unlock();
         m.reader().unlock();
     };
-    co_sched.RunUntilNoTask();
+    WaitUntilNoTask();
 
     // writer view
-    go [=]()mutable {
+    go [&]()mutable {
         EXPECT_FALSE(m.writer().is_lock());
         m.writer().lock();
         EXPECT_TRUE(m.writer().is_lock());
@@ -87,10 +84,10 @@ TEST(Mutex, test_rwmutex)
         m.writer().unlock();
         EXPECT_FALSE(m.writer().is_lock());
     };
-    co_sched.RunUntilNoTask();
+    WaitUntilNoTask();
 
     // cross two view
-    go [=]()mutable {
+    go [&]()mutable {
         {
             std::unique_lock<co_wmutex> lock(m.writer());
             EXPECT_FALSE(m.reader().try_lock());
@@ -110,13 +107,13 @@ TEST(Mutex, test_rwmutex)
         m.writer().unlock();
         EXPECT_FALSE(m.writer().is_lock());
     };
-    co_sched.RunUntilNoTask();
+    WaitUntilNoTask();
 
     // multi threads
     int *v1 = new int(0);
     int *v2 = new int(0);
 
-    go [=]()mutable {
+    go [&]()mutable {
         // write
         for (int i = 0; i < 10000; ++i)
         {
@@ -127,7 +124,7 @@ TEST(Mutex, test_rwmutex)
     };
 
     for (int i = 0; i < 100; ++i)
-        go [=]()mutable {
+        go [&]()mutable {
             // read
             for (int i = 0; i < 10000; ++i)
             {
@@ -135,10 +132,7 @@ TEST(Mutex, test_rwmutex)
                 EXPECT_EQ(*v1, *v2);
             }
         };
-    boost::thread_group tg;
-    for (int i = 0; i < 4; ++i)
-        tg.create_thread([]{co_sched.RunUntilNoTask();});
-    tg.join_all();
+    WaitUntilNoTask();
     EXPECT_EQ(*v1, 10000);
     EXPECT_EQ(*v2, 10000);
 }
