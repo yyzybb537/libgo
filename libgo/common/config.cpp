@@ -13,6 +13,8 @@
 
 namespace co {
 
+__attribute__((weak)) extern void initHook();
+
 static int staticInitialize()
 {
     // scheduler
@@ -24,6 +26,8 @@ static int staticInitialize()
 
     // cls
     TaskRefInit(ClsMap);
+
+    initHook();
     return 0;
 }
 

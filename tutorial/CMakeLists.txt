@@ -37,6 +37,10 @@ endif()
 
 include(${PROJECT_SOURCE_DIR}/boost.cmake)
 
+#find_package(CURL REQUIRED)
+#target_link_libraries(main PRIVATE ${CURL_LIBRARIES})
+#include_directories(main PRIVATE ${CURL_INCLUDE_DIRS})
+
 include_directories(${PROJECT_SOURCE_DIR}/..)
 include_directories(${PROJECT_SOURCE_DIR}/../libgo)
 link_directories(${PROJECT_SOURCE_DIR}/../build)

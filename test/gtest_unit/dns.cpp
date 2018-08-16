@@ -6,6 +6,10 @@
 #include <netdb.h>
 #include <resolv.h>
 #include <arpa/inet.h>
+#include <poll.h>
+#define TEST_MIN_THREAD 1
+#define TEST_MAX_THREAD 1
+#include "gtest_exit.h"
 using namespace std;
 using namespace co;
 
@@ -185,11 +189,12 @@ void test_gethostbyname_r4()
 
 void printDebug() {
     printf("----------------- ---------------- -------------------\n");
-    printf("DebugInfo:%s\n", co::CoDebugger::getInstance().GetAllInfo().c_str());
+//    printf("DebugInfo:%s\n", co::CoDebugger::getInstance().GetAllInfo().c_str());
 }
 
 TEST(testDns, testDns)
 {
+    co::CoroutineOptions::getInstance().debug = dbg_hook | dbg_yield;
 
     int yield_c = 0;
 
@@ -202,7 +207,7 @@ TEST(testDns, testDns)
 //    go []{
 //        auto rs = __res_state();
 //    };
-//    co_sched.RunUntilNoTask();
+//    WaitUntilNoTask();
 //    return ;
 
     go test_gethostbyname2;
@@ -210,7 +215,7 @@ TEST(testDns, testDns)
     go test_gethostbyname_r2;
     go test_gethostbyname_r3;
     go test_gethostbyname_r4;
-    co_sched.RunUntilNoTask();
+    WaitUntilNoTask();
 //    printDebug();
 
     getXXbyYY funcs1[] = {getXXbyYY_1, getXXbyYY_2, getXXbyYY_3};
@@ -225,7 +230,7 @@ TEST(testDns, testDns)
                 test_getXXbyYY(i, yield_c); 
             };
         }
-        co_sched.RunUntilNoTask();
+        WaitUntilNoTask();
         EXPECT_TRUE(yield_c > 0);
         printf("yield count=%d\n", yield_c);
         //printDebug();
@@ -243,7 +248,7 @@ TEST(testDns, testDns)
                 test_getXXbyYY_r(i, yield_c); 
             };
         }
-        co_sched.RunUntilNoTask();
+        WaitUntilNoTask();
         EXPECT_TRUE(yield_c > 0);
         printf("yield count=%d\n", yield_c);
         //printDebug();
