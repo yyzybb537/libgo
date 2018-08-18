@@ -20,18 +20,23 @@ TEST(AsyncPool, AsyncPool)
     std::atomic<int> val{0};
 
     AsyncCoroutinePool::CallbackPoint cbPoint;
-    cbPoint.SetNotifyFunc([&]{ printf("notified!\n"); ++val; });
+    cbPoint.SetNotifyFunc([&]{ 
+//            printf("notified!\n");
+            ++val;
+            });
     gPool->AddCallbackPoint(&cbPoint);
 
     uint64_t threadId = NativeThreadID();
-    gPool->Post([&]{ 
-                ++val; 
-                printf("run task\n");
-            }, [&]{ 
-                ++val; 
-                EXPECT_EQ(threadId, NativeThreadID());
-                printf("run callback\n");
-            });
-    while (val != 3)
+    const int c = 100;
+    for (int i = 0; i < c; ++i)
+        gPool->Post([&]{ 
+                    ++val; 
+//                    printf("run task\n");
+                }, [&]{ 
+                    ++val; 
+                    EXPECT_EQ(threadId, NativeThreadID());
+//                    printf("run callback\n");
+                });
+    while (val != c * 3)
         cbPoint.Run();
 }
