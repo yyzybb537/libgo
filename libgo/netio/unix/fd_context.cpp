@@ -4,7 +4,12 @@
 #include "hook.h"
 #include <fcntl.h>
 #include <poll.h>
+#if defined(LIBGO_SYS_Linux)
 #include <sys/epoll.h>
+#elif defined(LIBGO_SYS_FreeBSD)
+#include <sys/event.h>
+#include <sys/time.h>
+#endif
 
 namespace co {
 
@@ -16,34 +21,6 @@ const char* FdType2Str(eFdType fdType)
         default:
             return "Unkown FdType";
     }
-}
-
-uint32_t PollEvent2EpollEvent(short int pollEvent)
-{
-    uint32_t epollEvent = 0;
-    if (pollEvent & POLLIN)
-        epollEvent |= EPOLLIN;
-    if (pollEvent & POLLOUT)
-        epollEvent |= EPOLLOUT;
-    if (pollEvent & POLLERR)
-        epollEvent |= EPOLLERR;
-    if (pollEvent & POLLHUP)
-        epollEvent |= EPOLLHUP;
-    return epollEvent;
-}
-
-short int EpollEvent2PollEvent(uint32_t epollEvent)
-{
-    short int pollEvent = 0;
-    if (epollEvent & EPOLLIN)
-        pollEvent |= POLLIN;
-    if (epollEvent & EPOLLOUT)
-        pollEvent |= POLLOUT;
-    if (epollEvent & EPOLLERR)
-        pollEvent |= POLLERR;
-    if (epollEvent & EPOLLHUP)
-        pollEvent |= POLLHUP;
-    return pollEvent;
 }
 
 FdContext::FdContext(int fd, eFdType fdType, bool isNonBlocking, SocketAttribute sockAttr)
@@ -66,20 +43,6 @@ bool FdContext::IsSocket()
 bool FdContext::IsTcpSocket()
 {
     if (!IsSocket()) return false;
-
-    if (!sockAttr_.Initialized()) {
-        socklen_t optlen = 4;
-        CallWithoutINTR<int>(getsockopt, fd_, SOL_SOCKET, SO_DOMAIN,
-                (char*)&sockAttr_.domain_, &optlen);
-
-        optlen = 4;
-        CallWithoutINTR<int>(getsockopt, fd_, SOL_SOCKET, SO_TYPE,
-                (char*)&sockAttr_.type_, &optlen);
-
-//        optlen = 4;
-//        CallWithoutINTR<int>(getsockopt, fd_, SOL_SOCKET, SO_PROTOCOL,
-//                (char*)&sockAttr_.protocol_, &optlen);
-    }
 
     return sockAttr_.type_ == SOCK_STREAM &&
         (sockAttr_.domain_ == AF_INET || sockAttr_.domain_ == AF_INET6);

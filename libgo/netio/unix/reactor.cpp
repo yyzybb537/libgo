@@ -1,9 +1,10 @@
 #include "reactor.h"
 #include "fd_context.h"
 #include "hook_helper.h"
-#include <sys/epoll.h>
 #include <poll.h>
 #include <thread>
+#include "epoll_reactor.h"
+#include "kqueue_reactor.h"
 
 namespace co {
 
@@ -21,17 +22,23 @@ int Reactor::InitializeReactorCount(uint8_t n)
     if (!sReactors_.empty()) return 0;
     sReactors_.reserve(n);
     for (uint8_t i = 0; i < n; i++) {
-        sReactors_.push_back(new Reactor);
+#if defined(LIBGO_SYS_Linux)
+        sReactors_.push_back(new EpollReactor);
+#elif defined(LIBGO_SYS_FreeBSD)
+        sReactors_.push_back(new KqueueReactor);
+#endif
     }
     return 0;
 }
 
 Reactor::Reactor()
 {
-    epfd_ = epoll_create(1024);
+}
 
+void Reactor::InitLoopThread()
+{
     std::thread thr([this]{
-                DebugPrint(dbg_thread, "Start epoll thread id: %lu", NativeThreadID());
+                DebugPrint(dbg_thread, "Start reactor(epoll/kqueue) thread id: %lu", NativeThreadID());
                 for (;;) this->Run();
             });
     thr.detach();
@@ -42,23 +49,7 @@ bool Reactor::Add(int fd, short int pollEvent, Entry const& entry)
     FdContextPtr ctx = HookHelper::getInstance().GetFdContext(fd);
     if (!ctx) return false;
 
-    return ctx->Add(epfd_, pollEvent, entry);
-}
-
-void Reactor::Run()
-{
-    const int cEvent = 1024;
-    struct epoll_event evs[cEvent];
-    int n = CallWithoutINTR<int>(::epoll_wait, epfd_, evs, cEvent, 10);
-    for (int i = 0; i < n; ++i) {
-        struct epoll_event & ev = evs[i];
-        int fd = ev.data.fd;
-        FdContextPtr ctx = HookHelper::getInstance().GetFdContext(fd);
-        if (!ctx)
-            continue;
-
-        ctx->Trigger(epfd_, EpollEvent2PollEvent(ev.events));
-    }
+    return ctx->Add(this, pollEvent, entry);
 }
 
 } // namespace co

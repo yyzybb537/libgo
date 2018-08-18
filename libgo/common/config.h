@@ -25,10 +25,19 @@
 
 #define LIBGO_DEBUG 0
 
+#if defined(__APPLE__) || defined(__FreeBSD__)
+# define LIBGO_SYS_FreeBSD 1
+# define LIBGO_SYS_Unix 1
+#elif defined(__linux__)
+# define LIBGO_SYS_Linux 1
+# define LIBGO_SYS_Unix 1
+#elif defined(WIN32)
+# define LIBGO_SYS_Windows 1
+#endif
+
 // VS2013不支持thread_local
 #if defined(_MSC_VER) && _MSC_VER < 1900
 # define thread_local __declspec(thread)
-# define UNSUPPORT_STEADY_TIME
 #endif
 
 #if defined(__GNUC__) && (__GNUC__ > 3 ||(__GNUC__ == 3 && __GNUC_MINOR__ >= 1))
@@ -40,7 +49,13 @@
 #define LIKELY(x) __builtin_expect(!!(x), 1)
 #define UNLIKELY(x) __builtin_expect(!!(x), 0)
 
-#if __linux__
+#if defined(LIBGO_SYS_Linux)
+# define ATTRIBUTE_WEAK __attribute__((weak))
+#elif defined(LIBGO_SYS_FreeBSD)
+# define ATTRIBUTE_WEAK __attribute__((weak_import))
+#endif
+
+#if defined(LIBGO_SYS_Unix)
 #include <unistd.h>
 #include <sys/types.h>
 #endif
@@ -76,12 +91,6 @@ static const uint64_t dbg_channel           = 0x1 << 16;
 static const uint64_t dbg_thread            = 0x1 << 17;
 static const uint64_t dbg_sys_max           = dbg_debugger;
 ///-------------------
-
-#if __linux__
-	typedef std::chrono::nanoseconds MininumTimeDurationType;
-#else
-	typedef std::chrono::microseconds MininumTimeDurationType;
-#endif
 
 // 协程中抛出未捕获异常时的处理方式
 enum class eCoExHandle : uint8_t
@@ -151,7 +160,7 @@ int GetCurrentThreadID();
 std::string GetCurrentTime();
 const char* BaseFile(const char* file);
 const char* PollEvent2Str(short int event);
-uint64_t NativeThreadID();
+unsigned long NativeThreadID();
 
 class ErrnoStore {
 public:

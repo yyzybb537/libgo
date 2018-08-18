@@ -2,7 +2,6 @@
 #include <dlfcn.h>
 #include <fcntl.h>
 #include <sys/select.h>
-#include <sys/epoll.h>
 #include <sys/socket.h>
 #include <sys/stat.h>
 #include <sys/ioctl.h>
@@ -18,6 +17,12 @@
 #include "hook_helper.h"
 #include "../../sync/co_mutex.h"
 #include "../../cls/co_local_storage.h"
+#if defined(LIBGO_SYS_Linux)
+# include <sys/epoll.h>
+#elif defined(LIBGO_SYS_FreeBSD)
+# include <sys/event.h>
+# include <sys/time.h>
+#endif
 using namespace co;
 
 // 设置阻塞式connect超时时间(-1无限时)
@@ -35,6 +40,7 @@ namespace co {
         return true;
     }
 
+#if defined(LIBGO_SYS_Linux)
     int libgo_epoll_wait(int epfd, struct epoll_event *events, int maxevents, int timeout)
     {
         Task* tk = Processer::GetCurrentTask();
@@ -62,6 +68,8 @@ namespace co {
 
         return epoll_wait_f(epfd, events, maxevents, 0);
     }
+#elif defined(LIBGO_SYS_FreeBSD)
+#endif
 
     inline int libgo_poll(struct pollfd *fds, nfds_t nfds, int timeout, bool nonblocking_check)
     {
@@ -202,7 +210,6 @@ retry_intr_fn:
 extern "C" {
 
 pipe_t pipe_f = NULL;
-pipe2_t pipe2_f = NULL;
 socket_t socket_f = NULL;
 socketpair_t socketpair_f = NULL;
 connect_t connect_f = NULL;
@@ -231,10 +238,14 @@ dup_t dup_f = NULL;
 dup2_t dup2_f = NULL;
 dup3_t dup3_f = NULL;
 fclose_t fclose_f = NULL;
+#if defined(LIBGO_SYS_Linux)
+pipe2_t pipe2_f = NULL;
 gethostbyname_r_t gethostbyname_r_f = NULL;
 gethostbyname2_r_t gethostbyname2_r_f = NULL;
 gethostbyaddr_r_t gethostbyaddr_r_f = NULL;
 epoll_wait_t epoll_wait_f = NULL;
+#elif defined(LIBGO_SYS_FreeBSD)
+#endif
 
 int pipe(int pipefd[2])
 {
@@ -250,6 +261,7 @@ int pipe(int pipefd[2])
     }
     return res;
 }
+#if defined(LIBGO_SYS_Linux)
 int pipe2(int pipefd[2], int flags)
 {
     if (!socket_f) initHook();
@@ -264,6 +276,7 @@ int pipe2(int pipefd[2], int flags)
     }
     return res;
 }
+#endif
 int socket(int domain, int type, int protocol)
 {
     if (!socket_f) initHook();
@@ -357,9 +370,18 @@ int connect(int fd, const struct sockaddr *addr, socklen_t addrlen)
 int accept(int sockfd, struct sockaddr *addr, socklen_t *addrlen)
 {
     if (!accept_f) initHook();
+
+    FdContextPtr ctx = HookHelper::getInstance().GetFdContext(sockfd);
+    if (!ctx) {
+        Task* tk = Processer::GetCurrentTask();
+        DebugPrint(dbg_hook, "task(%s) hook accept(fd=%d) no fd_context.", tk->DebugInfo(), sockfd);
+        errno = EBADF;
+        return -1;
+    }
+
     int sock = read_write_mode(sockfd, accept_f, "accept", POLLIN, SO_RCVTIMEO, 0, addr, addrlen);
     if (sock >= 0) {
-        HookHelper::getInstance().OnCreate(sock, eFdType::eSocket, false, SocketAttribute());
+        HookHelper::getInstance().OnCreate(sock, eFdType::eSocket, false, ctx->GetSocketAttribute());
     }
     return sock;
 }
@@ -470,18 +492,8 @@ int __poll(struct pollfd *fds, nfds_t nfds, int timeout)
     return libgo_poll(fds, nfds, timeout, true);
 }
 
-// --- This is invalid hook when gcc-5.4.
-//res_state __res_state(void)
-//{
-//    struct __res_state& s = CLS(struct __res_state);
-//    Task* tk = Processer::GetCurrentTask();
-//    DebugPrint(dbg_hook, "task(%s) hook __res_state() return:%p. %s coroutine.",
-//            tk->DebugInfo(),
-//            &s,
-//            Processer::IsCoroutine() ? "In" : "Not in");
-//    return &s;
-//}
 
+#if defined(LIBGO_SYS_Linux)
 struct hostent* gethostbyname(const char* name)
 {
     Task* tk = Processer::GetCurrentTask();
@@ -632,6 +644,7 @@ int gethostbyaddr_r(const void *addr, socklen_t len, int type,
     std::unique_lock<CoMutex> lock(g_dns_mtx);
     return gethostbyaddr_r_f(addr, len, type, ret, buf, buflen, result, h_errnop);
 }
+#endif
 
 // ---------------------------------------------------------------------------
 
@@ -843,9 +856,13 @@ int fcntl(int __fd, int __cmd, ...)
         // int
         case F_SETFD:
         case F_SETOWN:
+
+#if defined(LIBGO_SYS_Linux)
         case F_SETSIG:
         case F_SETLEASE:
         case F_NOTIFY:
+#endif
+
 #if defined(F_SETPIPE_SZ)
         case F_SETPIPE_SZ:
 #endif
@@ -880,6 +897,7 @@ int fcntl(int __fd, int __cmd, ...)
             }
 
         // struct f_owner_ex*
+#if defined(LIBGO_SYS_Linux)
         case F_GETOWN_EX:
         case F_SETOWN_EX:
             {
@@ -887,6 +905,7 @@ int fcntl(int __fd, int __cmd, ...)
                 va_end(va);
                 return fcntl_f(__fd, __cmd, arg);
             }
+#endif
 
         // void
         case F_GETFL:
@@ -898,8 +917,12 @@ int fcntl(int __fd, int __cmd, ...)
         // void
         case F_GETFD:
         case F_GETOWN:
+
+#if defined(LIBGO_SYS_Linux)
         case F_GETSIG:
         case F_GETLEASE:
+#endif
+
 #if defined(F_GETPIPE_SZ)
         case F_GETPIPE_SZ:
 #endif
@@ -1005,6 +1028,7 @@ int fclose(FILE* fp)
     return fclose_f(fp);
 }
 
+#if defined(LIBGO_SYS_Linux)
 /*
 int epoll_wait(int epfd, struct epoll_event *events, int maxevents, int timeout)
 {
@@ -1012,63 +1036,69 @@ int epoll_wait(int epfd, struct epoll_event *events, int maxevents, int timeout)
     return libgo_epoll_wait(epfd, events, maxevents, timeout);
 }
 */
+#elif defined(LIBGO_SYS_FreeBSD)
+#endif
 
-__attribute__ ((weak)) extern int __pipe(int pipefd[2]);
-__attribute__ ((weak)) extern int __pipe2(int pipefd[2], int flags);
-__attribute__ ((weak)) extern int __socket(int domain, int type, int protocol);
-__attribute__ ((weak)) extern int __socketpair(int domain, int type, int protocol, int sv[2]);
-__attribute__ ((weak)) extern int __connect(int fd, const struct sockaddr *addr, socklen_t addrlen);
-__attribute__ ((weak)) extern ssize_t __read(int fd, void *buf, size_t count);
-__attribute__ ((weak)) extern ssize_t __readv(int fd, const struct iovec *iov, int iovcnt);
-__attribute__ ((weak)) extern ssize_t __recv(int sockfd, void *buf, size_t len, int flags);
-__attribute__ ((weak)) extern ssize_t __recvfrom(int sockfd, void *buf, size_t len, int flags,
+#if defined(LIBGO_SYS_Linux)
+ATTRIBUTE_WEAK extern int __pipe(int pipefd[2]);
+ATTRIBUTE_WEAK extern int __pipe2(int pipefd[2], int flags);
+ATTRIBUTE_WEAK extern int __socket(int domain, int type, int protocol);
+ATTRIBUTE_WEAK extern int __socketpair(int domain, int type, int protocol, int sv[2]);
+ATTRIBUTE_WEAK extern int __connect(int fd, const struct sockaddr *addr, socklen_t addrlen);
+ATTRIBUTE_WEAK extern ssize_t __read(int fd, void *buf, size_t count);
+ATTRIBUTE_WEAK extern ssize_t __readv(int fd, const struct iovec *iov, int iovcnt);
+ATTRIBUTE_WEAK extern ssize_t __recv(int sockfd, void *buf, size_t len, int flags);
+ATTRIBUTE_WEAK extern ssize_t __recvfrom(int sockfd, void *buf, size_t len, int flags,
         struct sockaddr *src_addr, socklen_t *addrlen);
-__attribute__ ((weak)) extern ssize_t __recvmsg(int sockfd, struct msghdr *msg, int flags);
-__attribute__ ((weak)) extern ssize_t __write(int fd, const void *buf, size_t count);
-__attribute__ ((weak)) extern ssize_t __writev(int fd, const struct iovec *iov, int iovcnt);
-__attribute__ ((weak)) extern ssize_t __send(int sockfd, const void *buf, size_t len, int flags);
-__attribute__ ((weak)) extern ssize_t __sendto(int sockfd, const void *buf, size_t len, int flags,
+ATTRIBUTE_WEAK extern ssize_t __recvmsg(int sockfd, struct msghdr *msg, int flags);
+ATTRIBUTE_WEAK extern ssize_t __write(int fd, const void *buf, size_t count);
+ATTRIBUTE_WEAK extern ssize_t __writev(int fd, const struct iovec *iov, int iovcnt);
+ATTRIBUTE_WEAK extern ssize_t __send(int sockfd, const void *buf, size_t len, int flags);
+ATTRIBUTE_WEAK extern ssize_t __sendto(int sockfd, const void *buf, size_t len, int flags,
         const struct sockaddr *dest_addr, socklen_t addrlen);
-__attribute__ ((weak)) extern ssize_t __sendmsg(int sockfd, const struct msghdr *msg, int flags);
-__attribute__ ((weak)) extern int __libc_accept(int sockfd, struct sockaddr *addr, socklen_t *addrlen);
-__attribute__ ((weak)) extern int __libc_poll(struct pollfd *fds, nfds_t nfds, int timeout);
-__attribute__ ((weak)) extern int __select(int nfds, fd_set *readfds, fd_set *writefds,
+ATTRIBUTE_WEAK extern ssize_t __sendmsg(int sockfd, const struct msghdr *msg, int flags);
+ATTRIBUTE_WEAK extern int __libc_accept(int sockfd, struct sockaddr *addr, socklen_t *addrlen);
+ATTRIBUTE_WEAK extern int __libc_poll(struct pollfd *fds, nfds_t nfds, int timeout);
+ATTRIBUTE_WEAK extern int __select(int nfds, fd_set *readfds, fd_set *writefds,
                           fd_set *exceptfds, struct timeval *timeout);
-__attribute__ ((weak)) extern unsigned int __sleep(unsigned int seconds);
-__attribute__ ((weak)) extern int __nanosleep(const struct timespec *req, struct timespec *rem);
-__attribute__ ((weak)) extern int __close(int);
-__attribute__ ((weak)) extern int __fcntl(int __fd, int __cmd, ...);
-__attribute__ ((weak)) extern int __ioctl(int fd, unsigned long int request, ...);
-__attribute__ ((weak)) extern int __getsockopt(int sockfd, int level, int optname,
+ATTRIBUTE_WEAK extern unsigned int __sleep(unsigned int seconds);
+ATTRIBUTE_WEAK extern int __nanosleep(const struct timespec *req, struct timespec *rem);
+ATTRIBUTE_WEAK extern int __close(int);
+ATTRIBUTE_WEAK extern int __fcntl(int __fd, int __cmd, ...);
+ATTRIBUTE_WEAK extern int __ioctl(int fd, unsigned long int request, ...);
+ATTRIBUTE_WEAK extern int __getsockopt(int sockfd, int level, int optname,
         void *optval, socklen_t *optlen);
-__attribute__ ((weak)) extern int __setsockopt(int sockfd, int level, int optname,
+ATTRIBUTE_WEAK extern int __setsockopt(int sockfd, int level, int optname,
         const void *optval, socklen_t optlen);
-__attribute__ ((weak)) extern int __dup(int);
-__attribute__ ((weak)) extern int __dup2(int, int);
-__attribute__ ((weak)) extern int __dup3(int, int, int);
-__attribute__ ((weak)) extern int __usleep(useconds_t usec);
-__attribute__ ((weak)) extern int __new_fclose(FILE *fp);
-__attribute__ ((weak)) extern int __gethostbyname_r(const char *__restrict __name,
+ATTRIBUTE_WEAK extern int __dup(int);
+ATTRIBUTE_WEAK extern int __dup2(int, int);
+ATTRIBUTE_WEAK extern int __dup3(int, int, int);
+ATTRIBUTE_WEAK extern int __usleep(useconds_t usec);
+ATTRIBUTE_WEAK extern int __new_fclose(FILE *fp);
+#if defined(LIBGO_SYS_Linux)
+ATTRIBUTE_WEAK extern int __gethostbyname_r(const char *__restrict __name,
 			    struct hostent *__restrict __result_buf,
 			    char *__restrict __buf, size_t __buflen,
 			    struct hostent **__restrict __result,
 			    int *__restrict __h_errnop);
-__attribute__ ((weak)) extern int __gethostbyname2_r(const char *name, int af,
+ATTRIBUTE_WEAK extern int __gethostbyname2_r(const char *name, int af,
         struct hostent *ret, char *buf, size_t buflen,
         struct hostent **result, int *h_errnop);
-__attribute__ ((weak)) extern int __gethostbyaddr_r(const void *addr, socklen_t len, int type,
+ATTRIBUTE_WEAK extern int __gethostbyaddr_r(const void *addr, socklen_t len, int type,
         struct hostent *ret, char *buf, size_t buflen,
         struct hostent **result, int *h_errnop);
-__attribute__ ((weak)) extern int __epoll_wait_nocancel(int epfd, struct epoll_event *events,
+ATTRIBUTE_WEAK extern int __epoll_wait_nocancel(int epfd, struct epoll_event *events,
         int maxevents, int timeout);
+#elif defined(LIBGO_SYS_FreeBSD)
+#endif
 
 // 某些版本libc.a中没有__usleep.
-__attribute__((weak))
-int __usleep(useconds_t usec)
+ATTRIBUTE_WEAK int __usleep(useconds_t usec)
 {
     timespec req = {usec / 1000000, usec * 1000};
     return __nanosleep(&req, nullptr);
 }
+#endif
 
 } // extern "C"
 
@@ -1080,7 +1110,6 @@ static int doInitHook()
     connect_f = (connect_t)dlsym(RTLD_NEXT, "connect");
     if (connect_f) {
         pipe_f = (pipe_t)dlsym(RTLD_NEXT, "pipe");
-        pipe2_f = (pipe2_t)dlsym(RTLD_NEXT, "pipe2");
         socket_f = (socket_t)dlsym(RTLD_NEXT, "socket");
         socketpair_f = (socketpair_t)dlsym(RTLD_NEXT, "socketpair");
         connect_f = (connect_t)dlsym(RTLD_NEXT, "connect");
@@ -1109,14 +1138,18 @@ static int doInitHook()
         dup2_f = (dup2_t)dlsym(RTLD_NEXT, "dup2");
         dup3_f = (dup3_t)dlsym(RTLD_NEXT, "dup3");
         fclose_f = (fclose_t)dlsym(RTLD_NEXT, "fclose");
+#if defined(LIBGO_SYS_Linux)
+        pipe2_f = (pipe2_t)dlsym(RTLD_NEXT, "pipe2");
         gethostbyname_r_f = (gethostbyname_r_t)dlsym(RTLD_NEXT, "gethostbyname_r");
         gethostbyname2_r_f = (gethostbyname2_r_t)dlsym(RTLD_NEXT, "gethostbyname2_r");
         gethostbyaddr_r_f = (gethostbyaddr_r_t)dlsym(RTLD_NEXT, "gethostbyaddr_r");
         epoll_wait_f = (epoll_wait_t)dlsym(RTLD_NEXT, "epoll_wait");
+#elif defined(LIBGO_SYS_FreeBSD)
+#endif
     } else {
+#if defined(LIBGO_SYS_Linux)
         pipe_f = &__pipe;
         printf("use static hook. pipe_f=%p\n", (void*)pipe_f);
-        pipe2_f = &__pipe2;
         socket_f = &__socket;
         socketpair_f = &__socketpair;
         connect_f = &__connect;
@@ -1145,18 +1178,30 @@ static int doInitHook()
         dup2_f = &__dup2;
         dup3_f = &__dup3;
         fclose_f = &__new_fclose;
+#if defined(LIBGO_SYS_Linux)
+        pipe2_f = &__pipe2;
         gethostbyname_r_f = &__gethostbyname_r;
         gethostbyname2_r_f = &__gethostbyname2_r;
         gethostbyaddr_r_f = &__gethostbyaddr_r;
         epoll_wait_f = &__epoll_wait_nocancel;
+#elif defined(LIBGO_SYS_FreeBSD)
+#endif
+#endif
     }
 
-    if (!pipe_f || !pipe2_f || !socket_f || !socketpair_f ||
+    if (!pipe_f || !socket_f || !socketpair_f ||
             !connect_f || !read_f || !write_f || !readv_f || !writev_f || !send_f
             || !sendto_f || !sendmsg_f || !accept_f || !poll_f || !select_f
             || !sleep_f|| !usleep_f || !nanosleep_f || !close_f || !fcntl_f || !setsockopt_f
-            || !getsockopt_f || !dup_f || !dup2_f || !fclose_f || !gethostbyname_r_f
-            || !gethostbyname2_r_f || !gethostbyaddr_r_f || !epoll_wait_f
+            || !getsockopt_f || !dup_f || !dup2_f || !fclose_f
+#if defined(LIBGO_SYS_Linux)
+            || !pipe2_f
+            || !gethostbyname_r_f
+            || !gethostbyname2_r_f
+            || !gethostbyaddr_r_f
+            || !epoll_wait_f
+#elif defined(LIBGO_SYS_FreeBSD)
+#endif
             // 老版本linux中没有dup3, 无需校验
             // || !dup3_f
             )

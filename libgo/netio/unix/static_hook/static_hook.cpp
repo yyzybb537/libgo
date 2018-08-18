@@ -1,9 +1,15 @@
+#include "../../../common/config.h"
 #include <sys/socket.h>
 #include <sys/types.h>
 #include <sys/poll.h>
-#include <sys/epoll.h>
+#include <sys/time.h>
 #include <stdio.h>
 #include <errno.h>
+#if defined(LIBGO_SYS_Linux)
+# include <sys/epoll.h>
+#elif defined(LIBGO_SYS_FreeBSD)
+# include <sys/event.h>
+#endif
 
 extern "C" {
 
@@ -42,6 +48,8 @@ extern int __dup2(int, int);
 extern int __dup3(int, int, int);
 extern int __usleep(useconds_t usec);
 extern int __new_fclose(FILE *fp);
+
+#if defined(LIBGO_SYS_Linux)
 extern int __gethostbyname_r(const char *__restrict __name,
 			    struct hostent *__restrict __result_buf,
 			    char *__restrict __buf, size_t __buflen,
@@ -55,6 +63,8 @@ extern int __gethostbyaddr_r(const void *addr, socklen_t len, int type,
         struct hostent **result, int *h_errnop);
 extern int __epoll_wait_nocancel(int epfd, struct epoll_event *events,
         int maxevents, int timeout);
+#elif defined(LIBGO_SYS_FreeBSD)
+#endif
 }
 
 namespace co {
@@ -91,10 +101,13 @@ void __initStaticHook() {
     ignores += reinterpret_cast<long>(&__dup2);
     ignores += reinterpret_cast<long>(&__dup3);
     ignores += reinterpret_cast<long>(&__new_fclose);
+#if defined(LIBGO_SYS_Linux)
     ignores += reinterpret_cast<long>(&__gethostbyname_r);
     ignores += reinterpret_cast<long>(&__gethostbyname2_r);
     ignores += reinterpret_cast<long>(&__gethostbyaddr_r);
     ignores += reinterpret_cast<long>(&__epoll_wait_nocancel);
+#elif defined(LIBGO_SYS_FreeBSD)
+#endif
     errno = (int)ignores;
 }
 } // namespace co

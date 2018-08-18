@@ -4,6 +4,7 @@
 
 namespace co {
 
+class Reactor;
 class ReactorElement
 {
 public:
@@ -29,9 +30,9 @@ public:
 
     explicit ReactorElement(int fd);
 
-    bool Add(int epfd, short int pollEvent, Entry const& entry);
+    bool Add(Reactor * reactor, short int pollEvent, Entry const& entry);
 
-    void Trigger(int epfd, short int pollEvent);
+    void Trigger(Reactor * reactor, short int pollEvent);
 
 protected:
     void OnClose();

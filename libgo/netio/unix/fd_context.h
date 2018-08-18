@@ -25,10 +25,6 @@ struct SocketAttribute {
     bool Initialized() const { return domain_ != -1; }
 };
 
-uint32_t PollEvent2EpollEvent(short int pollEvent);
-
-short int EpollEvent2PollEvent(uint32_t epollEvent);
-
 template <typename R, typename F, typename ... Args>
 static R CallWithoutINTR(F f, Args && ... args)
 {
@@ -55,6 +51,8 @@ public:
     int GetTcpConnectTimeout();
 
     long GetSocketTimeoutMicroSeconds(int timeoutType);
+
+    SocketAttribute GetSocketAttribute() const { return sockAttr_; }
 
 public:
     void OnSetNonBlocking(bool isNonBlocking);

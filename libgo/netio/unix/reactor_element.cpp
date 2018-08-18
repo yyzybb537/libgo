@@ -1,21 +1,10 @@
 #include "reactor_element.h"
 #include <poll.h>
 #include <algorithm>
-#include <sys/epoll.h>
 #include "fd_context.h"
+#include "reactor.h"
 
 namespace co {
-
-const char* EpollCtlOp2Str(int op)
-{
-    switch (op) {
-    LIBGO_E2S_DEFINE(EPOLL_CTL_ADD);
-    LIBGO_E2S_DEFINE(EPOLL_CTL_MOD);
-    LIBGO_E2S_DEFINE(EPOLL_CTL_DEL);
-    default:
-        return "None";
-    }
-}
 
 ReactorElement::ReactorElement(int fd) : fd_(fd)
 {
@@ -23,40 +12,35 @@ ReactorElement::ReactorElement(int fd) : fd_(fd)
 
 void ReactorElement::OnClose()
 {
-    Trigger(-1, POLLNVAL);
+    Trigger(nullptr, POLLNVAL);
 }
 
-bool ReactorElement::Add(int epfd, short int pollEvent, Entry const& entry)
+bool ReactorElement::Add(Reactor * reactor, short int pollEvent, Entry const& entry)
 {
     std::unique_lock<std::mutex> lock(mtx_);
     EntryList & entryList = SelectList(pollEvent);
     CheckExpire(entryList);
     entryList.push_back(entry);
-    short int event = event_ | (pollEvent & (POLLIN | POLLOUT));
 
-    // TODO: 测试poll不监听任何事件时, 是否可以默认监听到POLLERR.
+    short int addEvent = pollEvent & (POLLIN | POLLOUT);
+    if (addEvent == 0)
+        addEvent |= POLLERR;
 
-    if (event != event_) {
-        struct epoll_event ev;
-        ev.events = PollEvent2EpollEvent(event);
-        ev.data.fd = fd_;
-        int op = event_ == 0 ? EPOLL_CTL_ADD : EPOLL_CTL_MOD;
-        int res = CallWithoutINTR<int>(::epoll_ctl, epfd, op, fd_, &ev);
-        DebugPrint(dbg_ioblock, "Reactor::Add fd = %d, pollEvent = %s, modEvent=(%s) -> (%s), "
-                "epoll_ctl op = %s, ret = %d, errno = %d",
-                fd_, PollEvent2Str(pollEvent), PollEvent2Str(event_), PollEvent2Str(event),
-                EpollCtlOp2Str(op), res, errno);
-        if (res == -1 && errno != EEXIST) {
+    short int promiseEvent = event_ | addEvent;
+    addEvent = promiseEvent & ~event_; // 计算event真实的差异
+
+    if (promiseEvent != event_) {
+        if (!reactor->AddEvent(fd_, addEvent, promiseEvent)) {
             // add error.
             Rollback(entryList, entry);
             return false;
         }
-        event_ = event;
+        event_ = promiseEvent;
         return true;
     }
 
-    DebugPrint(dbg_ioblock, "Reactor::Add fd = %d, pollEvent = %s, modEvent=(%s) -> (%s), needn't epoll_ctl",
-            fd_, PollEvent2Str(pollEvent), PollEvent2Str(event_), PollEvent2Str(event));
+    DebugPrint(dbg_ioblock, "Reactor::Add fd = %d, pollEvent = %s, event_ = %s, needn't epoll_ctl",
+            fd_, PollEvent2Str(pollEvent), PollEvent2Str(event_));
     return true;
 }
 
@@ -67,54 +51,56 @@ void ReactorElement::Rollback(EntryList & entryList, Entry const& entry)
         entryList.erase(itr);
 }
 
-void ReactorElement::Trigger(int epfd, short int pollEvent)
+void ReactorElement::Trigger(Reactor * reactor, short int pollEvent)
 {
     std::unique_lock<std::mutex> lock(mtx_);
 
     int triggerIn = 0, triggerOut = 0, triggerInOut = 0, triggerErr = 0;
 
-    short int check = POLLIN | POLLERR | POLLHUP | POLLNVAL;
+    short int errEvent = POLLERR | POLLHUP | POLLNVAL;
+    short int promiseEvent = 0;
+
+    short int check = POLLIN | errEvent;
     if (pollEvent & check) {
         triggerIn = in_.size();
         TriggerListWithoutLock(pollEvent & check, in_);
+    } else if (!in_.empty()) {
+        promiseEvent |= POLLIN;
     }
 
-    check = POLLOUT | POLLERR | POLLHUP | POLLNVAL;
+    check = POLLOUT | errEvent;
     if (pollEvent & check) {
         triggerOut = out_.size();
         TriggerListWithoutLock(pollEvent & check, out_);
+    } else if (!out_.empty()) {
+        promiseEvent |= POLLOUT;
     }
 
-    check = POLLIN | POLLOUT | POLLERR | POLLHUP | POLLNVAL;
+    check = POLLIN | POLLOUT | errEvent;
     if (pollEvent & check) {
         triggerInOut = inAndOut_.size();
         TriggerListWithoutLock(pollEvent & check, inAndOut_);
+    } else if (!inAndOut_.empty()) {
+        promiseEvent |= POLLIN|POLLOUT;
     }
 
-    check = POLLERR | POLLHUP | POLLNVAL;
+    check = errEvent;
     if (pollEvent & check) {
         triggerErr = err_.size();
         TriggerListWithoutLock(pollEvent & check, err_);
+    } else if (!err_.empty()) {
+        promiseEvent |= POLLERR;
     }
 
-    short int event = event_ & ~(pollEvent & (POLLIN | POLLOUT));
-    int res = 0;
-    int op = 0;
-    if (epfd != -1 && event != event_) {
-        op = event == 0 ? EPOLL_CTL_DEL : EPOLL_CTL_MOD;
-        struct epoll_event ev;
-        ev.events = PollEvent2EpollEvent(event);
-        ev.data.fd = fd_;
-        res = CallWithoutINTR<int>(::epoll_ctl, epfd, op, fd_, &ev);
+    short int delEvent = event_ & ~promiseEvent;
+    if (promiseEvent != event_) {
+        if (reactor && reactor->DelEvent(fd_, delEvent, promiseEvent))
+            event_ = promiseEvent;
+        return ;
     }
 
-    DebugPrint(dbg_ioblock, "%sReactorElement::Trigger epfd = %d, fd = %d, pollEvent = %s, modEvent=(%s) -> (%s), "
-            "trigger (in,out,inout,err) = (%d,%d,%d,%d), epoll_ctl op = %s, ret = %d, errno = %d",
-            epfd == -1 ? "Destruct " : "",
-            epfd, fd_, PollEvent2Str(pollEvent), PollEvent2Str(event_), PollEvent2Str(event),
-            triggerIn, triggerOut, triggerInOut, triggerErr,
-            EpollCtlOp2Str(op), res, errno);
-    event_ = event;
+    DebugPrint(dbg_ioblock, "Reactor::Del fd = %d, pollEvent = %s, event_ = %s, needn't epoll_ctl",
+            fd_, PollEvent2Str(pollEvent), PollEvent2Str(event_));
 }
 
 void ReactorElement::TriggerListWithoutLock(short int revent, EntryList & entryList)

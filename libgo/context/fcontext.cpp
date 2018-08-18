@@ -2,7 +2,7 @@
 #include <memory>
 #include <string.h>
 
-#if __linux__
+#if defined(LIBGO_SYS_Unix)
 #include <sys/mman.h>
 #endif
 
@@ -23,7 +23,7 @@ namespace co
         static int size = 0;
         return size;
     }
-#if __linux__
+#if defined(LIBGO_SYS_Unix)
     bool StackTraits::ProtectStack(void* stack, std::size_t size, int pageSize)
     {
         if (!pageSize) return false;
@@ -55,7 +55,7 @@ namespace co
                     stack, protect_page_addr, pageSize, getpagesize());
         }
     }
-#else //__linux__
+#else //defined(LIBGO_SYS_Unix)
     bool StackTraits::ProtectStack(void* stack, std::size_t size, int pageSize)
     {
         return false;
@@ -65,7 +65,7 @@ namespace co
     {
         return ;
     }
-#endif //__linux__
+#endif //defined(LIBGO_SYS_Unix)
 
 } //namespace co
 

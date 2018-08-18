@@ -9,8 +9,10 @@ extern "C" {
 typedef int (*pipe_t)(int pipefd[2]);
 extern pipe_t pipe_f;
 
+#if defined(LIBGO_SYS_Linux)
 typedef int (*pipe2_t)(int pipefd[2], int flags);
 extern pipe2_t pipe2_f;
+#endif 
 
 typedef int (*socket_t)(int domain, int type, int protocol);
 extern socket_t socket_f;
@@ -56,9 +58,12 @@ extern sendmsg_t sendmsg_f;
 typedef int(*poll_t)(struct pollfd *fds, nfds_t nfds, int timeout);
 extern poll_t poll_f;
 
+#if defined(LIBGO_SYS_Linux)
 typedef int (*epoll_wait_t)(int epfd, struct epoll_event *events,
         int maxevents, int timeout);
 extern epoll_wait_t epoll_wait_f;
+#elif defined(LIBGO_SYS_FreeBSD)
+#endif
 
 typedef int(*select_t)(int nfds, fd_set *readfds, fd_set *writefds,
         fd_set *exceptfds, struct timeval *timeout);
@@ -106,6 +111,7 @@ extern dup3_t dup3_f;
 typedef int (*fclose_t)(FILE *fp);
 extern fclose_t fclose_f;
 
+#if defined(LIBGO_SYS_Linux)
 // DNS by libcares
 // gethostent
 
@@ -129,6 +135,7 @@ typedef int (*gethostbyaddr_r_t) (const void *addr, socklen_t len, int type,
         struct hostent *ret, char *buf, size_t buflen,
         struct hostent **result, int *h_errnop);
 extern gethostbyaddr_r_t gethostbyaddr_r_f;
+#endif
 
 } //extern "C"
 
