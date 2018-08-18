@@ -98,7 +98,7 @@ public:
     std::map<SourceLocation, uint32_t> GetTasksInfo();
     std::vector<std::map<SourceLocation, uint32_t>> GetTasksStateInfo();
 
-#if __linux__
+#if defined(LIBGO_SYS_Linux)
     /// ------------ Linux -------------
     // 获取Fd统计信息
     std::string GetFdInfo();

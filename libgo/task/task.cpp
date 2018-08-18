@@ -109,7 +109,7 @@ Task::~Task()
 
 const char* Task::DebugInfo()
 {
-    if (this == nullptr) return "nil";
+    if (reinterpret_cast<void*>(this) == nullptr) return "nil";
 
     return TaskDebugInfo(this);
 }

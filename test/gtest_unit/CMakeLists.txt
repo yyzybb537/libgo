@@ -73,10 +73,12 @@ foreach(var ${SRC_LIST})
     #message("${TEST_LINK_FLAGS}")
 
     add_executable(${tgt}.t ${var})
-    target_link_libraries(${tgt}.t ${LINK_ARGS} rt)
     if (WIN32)
+        target_link_libraries(${tgt}.t ${LINK_ARGS} rt)
         set_target_properties(${tgt}.t PROPERTIES COMPILE_FLAGS "/wd4819 /wd4267")
         set_target_properties(${tgt}.t PROPERTIES INSTALL_RPATH ${PROJECT_SOURCE_DIR}/../../build)
+    elseif (UNIX)
+        target_link_libraries(${tgt}.t ${LINK_ARGS})
     endif()
 
     #add_executable(s_${tgt}.t ${var})

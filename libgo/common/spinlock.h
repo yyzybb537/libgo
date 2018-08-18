@@ -53,9 +53,9 @@ struct LFLock
     // PS: 这是一个可能没有内存一致性的接口, 使用的时候要小心cpu缓存不能及时刷新的问题.
     ALWAYS_INLINE bool is_lock()
     {
-#if defined(__linux__)
+#if defined(LIBGO_SYS_Linux)
         return flag._M_i;
-#elif defined(__APPLE__)
+#elif defined(LIBGO_SYS_FreeBSD)
         return flag.__a_;
 #endif
     }

@@ -3,7 +3,7 @@
 #include "../scheduler/processer.h"
 #include <string.h>
 #include <poll.h>
-#ifdef __linux__
+#if defined(LIBGO_SYS_Unix)
 #include <sys/time.h>
 #include <pthread.h>
 #endif
@@ -13,7 +13,9 @@
 
 namespace co {
 
-__attribute__((weak)) extern void initHook();
+#if defined(LIBGO_SYS_Linux)
+ATTRIBUTE_WEAK extern void initHook();
+#endif
 
 static int staticInitialize()
 {
@@ -27,7 +29,9 @@ static int staticInitialize()
     // cls
     TaskRefInit(ClsMap);
 
+#if defined(LIBGO_SYS_Linux)
     initHook();
+#endif
     return 0;
 }
 
@@ -59,7 +63,7 @@ const char* BaseFile(const char* file)
 
 int GetCurrentProcessID()
 {
-#if __linux__
+#if defined(LIBGO_SYS_Unix)
     return getpid();
 #else
     return 0;
@@ -74,15 +78,15 @@ int GetCurrentThreadID()
 
 std::string GetCurrentTime()
 {
-#if __linux__
+#if defined(LIBGO_SYS_Unix)
     struct tm local;
     struct timeval tv;
     gettimeofday(&tv, NULL);
     localtime_r(&tv.tv_sec, &local);
     char buffer[128];
-    snprintf(buffer, sizeof(buffer), "%04d-%02d-%02d %02d:%02d:%02d.%06lu",
+    snprintf(buffer, sizeof(buffer), "%04d-%02d-%02d %02d:%02d:%02d.%06d",
             local.tm_year+1900, local.tm_mon+1, local.tm_mday, 
-            local.tm_hour, local.tm_min, local.tm_sec, tv.tv_usec);
+            local.tm_hour, local.tm_min, local.tm_sec, (int)tv.tv_usec);
     return std::string(buffer);
 #else
     return std::string();
@@ -104,9 +108,9 @@ const char* PollEvent2Str(short int event)
         return "Zero";
     }
 }
-uint64_t NativeThreadID()
+unsigned long NativeThreadID()
 {
-    return pthread_self();
+    return reinterpret_cast<unsigned long>(pthread_self());
 }
 
 } //namespace co

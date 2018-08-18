@@ -106,8 +106,7 @@ private:
 
     ConnectionPtr Out(Connection* connection)
     {
-        Connection* ptr = connection.get();
-        return ConnectionPtr(ptr, [this, ptr]{ this->Put(ptr); });
+        return ConnectionPtr(connection, [this](Connection* ptr){ this->Put(ptr); });
     }
 
 private:

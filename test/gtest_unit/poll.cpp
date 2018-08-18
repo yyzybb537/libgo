@@ -151,15 +151,14 @@ TEST(Poll, TimeoutIsNegative1)
                 sleep(1);
                 write(fds[1], "a", 1);
             };
-            auto start = system_clock::now();
+            GTimer gt;
             pollfd pfds[2] = {{fds[0], POLLIN, 0}, {fds[1], POLLIN, 0}};
             int n = poll(pfds, 2, -1);
             EXPECT_EQ(n, 1);
             EXPECT_EQ(pfds[0].revents, POLLIN);
             EXPECT_EQ(pfds[1].revents, 0);
-            auto elapse = duration_cast<milliseconds>(system_clock::now() - start).count();
-            EXPECT_GT(elapse, 999);
-            EXPECT_LT(elapse, 1050);
+            TIMER_CHECK(gt, 1000, 50);
+
             char buf;
             EXPECT_EQ(read(fds[0], &buf, 1), 1);
             EXPECT_EQ(buf, 'a');
@@ -255,9 +254,9 @@ TEST(Poll, TimeoutIs1)
 //                printf("co_sleep(200) cost %d ms\n", gt.ms());
                 write(fds[1], "a", 1);
             };
-            auto start = system_clock::now();
+            GTimer gt;
             pollfd pfds[2] = {{fds[0], POLLIN, 0}, {fds[1], POLLIN, 0}};
-            GTimer gtx;
+//            GTimer gtx;
             int n = poll(pfds, 2, 2000);
             EXPECT_EQ(n, 1);
             EXPECT_EQ(pfds[0].revents, POLLIN);
@@ -265,12 +264,10 @@ TEST(Poll, TimeoutIs1)
 //            printf("tk(%s) poll cost %d ms\n", co::Processer::GetCurrentTask()->DebugInfo(), gtx.ms());
 //            co_sleep(50);
 //            exit(1);
-            auto elapse = duration_cast<milliseconds>(system_clock::now() - start).count();
-            EXPECT_GT(elapse, 199);
-            EXPECT_LT(elapse, 250);
+            TIMER_CHECK(gt, 200, 50);
 
             char buf;
-            GTimer gt;
+            gt.reset();
             EXPECT_EQ(read(fds[0], &buf, 1), 1);
             EXPECT_LT(gt.ms(), 20);
             EXPECT_EQ(buf, 'a');
@@ -282,24 +279,20 @@ TEST(Poll, TimeoutIs1)
                 ssize_t n = write(fds[1], "a", 1);
                 (void)n;
             };
-            auto start = system_clock::now();
+            GTimer gt;
             pollfd pfds[2] = {{fds[0], POLLIN, 0}, {fds[1], POLLIN, 0}};
             int n = poll(pfds, 2, 200);
             EXPECT_EQ(n, 0);
             EXPECT_EQ(pfds[0].revents, 0);
             EXPECT_EQ(pfds[1].revents, 0);
-            auto elapse = duration_cast<milliseconds>(system_clock::now() - start).count();
-            EXPECT_GT(elapse, 199);
-            EXPECT_LT(elapse, 250);
+            TIMER_CHECK(gt, 200, 50);
 
-            start = system_clock::now();
+            gt.reset();
             n = poll(pfds, 2, 1000);
             EXPECT_EQ(n, 1);
             EXPECT_EQ(pfds[0].revents, POLLIN);
             EXPECT_EQ(pfds[1].revents, 0);
-            elapse = duration_cast<milliseconds>(system_clock::now() - start).count();
-            EXPECT_GT(elapse, 250);
-            EXPECT_LT(elapse, 350);
+            TIMER_CHECK(gt, 250, 100);
 
             char buf;
             EXPECT_EQ(read(fds[0], &buf, 1), 1);
@@ -361,13 +354,11 @@ TEST(Poll, TimeoutIs1)
 
         {
             pollfd pfds[1] = {{fds[0], POLLOUT, 0}};
-            auto start = system_clock::now();
+            GTimer gt;
             auto yc = g_Scheduler.GetCurrentTaskYieldCount();
             int n = poll(pfds, 1, 300);
             EXPECT_EQ(g_Scheduler.GetCurrentTaskYieldCount(), yc + 1);
-            auto elapse = duration_cast<milliseconds>(system_clock::now() - start).count();
-            EXPECT_GT(elapse, 299);
-            EXPECT_LT(elapse, 350);
+            TIMER_CHECK(gt, 300, 50);
             EXPECT_EQ(n, 0);
             EXPECT_EQ(pfds[0].revents, 0);
         }
@@ -397,12 +388,9 @@ TEST(PollTrigger, MultiPollTimeout1)
     for (int i = 0; i < 10; ++i) {
         go [=] {
             pollfd pfds[1] = {{fds[0], POLLIN, 0}};
-            auto start = high_resolution_clock::now();
+            GTimer gt;
             int n = poll(pfds, 1, 1000);
-            auto end = system_clock::now();
-            auto c = duration_cast<milliseconds>(end - start).count();
-            EXPECT_LT(c, 1050);
-            EXPECT_GT(c, 999);
+            TIMER_CHECK(gt, 1000, 50);
             EXPECT_EQ(n, 0);
             EXPECT_EQ(pfds[0].revents, 0);
         };
@@ -411,12 +399,9 @@ TEST(PollTrigger, MultiPollTimeout1)
     for (int i = 0; i < 10; ++i) {
         go [=] {
             pollfd pfds[1] = {{fds[0], POLLOUT, 0}};
-            auto start = high_resolution_clock::now();
+            GTimer gt;
             int n = poll(pfds, 1, 500);
-            auto end = system_clock::now();
-            auto c = duration_cast<milliseconds>(end - start).count();
-            EXPECT_LT(c, 550);
-            EXPECT_GT(c, 499);
+            TIMER_CHECK(gt, 500, 50);
             EXPECT_EQ(n, 0);
             EXPECT_EQ(pfds[0].revents, 0);
         };
@@ -440,12 +425,9 @@ TEST(PollTrigger, MultiPollTimeout2)
     for (int i = 0; i < 10; ++i) {
         go [=] {
             pollfd pfds[2] = {{fds[0], POLLIN, 0}, {fds[1], POLLIN, 0}};
-            auto start = high_resolution_clock::now();
+            GTimer gt;
             int n = poll(pfds, 2, 1000);
-            auto end = system_clock::now();
-            auto c = duration_cast<milliseconds>(end - start).count();
-            EXPECT_LT(c, 1050);
-            EXPECT_GT(c, 999);
+            TIMER_CHECK(gt, 1000, 50);
             EXPECT_EQ(n, 0);
             EXPECT_EQ(pfds[0].revents, 0);
             EXPECT_EQ(pfds[1].revents, 0);
@@ -462,12 +444,9 @@ TEST(PollTrigger, MultiPollTimeout2)
     for (int i = 0; i < 10; ++i) {
         go [=] {
             pollfd pfds[2] = {{fds[0], POLLOUT, 0}, {fds[1], POLLOUT, 0}};
-            auto start = high_resolution_clock::now();
+            GTimer gt;
             int n = poll(pfds, 2, 500);
-            auto end = system_clock::now();
-            auto c = duration_cast<milliseconds>(end - start).count();
-            EXPECT_LT(c, 550);
-            EXPECT_GT(c, 499);
+            TIMER_CHECK(gt, 500, 50);
             EXPECT_EQ(n, 0);
             EXPECT_EQ(pfds[0].revents, 0);
             EXPECT_EQ(pfds[1].revents, 0);
@@ -491,12 +470,9 @@ TEST(PollTrigger, MultiPollTrigger)
     for (int i = 0; i < 1; ++i) {
         go [=] {
             pollfd pfds[1] = {{fds[0], POLLIN, 0}};
-            auto start = high_resolution_clock::now();
+            GTimer gt;
             int n = poll(pfds, 1, 1000);
-            auto end = system_clock::now();
-            auto c = duration_cast<milliseconds>(end - start).count();
-            EXPECT_LT(c, 550);
-            EXPECT_GT(c, 499);
+            TIMER_CHECK(gt, 500, 50);
             EXPECT_EQ(n, 1);
             EXPECT_EQ(pfds[0].revents, POLLIN);
         };
@@ -535,12 +511,9 @@ TEST(PollTrigger, MultiPollClose)
     for (int i = 0; i < 1; ++i) {
         go [=] {
             pollfd pfds[1] = {{fds[0], POLLIN, 0}};
-            auto start = high_resolution_clock::now();
+            GTimer gt;
             int n = poll(pfds, 1, 1000);
-            auto end = system_clock::now();
-            auto c = duration_cast<milliseconds>(end - start).count();
-            EXPECT_LT(c, 550);
-            EXPECT_GT(c, 499);
+            TIMER_CHECK(gt, 500, 50);
             EXPECT_EQ(n, 1);
             EXPECT_EQ(pfds[0].revents, POLLNVAL);
             cout << "read wait exit" << endl;
@@ -582,12 +555,9 @@ TEST(PollTrigger, MultiPollShutdown)
     for (int i = 0; i < 1; ++i) {
         go [=] {
             pollfd pfds[1] = {{fds[0], POLLIN, 0}};
-            auto start = high_resolution_clock::now();
+            GTimer gt;
             int n = poll(pfds, 1, 1000);
-            auto end = system_clock::now();
-            auto c = duration_cast<milliseconds>(end - start).count();
-            EXPECT_LT(c, 550);
-            EXPECT_GT(c, 499);
+            TIMER_CHECK(gt, 500, 50);
             EXPECT_EQ(n, 1);
             EXPECT_EQ(pfds[0].revents, POLLIN|POLLHUP);
             cout << "read wait exit" << endl;
@@ -627,12 +597,9 @@ TEST(Poll, MultiThreads)
             EXPECT_EQ(res, 0);
             uint64_t yc = g_Scheduler.GetCurrentTaskYieldCount();
             pollfd pfds[1] = {{fds[0], POLLIN, 0}};
-            auto start = high_resolution_clock::now();
+            GTimer gt;
             int n = poll(pfds, 1, 1000);
-            auto end = system_clock::now();
-            auto c = duration_cast<milliseconds>(end - start).count();
-            EXPECT_LT(c, 1200);
-            EXPECT_GT(c, 999);
+            TIMER_CHECK(gt, 1000, 200);
             EXPECT_EQ(n, 0);
             EXPECT_EQ(g_Scheduler.GetCurrentTaskYieldCount(), yc + 1);
             EXPECT_EQ(close(fds[0]), 0);

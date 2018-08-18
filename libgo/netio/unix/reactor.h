@@ -17,14 +17,19 @@ public:
 
     Reactor();
 
-    // @returns: 0 or errno
     bool Add(int fd, short int pollEvent, Entry const& entry);
 
-    void Run();
+    virtual void Run() = 0;
+
+    // ---------- call by element
+    virtual bool AddEvent(int fd, short int addEvent, short int promiseEvent) = 0;
+
+    virtual bool DelEvent(int fd, short int delEvent, short int promiseEvent) = 0;
+
+protected:
+    void InitLoopThread();
 
 private:
-    int epfd_;
-
     static std::vector<Reactor*> sReactors_;
     static std::atomic<uint8_t> sReactorCount_;
 };

@@ -34,7 +34,7 @@ std::string CoDebugger::GetAllInfo()
     }
     s += "\n--------------------------------------------";
 
-#if __linux__
+#if defined(LIBGO_SYS_Linux)
     s += "\n" + GetFdInfo();
     s += "\nEpollWait:" + std::to_string(GetEpollWaitCount());
 #endif
@@ -98,7 +98,7 @@ ThreadLocalInfo& CoDebugger::GetLocalInfo()
     return g_Scheduler.GetLocalInfo();
 }
 
-#if __linux__
+#if defined(LIBGO_SYS_Linux)
 /// ------------ Linux -------------
 // 获取Fd统计信息
 std::string CoDebugger::GetFdInfo()
