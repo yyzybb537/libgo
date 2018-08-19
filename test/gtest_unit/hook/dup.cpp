@@ -44,6 +44,7 @@ TEST(testDup, testDup)
     EXPECT_EQ(res, fd_dup);
     CheckPair(fd_dup, fds[0]);
 
+#if defined(LIBGO_SYS_Linux)
     // dup3
     res = dup3(fds[0], fd_dup, O_CLOEXEC);
     if (res == -1) {
@@ -55,4 +56,5 @@ TEST(testDup, testDup)
     } else {
         CheckPair(fd_dup, fds[1]);
     }
+#endif
 }
