@@ -58,6 +58,8 @@ void ReactorElement::Trigger(Reactor * reactor, short int pollEvent)
     short int errEvent = POLLERR | POLLHUP | POLLNVAL;
     short int promiseEvent = 0;
 
+    DebugPrint(dbg_ioblock, "Trigger fd = %d, pollEvent = %s", fd_, PollEvent2Str(pollEvent));
+
     short int check = POLLIN | errEvent;
     if (pollEvent & check) {
         if (!in_.empty())

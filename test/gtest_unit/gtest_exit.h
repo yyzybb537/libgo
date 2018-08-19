@@ -226,6 +226,12 @@ int tcpSocketPair(int, int, int, int fds[2])
         return -1;
     }
 
+    int bufSize = 32*1024;
+    setsockopt(newSock,SOL_SOCKET,SO_RCVBUF,(const char*)&bufSize,sizeof(int));
+    setsockopt(newSock,SOL_SOCKET,SO_SNDBUF,(const char*)&bufSize,sizeof(int));
+    setsockopt(clientSock,SOL_SOCKET,SO_RCVBUF,(const char*)&bufSize,sizeof(int));
+    setsockopt(clientSock,SOL_SOCKET,SO_SNDBUF,(const char*)&bufSize,sizeof(int));
+
     fds[0] = clientSock;
     fds[1] = newSock;
     close(listenSock);
