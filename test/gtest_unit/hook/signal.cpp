@@ -3,6 +3,7 @@
 #include <gtest/gtest.h>
 #include <signal.h>
 #include "coroutine.h"
+#include "../gtest_exit.h"
 using namespace std;
 
 static int triggered = 0;

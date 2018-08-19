@@ -9,6 +9,7 @@
 #include <sys/socket.h>
 #include <unistd.h>
 #include <fcntl.h>
+#include "../gtest_exit.h"
 using namespace std;
 using namespace co;
 

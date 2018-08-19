@@ -1,4 +1,5 @@
 #pragma once
+#include "common/config.h"
 #include "common/pp.h"
 #include "common/syntax_helper.h"
 #include "sync/channel.h"
@@ -11,7 +12,8 @@
 #include "pool/async_coroutine_pool.h"
 //#include "defer/defer.h"
 
-#define go ::co::__go(__FILE__, __LINE__)-
+#define go_alias ::co::__go(__FILE__, __LINE__)-
+#define go go_alias
 
 // create coroutine options
 #define co_stack(size) ::co::__go_option<::co::opt_stack_size>{size}-

@@ -7,9 +7,9 @@
 #include <resolv.h>
 #include <arpa/inet.h>
 #include <poll.h>
+#include "../gtest_exit.h"
 #define TEST_MIN_THREAD 1
 #define TEST_MAX_THREAD 1
-#include "gtest_exit.h"
 using namespace std;
 using namespace co;
 
