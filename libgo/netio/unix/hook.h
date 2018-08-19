@@ -1,4 +1,5 @@
 #pragma once
+#include "../../common/config.h"
 #include <unistd.h>
 #include <resolv.h>
 #include <netdb.h>

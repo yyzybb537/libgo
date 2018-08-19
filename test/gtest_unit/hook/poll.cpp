@@ -33,10 +33,10 @@ static int fill_send_buffer(int fd)
         pollfd pfd;
         pfd.fd = fd;
         pfd.events = POLLOUT;
-        if (poll(&pfd, 1, 0) <= 0)
+        if (poll(&pfd, 1, 500) <= 0)
             break;
         c += write(fd, buf, fillSlice);
-        printf("fill %d bytes\n", c);
+//        printf("fill %d bytes\n", c);
     }
     return c;
 }
@@ -47,6 +47,8 @@ void timeoutIs0()
     int res = tcpSocketPair(AF_LOCAL, SOCK_STREAM, 0, fds);
     EXPECT_EQ(res, 0);
     HOOK_EQ(res);
+
+    auto yc = g_Scheduler.GetCurrentTaskYieldCount();
 
     {
         pollfd pfds[1] = {{fds[0], POLLIN, 0}};
@@ -114,7 +116,7 @@ void timeoutIs0()
         HOOK_EQ(pfds[1].revents);
     }
 
-    EXPECT_EQ(g_Scheduler.GetCurrentTaskYieldCount(), 0u);
+    EXPECT_EQ(g_Scheduler.GetCurrentTaskYieldCount(), yc);
 
     fds[0] = -1;
 
@@ -133,7 +135,7 @@ void timeoutIs0()
         HOOK_EQ(pfds[1].revents);
     }
 
-    EXPECT_EQ(g_Scheduler.GetCurrentTaskYieldCount(), 0u);
+    EXPECT_EQ(g_Scheduler.GetCurrentTaskYieldCount(), yc);
     EXPECT_EQ(close(fds[1]), 0);
 }
 
@@ -218,11 +220,7 @@ void timeoutIsNegative1()
 
     {
         pollfd pfds[2] = {{fds[0], POLLOUT, 0}, {fds[1], POLLIN|POLLOUT, 0}};
-#if !defined(LIBGO_SYS_FreeBSD)
-        int n = poll(pfds, 2, -1);
-#else
         int n = poll(pfds, 2, 0);
-#endif
         HOOK_EQ(n);
         HOOK_EQ(pfds[0].revents);
         HOOK_EQ(pfds[1].revents);
@@ -234,11 +232,7 @@ void timeoutIsNegative1()
         // poll invalid fds with negative timeout
         pollfd pfds[1] = {{fds[0], POLLOUT, 0}};
         auto yc = g_Scheduler.GetCurrentTaskYieldCount();
-#if !defined(LIBGO_SYS_FreeBSD)
-        int n = poll(pfds, 1, -1);
-#else
         int n = poll(pfds, 1, 0);
-#endif
         EXPECT_EQ(g_Scheduler.GetCurrentTaskYieldCount(), yc);
         EXPECT_EQ(n, 0);
         HOOK_EQ(pfds[0].revents);
@@ -246,11 +240,7 @@ void timeoutIsNegative1()
 
     {
         pollfd pfds[2] = {{fds[0], POLLOUT, 0}, {fds[1], POLLIN|POLLOUT, 0}};
-#if !defined(LIBGO_SYS_FreeBSD)
-        int n = poll(pfds, 2, -1);
-#else
         int n = poll(pfds, 2, 0);
-#endif
         EXPECT_EQ(n, 1);
         HOOK_EQ(pfds[0].revents);
         HOOK_EQ(pfds[1].revents);
@@ -541,11 +531,13 @@ TEST(PollTrigger, MultiPollTrigger)
 
 TEST(PollTrigger, MultiPollClose)
 {
-//    ::co::CoroutineOptions::getInstance().debug = dbg_ioblock | dbg_fd_ctx;
+    ::co::CoroutineOptions::getInstance().debug = dbg_ioblock | dbg_fd_ctx;
 
     int fds[2];
     int res = tcpSocketPair(AF_LOCAL, SOCK_STREAM, 0, fds);
     EXPECT_EQ(res, 0);
+
+    fill_send_buffer(fds[0]);
 
     for (int i = 0; i < 1; ++i) {
         go [=] {
@@ -559,12 +551,12 @@ TEST(PollTrigger, MultiPollClose)
         };
     }
 
-    fill_send_buffer(fds[0]);
-
     for (int i = 0; i < 1; ++i) {
         go [=] {
             pollfd pfds[1] = {{fds[0], POLLOUT, 0}};
+            GTimer gt;
             int n = poll(pfds, 1, 1000);
+            TIMER_CHECK(gt, 500, 50);
             EXPECT_EQ(n, 1);
             EXPECT_EQ(pfds[0].revents, POLLNVAL);
             cout << "write wait exit" << endl;
@@ -591,6 +583,8 @@ TEST(PollTrigger, MultiPollShutdown)
     int res = tcpSocketPair(AF_LOCAL, SOCK_STREAM, 0, fds);
     EXPECT_EQ(res, 0);
 
+    fill_send_buffer(fds[0]);
+
     for (int i = 0; i < 1; ++i) {
         go [=] {
             pollfd pfds[1] = {{fds[0], POLLIN, 0}};
@@ -603,12 +597,12 @@ TEST(PollTrigger, MultiPollShutdown)
         };
     }
 
-    fill_send_buffer(fds[0]);
-
     for (int i = 0; i < 1; ++i) {
         go [=] {
             pollfd pfds[1] = {{fds[0], POLLOUT, 0}};
+            GTimer gt;
             int n = poll(pfds, 1, 1000);
+            TIMER_CHECK(gt, 500, 50);
             EXPECT_EQ(n, 1);
             EXPECT_EQ(pfds[0].revents, POLLOUT|POLLHUP);
             cout << "write wait exit" << endl;

@@ -19,7 +19,7 @@ static int fill_send_buffer(int fd)
         pollfd pfd;
         pfd.fd = fd;
         pfd.events = POLLOUT;
-        if (poll(&pfd, 1, 100) <= 0)
+        if (poll(&pfd, 1, 1000) <= 0)
             break;
         c += write(fd, buf, 1024);
     }
@@ -29,7 +29,7 @@ static int fill_send_buffer(int fd)
 void timed()
 {
     int fds[2];
-    int res = socketpair(AF_LOCAL, SOCK_STREAM, 0, fds);
+    int res = tcpSocketPair(AF_LOCAL, SOCK_STREAM, 0, fds);
     EXPECT_EQ(res, 0);
 
     int socketfd = fds[0];

@@ -131,7 +131,7 @@ TEST(Select, TimeoutIs0)
         EXPECT_EQ(g_Scheduler.GetCurrentTaskYieldCount(), yield_count);
 
         int fds[2];
-        int res = socketpair(AF_LOCAL, SOCK_STREAM, 0, fds);
+        int res = tcpSocketPair(AF_LOCAL, SOCK_STREAM, 0, fds);
         EXPECT_EQ(res, 0);
 
         fd_set wfs;
@@ -176,7 +176,7 @@ TEST(Select, TimeoutIsF1)
         EXPECT_EQ(g_Scheduler.GetCurrentTaskYieldCount(), yield_count + 1);
 
         int fds[2];
-        int res = socketpair(AF_LOCAL, SOCK_STREAM, 0, fds);
+        int res = tcpSocketPair(AF_LOCAL, SOCK_STREAM, 0, fds);
         EXPECT_EQ(res, 0);
 
         fd_set wfs;
