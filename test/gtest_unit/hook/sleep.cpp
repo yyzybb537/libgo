@@ -60,7 +60,9 @@ struct Sleep : public TestWithParam<sleep_type>
 
 TEST_P(Sleep, sleep0)
 {
-    int c = 0, n = 2;
+//    co_opt.debug = dbg_timer;
+
+    int c = 0, n = 10;
     for (int i = 0; i < n; ++i)
         go [&c, this]{
             do_sleep(type_, 0);
@@ -70,6 +72,8 @@ TEST_P(Sleep, sleep0)
     GTimer gt;
     WaitUntilNoTask();
     TIMER_CHECK(gt, 0, 10);
+
+//    co_opt.debug = 0;
 }
 
 TEST_P(Sleep, sleep1)
