@@ -97,10 +97,12 @@ void Processer::Process()
                         }
                         lock.unlock();
 
-                        if (!next && addNewQuota_ > 0) {
-                            if (AddNewTasks()) {
+                        if (!next) {
+                            if (addNewQuota_ > 0 && AddNewTasks()) {
                                 runnableQueue_.next(runningTask_, runningTask_);
                                 -- addNewQuota_;
+                            } else {
+                                runningTask_ = nullptr;
                             }
                         }
                     }

@@ -23,7 +23,7 @@
 
 #define co_yield do { ::co::Processer::StaticCoYield(); } while (0)
 
-// coroutine sleep, never blocks current thread.
+// coroutine sleep, never blocks current thread if run in coroutine.
 #define co_sleep(milliseconds) do { usleep(1000 * milliseconds); } while (0)
 
 // co_sched
