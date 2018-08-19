@@ -24,7 +24,7 @@ public:
     void Post(Func const& func, Func const& callback);
 
     template <typename R>
-    void Post(std::function<R()> const& func, Channel<R> ret) {
+    void Post(Channel<R> const& ret, std::function<R()> const& func) {
         Post([=]{ ret << func(); }, NULL);
     }
 

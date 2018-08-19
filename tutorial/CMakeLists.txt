@@ -47,14 +47,6 @@ link_directories(${PROJECT_SOURCE_DIR}/../build)
 
 aux_source_directory(${PROJECT_SOURCE_DIR} SRC_LIST)
 
-#if (UNIX)
-#    set(LINK_ARGS libgo ${Boost_LIBRARIES} pthread dl)
-#elseif (WIN32)
-#    set(LINK_ARGS libgo ${Boost_LIBRARIES} ws2_32)
-#
-#    #list(REMOVE_ITEM SRC_LIST ${PROJECT_SOURCE_DIR}/signal.cpp)
-#endif()
-
 foreach(var ${SRC_LIST})
     string(REGEX REPLACE ".*/" "" var ${var})
     string(REGEX REPLACE ".cpp" "" tgt ${var})
@@ -65,7 +57,7 @@ foreach(var ${SRC_LIST})
         set_target_properties(${tgt}.t PROPERTIES INSTALL_RPATH ${PROJECT_SOURCE_DIR}/../../build)
         set(LINK_ARGS libgo ${Boost_LIBRARIES} ws2_32 rt)
     elseif (UNIX)
-        set(LINK_ARGS libgo ${Boost_LIBRARIES} pthread dl)
+        set(LINK_ARGS libgo curl ${Boost_LIBRARIES} pthread dl)
     endif()
     target_link_libraries(${tgt}.t ${LINK_ARGS})
 

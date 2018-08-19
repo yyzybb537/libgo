@@ -1,5 +1,5 @@
 /************************************************
- * libgo sample10
+ * libgo sample3 channel
 ************************************************
  * 在编写比较复杂的网络程序时，经常需要在多个协程
  * 间传递数据，此时就需要用到channel。
@@ -7,15 +7,7 @@
 ************************************************/
 #include "coroutine.h"
 #include "win_exit.h"
-
-struct A
-{
-    // 可以由int隐式转换来构造
-    A(int i) : i_(i) {}
-    // 可以隐式转换成int
-    operator int() { return i_; }
-    int i_;
-};
+#include <stdio.h>
 
 int main(int argc, char** argv)
 {
@@ -42,7 +34,6 @@ int main(int argc, char** argv)
         ch_0 >> i;
         printf("i = %d\n", i);
     };
-    co_sched.RunUntilNoTask();
 
     /*********************** 2. 带缓冲区的Channel ************************/
     // 创建缓冲区容量为1的Channel, 传递智能指针:
@@ -68,32 +59,41 @@ int main(int argc, char** argv)
         ch_1 >> ptr;
         printf("*ptr = %d\n", *ptr);
     };
-    co_sched.RunUntilNoTask();
 
-    /*********************** 3. 支持隐式转换 ************************/
-    // Channel在写入数据和读取数据时均支持隐式转换
-    co_chan<A> ch_a(1);
-    int i = 0;
-    // Channel在协程外部也可以使用, 不过阻塞行为会阻塞当前线程 (while sleep的方式, 而不是挂起),
-    // 因此不推荐在协程外部使用.
-    ch_a << 1;
-    ch_a >> i;
-    printf("i = %d\n", i);
+    /*********************** 3. Try and Timeout ************************/
+    // 前面两种对channel的使用方式都是无限期等待的
+    // Channel还支持带超时的等待机制, 和非阻塞的模式
+    co_chan<int> ch_2;
 
-    /*********************** 4. 支持移动语义 ************************/
-    // Channel完整地支持移动语义, 因此可以存储类似std::unique_ptr这种不可拷贝但支持移动语义的对象.
-    co_chan<std::unique_ptr<int>> ch_move(1);
-    std::unique_ptr<int> uptr(new int(1)), sptr;
-    ch_move << std::move(uptr);
-    ch_move >> sptr;
-    printf("*sptr = %d\n", *sptr);
-    
-    /*********************** 5. 多读多写 ************************/
+    go [=] {
+        // 使用TryPop和TryPush接口, 可以立即返回无需等待.
+        // 当Channel为空时, TryPop会失败; 当Channel写满时, TryPush会失败.
+        // 如果操作成功, 返回true, 否则返回false.
+        int val = 0;
+        bool isSuccess = ch_2.TryPop(val);
+
+        // 使用TimedPop和TimedPush接口, 可以在第二个参数设置等待的超时时间
+        // 如果超时, 返回false, 否则返回true.
+        // 注意：当前版本, 原生线程中使用Channel时不支持超时时间, 退化为无限期等待.
+        isSuccess = ch_2.TimedPush(1, std::chrono::microseconds(100));
+
+        (void)isSuccess;
+    };
+
+    /*********************** 4. 多读多写\线程安全 ************************/
     // Channel可以同时由多个线程读写.
-
-    /*********************** 6. 线程安全 ************************/
     // Channel是线程安全的, 因此不必担心在多线程调度协程时会出现问题.
 
+    /*********************** 5. 跨越多个调度器 ************************/
+    // Channel可以自由地使用, 不必关心操作它的协程是属于哪个调度器的.
+
+    /*********************** 6. 兼容原生线程 ************************/
+    // Channel不仅可以用于协程中, 还可以用于原生线程.
+
+    // 200ms后安全退出
+    std::thread([]{ co_sleep(200); co_sched.Stop(); }).detach();
+
+    co_sched.Start();
     return 0;
 }
 

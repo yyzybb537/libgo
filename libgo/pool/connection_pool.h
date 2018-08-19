@@ -14,13 +14,14 @@ public:
     typedef std::shared_ptr<Connection> ConnectionPtr;
     typedef std::function<Connection*()> Factory;
     typedef std::function<void(Connection*)> Deleter;
+    typedef std::function<bool(Connection*)> CheckAlive;
 
     // @Factory: 创建连接的工厂
-    // @Deleter: 销毁连接
+    // @Deleter: 销毁连接, 传递NULL时会使用delete删除连接.
     // @maxConnection: 最大连接数, 0表示不限数量
     // @maxIdleConnection: 最大空闲连接数, 0表示不限数量
     // 注意：Factory和Deleter的调用可能会并行.
-    explicit ConnectionPool(Factory f, Deleter d, size_t maxConnection = 0, size_t maxIdleConnection = 0)
+    explicit ConnectionPool(Factory f, Deleter d = NULL, size_t maxConnection = 0, size_t maxIdleConnection = 0)
         : factory_(f), deleter_(d), count_(0),
         maxConnection_(maxConnection),
         maxIdleConnection_(maxIdleConnection == 0 ? maxConnection : maxIdleConnection),
@@ -28,6 +29,18 @@ public:
     {
         if (maxIdleConnection_ == 0)
             maxIdleConnection_ = maxConnection_;
+
+        if (!deleter_) {
+            deleter_ = [](Connection * ptr){ delete ptr; };
+        }
+    }
+
+    ~ConnectionPool()
+    {
+        Connection* ptr = nullptr;
+        while (channel_.TryPop(ptr)) {
+            deleter_(ptr);
+        }
     }
 
     // 预创建一些连接
@@ -36,7 +49,7 @@ public:
     {
         for (size_t i = Count(); i < maxIdleConnection_; ++i)
         {
-            ConnectionPtr connection = CreateOne();
+            Connection* connection = CreateOne();
             if (!connection) break;
             if (!channel_.TryPush(connection)) break;
         }
@@ -45,18 +58,33 @@ public:
     // 获取一个连接
     // 如果池空了并且连接数达到上限, 则会等待
     // 返回的智能指针销毁时, 会自动将连接归还给池
-    ConnectionPtr Get()
+    ConnectionPtr Get(CheckAlive checkAliveOnGet = NULL,
+            CheckAlive checkAliveOnPut = NULL)
     {
-        ConnectionPtr connection;
-        if (channel_.TryPop(connection))
-            return Out(connection);
+        Connection* connection = nullptr;
+retry_get:
+        if (channel_.TryPop(connection)) {
+            if (checkAliveOnGet && !checkAliveOnGet(connection)) {
+                deleter_(connection);
+                connection = nullptr;
+                goto retry_get;
+            }
+
+            return Out(connection, checkAliveOnPut);
+        }
 
         connection = CreateOne();
         if (connection)
-            return Out(connection);
+            return Out(connection, checkAliveOnPut);
 
         channel_ >> connection;
-        return Out(connection);
+        if (checkAliveOnGet && !checkAliveOnGet(connection)) {
+            deleter_(connection);
+            connection = nullptr;
+            goto retry_get;
+        }
+
+        return Out(connection, checkAliveOnPut);
     }
 
     // 获取一个连接
@@ -64,18 +92,38 @@ public:
     // 返回的智能指针销毁时, 会自动将连接归还给池
     //
     // @timeout: 等待超时时间, 仅在协程中有效, 例: std::chrono::seconds(1)
-    ConnectionPtr Get(FastSteadyClock::duration timeout)
+    // @checkAliveOnGet: 申请时检查连接是否还有效
+    // @checkAliveOnPut: 归还时检查连接是否还有效
+    ConnectionPtr Get(FastSteadyClock::duration timeout,
+            CheckAlive checkAliveOnGet = NULL,
+            CheckAlive checkAliveOnPut = NULL)
     {
-        Connection* connection;
-        if (channel_.TryPop(connection))
-            return Out(connection);
+        FastSteadyClock::time_point deadline = FastSteadyClock::now() + timeout;
+        Connection* connection = nullptr;
+retry_get:
+        if (channel_.TryPop(connection)) {
+            if (checkAliveOnGet && !checkAliveOnGet(connection)) {
+                deleter_(connection);
+                connection = nullptr;
+                goto retry_get;
+            }
+
+            return Out(connection, checkAliveOnPut);
+        }
 
         connection = CreateOne();
         if (connection)
-            return Out(connection);
+            return Out(connection, checkAliveOnPut);
 
-        if (channel_.TimedPop(connection, timeout))
-            return Out(connection);
+        if (channel_.TimedPop(connection, deadline)) {
+            if (checkAliveOnGet && !checkAliveOnGet(connection)) {
+                deleter_(connection);
+                connection = nullptr;
+                goto retry_get;
+            }
+
+            return Out(connection, checkAliveOnPut);
+        }
 
         return ConnectionPtr();
     }
@@ -104,9 +152,16 @@ private:
         }
     }
 
-    ConnectionPtr Out(Connection* connection)
+    ConnectionPtr Out(Connection* connection, CheckAlive checkAliveOnPut)
     {
-        return ConnectionPtr(connection, [this](Connection* ptr){ this->Put(ptr); });
+        return ConnectionPtr(connection, [this, checkAliveOnPut](Connection* ptr){
+                    if (checkAliveOnPut && !checkAliveOnPut(ptr)) {
+                        this->deleter_(ptr);
+                        return ;
+                    }
+
+                    this->Put(ptr);
+                });
     }
 
 private:

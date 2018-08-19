@@ -1,4 +1,7 @@
 #pragma once
+#include <chrono>
+#include <thread>
+#include <stdio.h>
 
 #ifdef _WIN32
 #include <stdlib.h>

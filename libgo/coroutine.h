@@ -10,7 +10,7 @@
 #include "cls/co_local_storage.h"
 #include "pool/connection_pool.h"
 #include "pool/async_coroutine_pool.h"
-//#include "defer/defer.h"
+#include "defer/defer.h"
 
 #define go_alias ::co::__go(__FILE__, __LINE__)-
 #define go go_alias
@@ -24,7 +24,11 @@
 #define co_yield do { ::co::Processer::StaticCoYield(); } while (0)
 
 // coroutine sleep, never blocks current thread if run in coroutine.
-#define co_sleep(milliseconds) do { usleep(1000 * milliseconds); } while (0)
+#if defined(LIBGO_SYS_Unix)
+# define co_sleep(milliseconds) do { usleep(1000 * milliseconds); } while (0)
+#else
+# define co_sleep(milliseconds) do { ::Sleep(milliseconds); } while (0)
+#endif
 
 // co_sched
 #define co_sched g_Scheduler
@@ -56,12 +60,11 @@ typedef ::co::CoTimer::TimerId co_timer_id;
 #define co_cls(type, ...) CLS(type, ##__VA_ARGS__)
 #define co_cls_ref(type) CLS_REF(type)
 
-//// co_defer
-//#define co_defer auto LIBGO_PP_CAT(__defer_, __COUNTER__) = ::co::__defer_op()-
-////#define co_last_defer() LIBGO_PP_CAT(__defer_, LIBGO_PP_DEC(__COUNTER__))
-//#define co_last_defer() ::co::GetLastDefer()
-//#define co_defer_scope co_defer [&]
-//
+// co_defer
+#define co_defer auto LIBGO_PP_CAT(__defer_, __COUNTER__) = ::co::__defer_op()-
+#define co_last_defer() ::co::GetLastDefer()
+#define co_defer_scope co_defer [&]
+
 //// co_listener
 //using ::co::co_listener;
 //

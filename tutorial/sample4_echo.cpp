@@ -59,7 +59,6 @@ retry_read:
         // 阻塞的write已被HOOK，等待期间切换执行其他协程。
         ssize_t wn = write(sockfd, buf, n);
         (void)wn;
-
     }
 }
 
@@ -78,6 +77,7 @@ void client()
 
     char buf[12] = "1234";
     int len = strlen(buf) + 1;
+
     // 阻塞的write已被HOOK，等待期间切换执行其他协程。
     ssize_t wn = write(sockfd, buf, len);
     (void)wn;
@@ -95,9 +95,11 @@ retry_read:
     } else if (n == 0) {
         fprintf(stderr, "read eof\n");
     } else {
-        // echo
         printf("recv [%d] %s\n", n, rcv_buf);
     }
+
+    // 调度器的Scheduler::Stop接口, 可以停止调度线程的执行, 可以用于安全地退出main函数
+    co_sched.Stop();
 }
 
 int main()
@@ -106,7 +108,7 @@ int main()
     go client;
 
     // 单线程执行
-    co_sched.RunUntilNoTask();
+    co_sched.Start();
     return 0;
 }
 

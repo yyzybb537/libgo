@@ -70,6 +70,11 @@ int main() {
     co_last_defer().dismiss();
 
     go foo;
-    co_sched.RunUntilNoTask();
+
+    // 200ms后安全退出
+    std::thread([]{ co_sleep(200); co_sched.Stop(); }).detach();
+
+    co_sched.Start();
+    return 0;
 }
 

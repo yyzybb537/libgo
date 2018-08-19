@@ -1,5 +1,6 @@
 #include "defer.h"
-#include "scheduler.h"
+#include "../scheduler/scheduler.h"
+#include "../cls/co_local_storage.h"
 
 namespace co
 {
@@ -13,7 +14,8 @@ namespace co
     {
         Task* tk = Processer::GetCurrentTask();
         if (tk) {
-            return reinterpret_cast<dismisser*&>(tk->defer_cls_);
+            CLS_REF(dismisser*) defer_cls = CLS(dismisser*, nullptr);
+            return (dismisser*&)defer_cls;
         }
 
         return reinterpret_cast<dismisser*&>(GetLastDeferTls());

@@ -22,12 +22,10 @@ void request_once(const char* url, int i)
     CURL *curl = curl_easy_init();
     if (curl) {
         curl_easy_setopt(curl, CURLOPT_URL, url);
-//        curl_easy_setopt(curl, CURLOPT_TIMEOUT, 1);
+        curl_easy_setopt(curl, CURLOPT_TIMEOUT, 10);
         curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, curl_fwrite);
-//        printf("[%d]start perform\n", i);
         for (;;) {
             CURLcode res = curl_easy_perform(curl);
-            //        printf("[%d]res:%d\n", res, i);
             if (CURLE_OK == res)
                 ++g_ok;
             else
@@ -45,8 +43,6 @@ void show_status()
     static int last_ok = 0, last_error = 0;
     printf("ok:%d, error:%d\n", g_ok - last_ok, g_error - last_error);
     last_ok = g_ok, last_error = g_error;
-
-    co_timer_add(std::chrono::seconds(1), show_status);
 }
 
 int main(int argc, char** argv)
@@ -56,22 +52,22 @@ int main(int argc, char** argv)
         exit(1);
     }
 
-//    co_sched.GetOptions().debug = co::dbg_ioblock;
-//    co_sched.GetOptions().debug_output = fopen("log", "w+");
-//    co_sched.GetOptions().enable_work_steal = false;
-
     int concurrency = atoi(argv[2]);
+    printf("start %d coroutines\n", concurrency);
 
+    // 创建N个协程
     for (int i = 0; i < concurrency; ++i)
         go [=]{ request_once(argv[1], i); };
 
-    co_timer_add(std::chrono::seconds(1), show_status);
+    go []{ 
+        for (;;) {
+            show_status(); 
+            sleep(1);
+        }
+    };
 
-    // 创建8个线程去并行执行所有协程
-    boost::thread_group tg;
-    for (int i = 0; i < 8; ++i)
-        tg.create_thread([]{ co_sched.RunLoop(); });
-    tg.join_all();
+    // 创建nCores个线程去并行执行所有协程
+    co_sched.Start(0);
     return 0;
 }
 
