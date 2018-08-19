@@ -195,5 +195,6 @@ extern std::mutex gDbgLock;
         } \
     } while(0)
 
+
 #define LIBGO_E2S_DEFINE(x) \
     case x: return #x

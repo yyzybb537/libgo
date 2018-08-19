@@ -4,6 +4,10 @@
 
 namespace co {
 
+#define DBG_TIMER_CHECK(t) do {\
+        (t).check(__LINE__, std::chrono::microseconds(1)); \
+    } while (0)
+
 struct DbgTimer {
     explicit DbgTimer(uint64_t dbgMask) {
         active_ = (CoroutineOptions::getInstance().debug & dbgMask) != 0;
@@ -24,8 +28,10 @@ struct DbgTimer {
         prev_ = now;
     }
 
-    std::string ToString() const {
+    std::string ToString() {
         if (!active_) return "";
+
+        DBG_TIMER_CHECK(*this);
 
         std::string s;
         s.reserve(costs_.size() * 32);
@@ -42,9 +48,5 @@ private:
     FastSteadyClock::time_point prev_;
     std::vector<std::pair<int, int>> costs_;
 };
-
-#define DBG_TIMER_CHECK(t) do {\
-        t.check(__LINE__, std::chrono::microseconds(1)); \
-    } while (0)
 
 } // namespace co

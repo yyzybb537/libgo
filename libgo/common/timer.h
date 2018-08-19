@@ -239,7 +239,8 @@ void Timer<F>::RunOnce()
 
     Point last;
     last.p64 = point_.p64;
-    point_.p64 = destPoint.p64;
+//    point_.p64 = destPoint.p64;
+    __atomic_store(&point_.p64, &destPoint.p64, std::memory_order_release);
     DBG_TIMER_CHECK(dt);
 
     // 寻找此次需要转动的最大刻度
@@ -252,7 +253,8 @@ void Timer<F>::RunOnce()
     }
     DBG_TIMER_CHECK(dt);
 
-    DebugPrint(dbg_timer, "[id=%ld]RunOnce point:<%d><%d><%d> ----> <%d><%d><%d>", this->getId(),
+    DebugPrint(dbg_timer, "[id=%ld]RunOnce point:<%d><%d><%d> ----> <%d><%d><%d>",
+            this->getId(),
             (int)last.p8[0], (int)last.p8[1], (int)last.p8[2],
             (int)point_.p8[0], (int)point_.p8[1], (int)point_.p8[2]);
     DBG_TIMER_CHECK(dt);
@@ -294,7 +296,8 @@ FastSteadyClock::time_point Timer<F>::NextTrigger(FastSteadyClock::duration max)
             dest - begin_).count() / precision_.count();
     Point & p = *(Point*)&durVal;
     Point last;
-    last.p64 = point_.p64;
+//    last.p64 = point_.p64;
+    __atomic_load(&point_.p64, &last.p64, std::memory_order_acquire);
     auto lastTime = last.p64 * precision_ + begin_;
     if (last.p64 >= p.p64) return FastSteadyClock::now();
 
@@ -380,7 +383,8 @@ void Timer<F>::Dispatch(Element * element, bool mainloop)
 {
 sync_retry:
     Point last;
-    last.p64 = point_.p64;
+//    last.p64 = point_.p64;
+    __atomic_load(&point_.p64, &last.p64, std::memory_order_acquire);
     FastSteadyClock::time_point lastTime(begin_ + last.p64 * precision_);
 
     if (!mainloop && element->tp_ <= lastTime) {
@@ -397,7 +401,7 @@ sync_retry:
 
     Point & p = *(Point*)&durVal;
     int level = 0;
-    int offset = 0;
+    int offset = last.p8[0];
     for (int i = 7; i >= 0; --i) {
         if (p.p8[i] > 0) {
             level = i;
@@ -411,7 +415,9 @@ sync_retry:
 
     {
         std::unique_lock<typename Slot::lock_t> lock(slot.LockRef());
-        if (last.p64 != point_.p64) {
+        uint64_t atomicPointP64;
+        __atomic_load(&point_.p64, &atomicPointP64, std::memory_order_acquire);
+        if (last.p64 != atomicPointP64) {
             goto sync_retry;
         }
 
