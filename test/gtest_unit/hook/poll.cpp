@@ -24,23 +24,6 @@ using namespace co;
 // 9.timeout return.
 // 10.multi threads.
 
-static int fill_send_buffer(int fd)
-{
-    const int fillSlice = 1024;
-    static char* buf = new char[fillSlice];
-    int c = 0;
-    for (;;) {
-        pollfd pfd;
-        pfd.fd = fd;
-        pfd.events = POLLOUT;
-        if (poll(&pfd, 1, 500) <= 0)
-            break;
-        c += write(fd, buf, fillSlice);
-//        printf("fill %d bytes\n", c);
-    }
-    return c;
-}
-
 void timeoutIs0()
 {
     int fds[2];
@@ -107,6 +90,8 @@ void timeoutIs0()
     }
 
     EXPECT_EQ(close(fds[0]), 0);
+    usleep(10 * 1000);
+    yc++;
 
     {
         pollfd pfds[2] = {{fds[0], POLLOUT, 0}, {fds[1], POLLIN|POLLOUT, 0}};
@@ -116,7 +101,9 @@ void timeoutIs0()
         HOOK_EQ(pfds[1].revents);
     }
 
-    EXPECT_EQ(g_Scheduler.GetCurrentTaskYieldCount(), yc);
+    if (Processer::IsCoroutine()) {
+        EXPECT_EQ(g_Scheduler.GetCurrentTaskYieldCount(), yc);
+    }
 
     fds[0] = -1;
 
@@ -135,19 +122,22 @@ void timeoutIs0()
         HOOK_EQ(pfds[1].revents);
     }
 
-    EXPECT_EQ(g_Scheduler.GetCurrentTaskYieldCount(), yc);
+    if (Processer::IsCoroutine()) {
+        EXPECT_EQ(g_Scheduler.GetCurrentTaskYieldCount(), yc);
+    }
     EXPECT_EQ(close(fds[1]), 0);
 }
 
 TEST(Poll, TimeoutIs0)
 {
-//    ::co::CoroutineOptions::getInstance().debug = dbg_thread;
+//    co_opt.debug = dbg_ioblock | dbg_fd_ctx;
     timeoutIs0();
 
     go [] {
         timeoutIs0();
     };
     WaitUntilNoTask();
+//    co_opt.debug = 0;
 }
 
 void timeoutIsNegative1()
@@ -217,6 +207,7 @@ void timeoutIsNegative1()
     }
 
     close(fds[0]);
+    usleep(10 * 1000);
 
     {
         pollfd pfds[2] = {{fds[0], POLLOUT, 0}, {fds[1], POLLIN|POLLOUT, 0}};
@@ -359,6 +350,7 @@ void timeoutIs1()
     }
 
     close(fds[0]);
+    usleep(10 * 1000);
 
     {
         pollfd pfds[2] = {{fds[0], POLLOUT, 0}, {fds[1], POLLIN|POLLOUT, 0}};
@@ -445,7 +437,7 @@ TEST(PollTrigger, MultiPollTimeout1)
 
 TEST(PollTrigger, MultiPollTimeout2)
 {
-//    ::co::CoroutineOptions::getInstance().debug = dbg_ioblock | dbg_fd_ctx;
+//    ::co::CoroutineOptions::getInstance().debug = dbg_ioblock | dbg_fd_ctx | dbg_suspend;
 
     int fds[2];
     int res = tcpSocketPair(AF_LOCAL, SOCK_STREAM, 0, fds);
@@ -464,11 +456,19 @@ TEST(PollTrigger, MultiPollTimeout2)
     }
 
     WaitUntilNoTask();
+    close(fds[0]);
+    close(fds[1]);
 
-    res = fill_send_buffer(fds[0]);
-    cout << "fill " << res << " bytes." << endl;
-    res = fill_send_buffer(fds[1]);
-    cout << "fill " << res << " bytes." << endl;
+    res = tcpSocketPair(AF_LOCAL, SOCK_STREAM, 0, fds);
+    EXPECT_EQ(res, 0);
+
+    int fill1 = fill_send_buffer(fds[0]);
+    int fill2 = fill_send_buffer(fds[1]);
+
+    cout << "fill " << fill1 << " bytes." << endl;
+    cout << "fill " << fill2 << " bytes." << endl;
+
+    DebugPrint(dbg_all, "fill done!!!!!!!!!!!!!!!!!!!!!!!!!!!");
 
     for (int i = 0; i < 10; ++i) {
         go [=] {
@@ -483,7 +483,7 @@ TEST(PollTrigger, MultiPollTimeout2)
     }
     WaitUntilNoTask();
 
-//    ::co::CoroutineOptions::getInstance().debug = 0;
+    ::co::CoroutineOptions::getInstance().debug = 0;
     close(fds[0]);
     close(fds[1]);
 }
@@ -531,7 +531,7 @@ TEST(PollTrigger, MultiPollTrigger)
 
 TEST(PollTrigger, MultiPollClose)
 {
-    ::co::CoroutineOptions::getInstance().debug = dbg_ioblock | dbg_fd_ctx;
+//    ::co::CoroutineOptions::getInstance().debug = dbg_ioblock | dbg_fd_ctx;
 
     int fds[2];
     int res = tcpSocketPair(AF_LOCAL, SOCK_STREAM, 0, fds);

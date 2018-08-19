@@ -8,23 +8,9 @@
 #include <sys/fcntl.h>
 #include <sys/types.h>
 #include "../gtest_exit.h"
+#include "hook.h"
 using namespace std;
 using namespace co;
-
-static int fill_send_buffer(int fd)
-{
-    static char* buf = new char[1024];
-    int c = 0;
-    for (;;) {
-        pollfd pfd;
-        pfd.fd = fd;
-        pfd.events = POLLOUT;
-        if (poll(&pfd, 1, 1000) <= 0)
-            break;
-        c += write(fd, buf, 1024);
-    }
-    return c;
-}
 
 void timed()
 {

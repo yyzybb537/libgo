@@ -39,3 +39,21 @@ inline T* getHookVal(T t, int line) {
             } \
         } \
     } while (0)
+
+inline int fill_send_buffer(int fd)
+{
+    const int fillSlice = 1024;
+    static char* buf = new char[fillSlice];
+    int c = 0;
+    for (;;) {
+        pollfd pfd;
+        pfd.fd = fd;
+        pfd.events = POLLOUT;
+        if (poll(&pfd, 1, 1000) <= 0)
+            break;
+        c += write(fd, buf, fillSlice);
+//        printf("fill %d bytes\n", c);
+        CHECK_POINT();
+    }
+    return c;
+}
