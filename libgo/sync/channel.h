@@ -66,10 +66,20 @@ public:
         return impl_->Push(t, true, dur);
     }
 
+    bool TimedPush(T t, FastSteadyClock::time_point deadline) const
+    {
+        return impl_->Push(t, true, deadline - FastSteadyClock::now());
+    }
+
     template <typename Rep, typename Period>
     bool TimedPop(T & t, std::chrono::duration<Rep, Period> dur) const
     {
         return impl_->Pop(t, true, dur);
+    }
+
+    bool TimedPop(T & t, FastSteadyClock::time_point deadline) const
+    {
+        return impl_->Pop(t, true, deadline - FastSteadyClock::now());
     }
 
     template <typename Rep, typename Period>
@@ -77,6 +87,12 @@ public:
     {
         T t;
         return impl_->Pop(t, true, dur);
+    }
+
+    bool TimedPop(std::nullptr_t ignore, FastSteadyClock::time_point deadline) const
+    {
+        T t;
+        return impl_->Pop(t, true, deadline - FastSteadyClock::now());
     }
 
     bool Unique() const

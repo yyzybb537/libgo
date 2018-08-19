@@ -16,8 +16,6 @@ using namespace boost::asio;
 using namespace boost::asio::ip;
 using boost::system::error_code;
 
-// 由于socket的析构要依赖于io_service, 所以注意控制
-// io_service的生命期要长于socket
 io_service ios;
 
 tcp::endpoint addr(address::from_string("127.0.0.1"), port);
@@ -56,8 +54,11 @@ int main()
     go client;
     go client;
 
+    // 200ms后安全退出
+    std::thread([]{ co_sleep(200); co_sched.Stop(); }).detach();
+
     // 单线程执行
-    co_sched.RunUntilNoTask();
+    co_sched.Start();
     return 0;
 }
 
