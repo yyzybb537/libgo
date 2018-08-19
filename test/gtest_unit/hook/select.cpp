@@ -7,7 +7,7 @@
 #include <chrono>
 #include <boost/any.hpp>
 #include "coroutine.h"
-#include "gtest_exit.h"
+#include "../gtest_exit.h"
 using namespace std;
 using namespace co;
 

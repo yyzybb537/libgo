@@ -5,7 +5,6 @@
 #include <arpa/inet.h>
 #include <sys/socket.h>
 #include <sys/types.h>
-#include <sys/epoll.h>
 #include <boost/thread.hpp>
 #include <boost/asio.hpp>
 #include <boost/smart_ptr/shared_array.hpp>
@@ -68,7 +67,7 @@ struct TestServer
 #ifdef _WIN32
         work_thread_.interrupt();
 #else
-        quick_exit(0);
+        exit(0);
 #endif
     }
 

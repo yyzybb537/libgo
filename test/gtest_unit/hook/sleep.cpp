@@ -6,7 +6,7 @@
 #include <chrono>
 #include <time.h>
 #include <poll.h>
-#include "gtest_exit.h"
+#include "../gtest_exit.h"
 using namespace std;
 using namespace co;
 

@@ -6,7 +6,7 @@
 #include <chrono>
 #include <boost/asio.hpp>
 #include <time.h>
-#include "gtest_exit.h"
+#include "../gtest_exit.h"
 using namespace co;
 using namespace boost::asio;
 using namespace boost::asio::ip;

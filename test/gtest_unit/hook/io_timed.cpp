@@ -7,7 +7,7 @@
 #include "netio/unix/hook.h"
 #include <sys/fcntl.h>
 #include <sys/types.h>
-#include "gtest_exit.h"
+#include "../gtest_exit.h"
 using namespace std;
 using namespace co;
 

@@ -45,6 +45,7 @@ link_directories(${PROJECT_BINARY_DIR}/gtest)
 add_subdirectory(${PROJECT_SOURCE_DIR}/../../third_party/gtest ${PROJECT_BINARY_DIR}/gtest)
 
 aux_source_directory(${PROJECT_SOURCE_DIR} SRC_LIST)
+aux_source_directory(${PROJECT_SOURCE_DIR}/hook SRC_LIST)
 
 if (UNIX)
     include_directories(${PROJECT_SOURCE_DIR}/../../libgo/linux)
@@ -67,9 +68,11 @@ elseif (WIN32)
     list(REMOVE_ITEM SRC_LIST ${PROJECT_SOURCE_DIR}/signal.cpp)
 endif()
 
+message("SRC_LIST: ${SRC_LIST}")
+
 foreach(var ${SRC_LIST})
-    string(REGEX REPLACE ".*/" "" var ${var})
-    string(REGEX REPLACE ".cpp" "" tgt ${var})
+    string(REGEX REPLACE ".*/" "" source ${var})
+    string(REGEX REPLACE ".cpp" "" tgt ${source})
     #message("${TEST_LINK_FLAGS}")
 
     add_executable(${tgt}.t ${var})

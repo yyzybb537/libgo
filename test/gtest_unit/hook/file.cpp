@@ -6,7 +6,7 @@
 #include <sys/file.h>
 #include <chrono>
 #include "libgo.h"
-#include "gtest_exit.h"
+#include "../gtest_exit.h"
 using namespace std;
 using namespace co;
 
