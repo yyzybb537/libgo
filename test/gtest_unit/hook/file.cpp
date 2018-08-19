@@ -1,8 +1,10 @@
-#include "test_server.h"
 #include <iostream>
 #include <unistd.h>
 #include <gtest/gtest.h>
 #include <poll.h>
+#include <sys/types.h>
+#include <fcntl.h>
+#include <sys/ioctl.h>
 #include <sys/file.h>
 #include <chrono>
 #include "libgo.h"
