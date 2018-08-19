@@ -296,7 +296,7 @@ TEST(Channel, capacity0TimedTypes)
         // block try
         go [=] {
             GTimer t;
-            bool ok = ch.TimedPush(1, std::chrono::duration_cast<MininumTimeDurationType>(milliseconds(32)));
+            bool ok = ch.TimedPush(1, std::chrono::milliseconds(32));
             EXPECT_FALSE(ok);
             TIMER_CHECK(t, 32, DEFAULT_DEVIATION);
         };

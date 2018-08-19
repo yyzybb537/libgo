@@ -5,6 +5,7 @@
 #include <unistd.h>
 #include <sys/socket.h>
 #include <arpa/inet.h>
+#include <poll.h>
 
 #define DEBUG_CHECK_POINT
 

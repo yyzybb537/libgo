@@ -2,15 +2,18 @@
 
 make $@
 ulimit -c 500000
-echo '' > result
+errinfo=''
 for t in `ls *.t`
 do
-    echo ''
-    echo ------------ run $t -------------- | tee -a result
-    ./$t | tee -a result
-    echo ---------------------------------- | tee -a result
+    echo "------------ run $t --------------"
+    ./$t || errinfo="$errinfo $t"
+    echo "----------------------------------"
 done
 
-echo ------------ result --------------
-cat result | egrep \(PASSED\|FAIL\|run\)
-echo ----------------------------------
+if [ "$errinfo" = "" ]
+then
+    echo "All OK"
+else
+    echo "Error: $errinfo"
+    exit 1
+fi

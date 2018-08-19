@@ -68,6 +68,10 @@ elseif (WIN32)
     list(REMOVE_ITEM SRC_LIST ${PROJECT_SOURCE_DIR}/signal.cpp)
 endif()
 
+if (APPLE)
+    list(REMOVE_ITEM SRC_LIST ${PROJECT_SOURCE_DIR}/hook/dns.cpp)
+endif()
+
 message("SRC_LIST: ${SRC_LIST}")
 
 foreach(var ${SRC_LIST})
