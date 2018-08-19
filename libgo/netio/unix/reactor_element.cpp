@@ -55,14 +55,14 @@ void ReactorElement::Trigger(Reactor * reactor, short int pollEvent)
 {
     std::unique_lock<std::mutex> lock(mtx_);
 
-    int triggerIn = 0, triggerOut = 0, triggerInOut = 0, triggerErr = 0;
-
     short int errEvent = POLLERR | POLLHUP | POLLNVAL;
     short int promiseEvent = 0;
 
     short int check = POLLIN | errEvent;
     if (pollEvent & check) {
-        triggerIn = in_.size();
+        if (!in_.empty())
+            DebugPrint(dbg_ioblock, "Trigger fd = %d, POLLIN.size = %d", fd_, (int)in_.size());
+
         TriggerListWithoutLock(pollEvent & check, in_);
     } else if (!in_.empty()) {
         promiseEvent |= POLLIN;
@@ -70,7 +70,9 @@ void ReactorElement::Trigger(Reactor * reactor, short int pollEvent)
 
     check = POLLOUT | errEvent;
     if (pollEvent & check) {
-        triggerOut = out_.size();
+        if (!out_.empty())
+            DebugPrint(dbg_ioblock, "Trigger fd = %d, POLLOUT.size = %d", fd_, (int)out_.size());
+
         TriggerListWithoutLock(pollEvent & check, out_);
     } else if (!out_.empty()) {
         promiseEvent |= POLLOUT;
@@ -78,7 +80,9 @@ void ReactorElement::Trigger(Reactor * reactor, short int pollEvent)
 
     check = POLLIN | POLLOUT | errEvent;
     if (pollEvent & check) {
-        triggerInOut = inAndOut_.size();
+        if (!inAndOut_.empty())
+            DebugPrint(dbg_ioblock, "Trigger fd = %d, (POLLIN|POLLOUT).size = %d", fd_, (int)inAndOut_.size());
+
         TriggerListWithoutLock(pollEvent & check, inAndOut_);
     } else if (!inAndOut_.empty()) {
         promiseEvent |= POLLIN|POLLOUT;
@@ -86,7 +90,9 @@ void ReactorElement::Trigger(Reactor * reactor, short int pollEvent)
 
     check = errEvent;
     if (pollEvent & check) {
-        triggerErr = err_.size();
+        if (!err_.empty())
+            DebugPrint(dbg_ioblock, "Trigger fd = %d, POLLERR.size = %d", fd_, (int)err_.size());
+
         TriggerListWithoutLock(pollEvent & check, err_);
     } else if (!err_.empty()) {
         promiseEvent |= POLLERR;
