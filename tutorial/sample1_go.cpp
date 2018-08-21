@@ -18,6 +18,7 @@ struct A {
 
 int main()
 {
+    //----------------------------------
     // 使用关键字go创建协程, go后面可以使用:
     //     1.void(*)()函数指针, 比如:foo.
     //     2.也可以使用无参数的lambda, std::bind对象, function对象, 
@@ -58,8 +59,26 @@ int main()
     // 如果不想让调度器卡住主线程, 可以使用以下方式:
     std::thread t([]{ co_sched.Start(); });
     t.detach();
+    co_sleep(100);
+    //----------------------------------
 
-    sleep(1);
+    //----------------------------------
+    // 除了上述的使用默认的调度器外, 还可以自行创建额外的调度器,
+    // 协程只会在所属的调度器中被调度, 创建额外的调度器可以实现业务间的隔离.
+
+    // 创建一个调度器
+    co::Scheduler* sched = co::Scheduler::Create();
+
+    // 启动4个线程执行新创建的调度器
+    std::thread t2([sched]{ sched->Start(4); });
+    t2.detach();
+
+    // 在新创建的调度器上创建一个协程
+    go co_scheduler(sched) []{
+        printf("run in my scheduler.\n");
+    };
+
+    co_sleep(100);
     return 0;
 }
 
