@@ -33,7 +33,7 @@ public:
     }
 
     template <typename R>
-    void Post(std::function<R()> const& func, std::function<void(R)> const& callback) {
+    void Post(std::function<R()> const& func, std::function<void(R&)> const& callback) {
         std::shared_ptr<R> ctx(new R);
         Post([=]{ *ctx = func(); }, [=]{ callback(*ctx); });
     }
