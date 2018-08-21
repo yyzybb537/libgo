@@ -28,6 +28,16 @@ public:
         Post([=]{ ret << func(); }, NULL);
     }
 
+    void Post(Channel<void> const& ret, std::function<void()> const& func) {
+        Post([=]{ func(); ret << nullptr; }, NULL);
+    }
+
+    template <typename R>
+    void Post(std::function<R()> const& func, std::function<void(R)> const& callback) {
+        std::shared_ptr<R> ctx(new R);
+        Post([=]{ *ctx = func(); }, [=]{ callback(*ctx); });
+    }
+
     // 触发点
     struct CallbackPoint
     {
