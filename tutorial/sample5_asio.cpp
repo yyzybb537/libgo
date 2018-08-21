@@ -11,7 +11,7 @@
 #include "coroutine.h"
 #include "win_exit.h"
 
-static const uint16_t port = 43333;
+static const uint16_t port = 43332;
 using namespace boost::asio;
 using namespace boost::asio::ip;
 using boost::system::error_code;

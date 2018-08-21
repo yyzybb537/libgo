@@ -47,8 +47,8 @@ void Scheduler::CreateTask(TaskF const& fn, TaskOpt const& opt)
     ++taskCount_;
 
     DebugPrint(dbg_task, "task(%s) created.", TaskDebugInfo(tk));
-    if (GetTaskListener()) {
-        GetTaskListener()->onCreated(tk->id_);
+    if (Listener::GetTaskListener()) {
+        Listener::GetTaskListener()->onCreated(tk->id_);
     }
 
     AddTaskRunnable(tk);

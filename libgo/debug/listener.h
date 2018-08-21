@@ -1,4 +1,5 @@
 #pragma once
+#include <exception>
 
 namespace co
 {
@@ -78,9 +79,8 @@ public:
          *（本方法运行在协程中）
          *
          * @prarm task_id 协程ID
-         * @prarm eptr 抛出的异常对象指针
          */
-        virtual void onFinished(uint64_t task_id, const std::exception_ptr eptr) noexcept {
+        virtual void onFinished(uint64_t task_id) noexcept {
         }
 
         virtual ~TaskListener() noexcept = default;
@@ -98,7 +98,7 @@ public:
     };
 
 public:
-    static TaskListener*& GetTaskListener() {
+    ALWAYS_INLINE static TaskListener*& GetTaskListener() {
         static TaskListener* task_listener = nullptr;
         return task_listener;
     }
