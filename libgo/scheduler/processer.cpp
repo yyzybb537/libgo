@@ -78,8 +78,8 @@ void Processer::Process()
             runningTask_->state_ = TaskState::runnable;
             runningTask_->proc_ = this;
             DebugPrint(dbg_switch, "enter task(%s)", runningTask_->DebugInfo());
-            if (scheduler_->GetTaskListener())
-                scheduler_->GetTaskListener()->onSwapIn(runningTask_->id_);
+            if (Listener::GetTaskListener())
+                Listener::GetTaskListener()->onSwapIn(runningTask_->id_);
             ++switchCount_;
 
             runningTask_->SwapIn();
@@ -162,8 +162,8 @@ void Processer::CoYield()
 
     ++ TaskRefYieldCount(tk);
 
-    if (scheduler_->GetTaskListener())
-        scheduler_->GetTaskListener()->onSwapOut(tk->id_);
+    if (Listener::GetTaskListener())
+        Listener::GetTaskListener()->onSwapOut(tk->id_);
 
     tk->SwapOut();
 }

@@ -27,8 +27,6 @@ const char* GetTaskStateName(TaskState state)
 
 void Task::Run()
 {
-    std::exception_ptr eptr;
-
     auto call_fn = [this]() {
         if (Listener::GetTaskListener()) {
             Listener::GetTaskListener()->onStart(this->id_);
@@ -44,43 +42,23 @@ void Task::Run()
 
     if (CoroutineOptions::getInstance().exception_handle == eCoExHandle::immedaitely_throw) {
         call_fn();
-        goto end;
-    }
+    } else {
+        try {
+            call_fn();
+        } catch (...) {
+            this->fn_ = TaskF();
 
-    try {
-        call_fn();
+            std::exception_ptr eptr = std::current_exception();
+            DebugPrint(dbg_exception, "task(%s) catched exception.", DebugInfo());
 
-    } catch (...) {
-        this->fn_ = TaskF();
-
-        eptr = std::current_exception();
-        if (Listener::GetTaskListener()) {
-            Listener::GetTaskListener()->onException(this->id_, eptr);
-        }
-
-        if (eptr) {
-            const auto handle = CoroutineOptions::getInstance().exception_handle;
-            if (handle == eCoExHandle::delay_rethrow) {
-                this->eptr_ = eptr;
-
-            } else /*if (handle == eCoExHandle::debugger_only)*/{
-                const auto type = (dbg_exception | dbg_task);
-                if (CoroutineOptions::getInstance().debug & type) {
-                    try {
-                        std::rethrow_exception(eptr);
-                    } catch (std::exception& e) {
-                        DebugPrint(type, "task(%s) has uncaught exception:%s", TaskDebugInfo(this), e.what());
-                    } catch (...) {
-                        DebugPrint(type, "task(%s) has uncaught exception.", TaskDebugInfo(this));
-                    }
-                }
+            if (Listener::GetTaskListener()) {
+                Listener::GetTaskListener()->onException(this->id_, eptr);
             }
         }
     }
 
-    end:
     if (Listener::GetTaskListener()) {
-        Listener::GetTaskListener()->onFinished(this->id_, eptr);
+        Listener::GetTaskListener()->onFinished(this->id_);
     }
 
     state_ = TaskState::done;

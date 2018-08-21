@@ -112,10 +112,6 @@ private:
 
     // ------------- 兼容旧版架构接口 -------------
 public:
-    typedef Listener::TaskListener TaskListener;
-    inline TaskListener* GetTaskListener() { return Listener::GetTaskListener(); }
-    inline void SetTaskListener(TaskListener* listener) { return Listener::SetTaskListener(listener); }
-
 //    // 调度器调度函数, 内部执行协程、调度协程
 //    uint32_t Run();
 //

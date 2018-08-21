@@ -96,8 +96,7 @@ static const uint64_t dbg_sys_max           = dbg_debugger;
 enum class eCoExHandle : uint8_t
 {
     immedaitely_throw,  // 立即抛出
-    delay_rethrow,      // 延迟到调度器调度时抛出
-    debugger_only,      // 仅打印调试信息
+    on_listener,        // 使用listener处理, 如果没设置listener则立刻抛出
 };
 
 typedef void*(*stack_malloc_fn_t)(size_t size);

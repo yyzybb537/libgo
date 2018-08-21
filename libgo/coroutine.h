@@ -11,6 +11,7 @@
 #include "pool/connection_pool.h"
 #include "pool/async_coroutine_pool.h"
 #include "defer/defer.h"
+#include "debug/listener.h"
 
 #define go_alias ::co::__go(__FILE__, __LINE__)-
 #define go go_alias
@@ -64,13 +65,3 @@ typedef ::co::CoTimer::TimerId co_timer_id;
 #define co_defer auto LIBGO_PP_CAT(__defer_, __COUNTER__) = ::co::__defer_op()-
 #define co_last_defer() ::co::GetLastDefer()
 #define co_defer_scope co_defer [&]
-
-//// co_listener
-//using ::co::co_listener;
-//
-//inline void set_co_listener(::co::co_listener* listener) {
-//    g_Scheduler.SetTaskListener(listener);
-//}
-//inline ::co::co_listener* get_co_listener() {
-//    return g_Scheduler.GetTaskListener();
-//}
