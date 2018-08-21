@@ -32,6 +32,14 @@ void done()
     printf("done.\n");
 }
 
+int calc() {
+    return 1024;
+}
+
+void callback(int val) {
+    printf("calc result: %d\n", val);
+}
+
 int main(int argc, char** argv)
 {
     //-----------------------------------------------
@@ -55,8 +63,11 @@ int main(int argc, char** argv)
     auto cbp = new co::AsyncCoroutinePool::CallbackPoint;
     pPool->AddCallbackPoint(cbp);  // 注意只能加入, 不能删除, 要保证处理器的生命期足够长.
 
-    // 以回调的方式投递任务 (适用于异步回调模型的项目)
+    // 1.以回调的方式投递任务 (适用于异步回调模型的项目)
     pPool->Post(&foo, &done);
+
+    // 2.还可以投递带返回值的回调函数, callback接受返回值, 以此形成回调链.
+    pPool->Post<int>(&calc, &callback);
 
     // 循环执行回调处理器, 直到前面投递的任务完成为止.
     for (;;) {
@@ -66,6 +77,7 @@ int main(int argc, char** argv)
     }
 
     // 以Channel的方式投递任务 (适用于协程中, 或同步模型的原生线程)
+    // channel方式等待任务完成时, callback不会经过回调处理器.
     co_chan<int> ch(1);
     pPool->Post<int>(ch, []{ return 8; });
 
@@ -73,6 +85,14 @@ int main(int argc, char** argv)
     int val = 0;
     ch >> val;
     printf("val = %d\n", val);
+
+    //-----------------------------------------------
+    // 还可以投递void返回值类型的任务
+    co_chan<void> ch2(1);
+    pPool->Post(ch2, []{ printf("void task.\n"); });
+
+    // 等待任务完成
+    ch2 >> nullptr;
     //-----------------------------------------------
     return 0;
 }
