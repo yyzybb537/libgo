@@ -10,31 +10,33 @@ libgo是一个使用C++11编写的协作式调度的stackful协程库,
 
 目前支持三个平台:
 
-    Linux   (GCC4.8+)
-    
-    Windows (Win7、Win8、Win10 x86 and x64 使用VS2013/2015编译)
-    
-    Mac (在mac分支上, 感谢群友 @eagle518 的贡献)
+    Linux
 
+    MacOSX
+    
+    Windows (Win7、Win8、Win10 x86 and x64 使用VS2013/2015编译) (要切换到windows分支)
 
-使用libgo编写并行程序，即可以像golang、erlang这些并发语言一样开发迅速且逻辑简洁，又有C++原生的性能优势，鱼和熊掌从此可以兼得。
+使用libgo编写多线程程序，即可以像golang、erlang这些并发语言一样开发迅速且逻辑简洁，又有C++原生的性能优势，鱼和熊掌从此可以兼得。
 
 libgo有以下特点：
 
  *   1.提供golang一般功能强大协程，基于corontine编写代码，可以以同步的方式编写简单的代码，同时获得异步的性能，
- *   2.支持海量协程, 创建100万个协程只需使用2GB物理内存
- *   3.允许用户自由控制协程调度点，随时随地变更调度线程数；
- *   4.支持多线程调度协程，极易编写并行代码，高效的并行调度算法，可以有效利用多个CPU核心
- *   5.可以让链接进程序的同步的第三方库变为异步调用，大大提升其性能。再也不用担心某些DB官方不提供异步driver了，比如hiredis、mysqlclient这种客户端驱动可以直接使用，并且可以得到不输于异步driver的性能。
- *   6.动态链接和静态链接全都支持，便于使用C++11的用户静态链接生成可执行文件并部署至低版本的linux系统上。
- *   7.提供协程锁(co_mutex), 定时器, channel等特性, 帮助用户更加容易地编写程序. 
- *   8.网络性能强劲，超越boost.asio异步模型；尤其在处理小包和多线程并行方面非常强大。
- *   9.支持协程局部变量(CLS), 并且完全覆盖TLS的所有使用场景(详见教程代码sample13).
+ *   2.支持海量协程, 创建100万个协程只需使用4.5GB物理内存.(真实值, 而不是刻意压缩stack得到的测试值)
+ *   3.支持多线程调度协程, 提供高效的负载均衡策略和协程同步机制, 很容易编写高效的多线程程序.
+ *   4.调度线程数支持动态伸缩, 不再有调度慢协程导致头部阻塞效应的问题.
+ *   5.使用hook技术让链接进程序的同步的第三方库变为异步调用，大大提升其性能。再也不用担心某些DB官方不提供异步driver了，比如hiredis、mysqlclient这种客户端驱动可以直接使用，并且可以得到不输于异步driver的性能。
+ *   6.动态链接和全静态链接均支持，便于使用C++11的用户静态链接生成可执行文件并部署至低版本的linux系统上。
+ *   7.提供Channel, 协程锁(co_mutex), 协程读写锁(co_rwmutex), 定时器等特性, 帮助用户更加容易地编写程序. 
+ *   8.支持协程局部变量(CLS), 并且完全覆盖TLS的所有使用场景(详见教程代码sample13_cls.cpp).
+
+ *   从近两年的用户反馈情况看，有很多用户都是已经有了一个异步非阻塞模型的项目(可能是基于epoll、libuv或asio等网络库)，然后需要访问MySQL这类没有提供异步Driver的DB. 常规的连接池+线程池的方案在高并发场景下的开销十分昂贵(每个连接对应一个线程才能达到最佳性能, 几千个指令周期的线程上下文切换消耗+过多的活跃线程会导致OS的调度能力急剧下降), 让许多用户难以接受.
+
+ *   鉴于此种情况, 想要使用libgo解决非阻塞模型中阻塞操作的问题，也是完全不必重构现有代码的, 全新的libgo3.0为此场景量身打造了三大利器, 可以无侵入地解决这个问题：运行环境隔离又可以便捷交互的多调度器(详见教程代码sample1_go.cpp)，替代传统线程池方案的libgo协程池(详见教程代码sample10_co_pool.cpp)，连接池(详见教程代码sample11_connection_pool.cpp)
  
+ *   **tutorial目录下有很多教程代码，内含详细的使用说明，让用户可以循序渐进的学习libgo库的使用方法。**
+
  *   如果你发现了任何bug、有好的建议、或使用上有不明之处，可以提交到issue，也可以直接联系作者:
       email: 289633152@qq.com  QQ交流群: 296561497
-
- *   **tutorial目录下有很多教程代码，内含详细的使用说明，让用户可以循序渐进的学习libgo库的使用方法。**
 
  
 ##### libgo的编译与使用:
@@ -45,29 +47,9 @@ libgo有以下特点：
 
             $ vcpkg install libgo
 
-        由于boost.context库在vcpkg上编译存在bug，此版本暂时使用ucontext做上下文切换的版本，性能上会略有下降
-        待bug修复，会改为使用boost的版本，以提供更好的性能给用户
-
  *    Linux: 
 
-		0.CMake编译参数
-		
-			ENABLE_BOOST_CONTEXT  `这是在linux上性能最佳的编译参数`
-				libgo在Linux系统上默认使用ucontext做协程上下文切换，开启此选项将使用boost.context来替代ucontext.
-				使用方式：
-					$ cmake .. -DENABLE_BOOST_CONTEXT=ON
-
-			DISABLE_HOOK
-				禁止hook syscall，开启此选项后，网络io相关的syscall将恢复系统默认的行为，
-				协程中使用阻塞式网络io将可能真正阻塞线程，如无特殊需求请勿开启此选项.
-				使用方式：
-					$ cmake .. -DDISABLE_HOOK=ON
-					
-			不开启ENABLE_BOOST_CONTEXT选项时, libgo不依赖boost库，可以直接使用，仅测试代码依赖boost库。
- 
-        1.如果你安装了ucorf或libgonet，那么你已经使用默认的方式安装过libgo了，如果不想设置如上的选项，可以跳过第2步.
- 
-        2.使用CMake进行编译安装：
+        1.使用CMake进行编译安装：
 
             $ mkdir build
             $ cd build
@@ -79,36 +61,18 @@ libgo有以下特点：
             $ make debug
 			$ sudo make install
 
-		  执行单元测试代码：
-
-			$ make test
-			$ make run_test
-
-		  生成性能网络测试代码：
-
-			$ make bm
-
-        3.以动态链接的方式使用时，一定要最先链接liblibgo.so，还需要链接libdl.so. 
-		  例如：
+        2.动态链接glibc: (libgo放到最前面链接)
         
             g++ -std=c++11 test.cpp -llibgo -ldl [-lother_libs]
             
-        4.以静态链接的方式使用时，只需链接liblibgo.a即可，不要求第一个被链接，但要求libc.a最后被链接. 
-		  要求安装GCC的静态链接库, debian系Linux安装gcc时已经自带, redhat系Linux需要从源中另行安装(yum install gcc-static)
-		  例如:
-        
-            g++ -std=c++11 test.cpp -llibgo -static -static-libgcc -static-libstdc++
+        3.全静态链接: (libgo放到最前面链接)
 
- *    Windows: 
+            g++ -std=c++11 test.cpp -llibgo -Wl,--whole-archive -lstatic_hook -lc -Wl,--no-whole-archive [-lother_libs] -static
 
-		0.CMake编译参数
-		
-			DISABLE_HOOK
-				禁止hook syscall，开启此选项后，网络io相关的syscall将恢复系统默认的行为，
-				协程中使用阻塞式网络io将可能真正阻塞线程，如无特殊需求请勿开启此选项.
-				使用方式：
-					$ cmake .. -DDISABLE_HOOK=ON
- 
+ *    Windows: (目前windows只支持2.x版本，3.0的windows支持还要等一段时间) 
+
+        0.切换到windows分支
+
         1.使用git submodule update --init --recursive下载Hook子模块
         
         2.使用CMake构建工程文件. 
@@ -132,11 +96,19 @@ libgo有以下特点：
 ##### 注意事项(WARNING)：
 * 
 
-        1.在开启WorkSteal算法的多线程调度模式下不要使用<线程局部变量(TLS)>。因为协程的每次切换，下一次继续执行都可能处于其他线程中.
+        协程中尽量不要使用TLS, 或依赖于TLS实现的不可重入的库函数。
+        如果不可避免地使用, 要注意在协程切换后要停止访问切换前产生的TLS数据。
 
-        2.不要让一个代码段耗时过长。协程的调度是协作式调度，需要协程主动让出执行权，推荐在耗时很长的循环中插入一些yield
+##### 可能产生协程切换的行为有以下几种：
 
-        3.除网络IO、sleep以外的阻塞系统调用，会真正阻塞调度线程的运行，请使用co_await, 并启动几个线程去Run内置的线程池.
+    * 用户调用co_yield主动让出cpu.
+    * 竞争协程锁、channel读写
+    * sleep系列的系统调用
+    * poll, select, epoll_wait这类等待事件触发的系统调用
+    * DNS相关系统调用(gethostbyname系列)
+    * 在阻塞式socket上的connect、accept、数据读写操作
+    * 在pipe上的数据读写操作
+
 
 ##### Linux系统上Hook的系统调用列表：
 * 
@@ -166,8 +138,13 @@ libgo有以下特点：
 		gethostbyaddr_r
 
 	以上系统调用都是可能阻塞的系统调用, 在协程中使用均不再阻塞整个线程, 阻塞等待期间CPU可以切换到其他协程执行.
+    在原生线程中执行的被HOOK的系统调用, 与原系统调用的行为保持100%一致, 不会有任何改变.
 
 *  
+        socket
+        socketpair
+        pipe
+        pipe2
 		close     
 		fcntl     
 		ioctl     
