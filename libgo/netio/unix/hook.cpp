@@ -1149,7 +1149,7 @@ static int doInitHook()
     } else {
 #if defined(LIBGO_SYS_Linux)
         pipe_f = &__pipe;
-        printf("use static hook. pipe_f=%p\n", (void*)pipe_f);
+//        printf("use static hook. pipe_f=%p\n", (void*)pipe_f);
         socket_f = &__socket;
         socketpair_f = &__socketpair;
         connect_f = &__connect;
