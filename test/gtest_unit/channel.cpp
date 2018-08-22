@@ -402,7 +402,7 @@ TEST(Channel, capacity0Timed)
                 bool ok = ch.TimedPop(v, milliseconds(500));
                 EXPECT_TRUE(ok);
                 p[v] = 1;
-                TIMER_CHECK(t, 0, 100);
+                TIMER_CHECK(t, 0, 200);
             };
 
         for (int i = 0; i < 1000; ++i)
