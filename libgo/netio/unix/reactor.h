@@ -12,6 +12,8 @@ public:
     // @returns: ignore
     static int InitializeReactorCount(uint8_t n);
 
+    static int GetReactorThreadCount();
+
 public:
     typedef ReactorElement::Entry Entry;
 

@@ -160,6 +160,9 @@ std::string GetCurrentTime();
 const char* BaseFile(const char* file);
 const char* PollEvent2Str(short int event);
 unsigned long NativeThreadID();
+std::string Format(const char* fmt, ...) __attribute__((format(printf,1,2)));
+std::string P(const char* fmt, ...) __attribute__((format(printf,1,2)));
+std::string P();
 
 class ErrnoStore {
 public:

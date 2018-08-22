@@ -1,5 +1,6 @@
 #pragma once
 #include "config.h"
+#include <string.h>
 
 namespace co
 {
@@ -418,13 +419,21 @@ struct SourceLocation
 
     friend bool operator<(SourceLocation const& lhs, SourceLocation const& rhs)
     {
-        if (lhs.file_ != rhs.file_)
-            return lhs.file_ < rhs.file_;
+        if (lhs.lineno_ != rhs.lineno_)
+            return lhs.lineno_ < rhs.lineno_;
 
-        return lhs.lineno_ < rhs.lineno_;
+        if (lhs.file_ == rhs.file_) return false;
+
+        if (lhs.file_ == nullptr)
+            return true;
+
+        if (rhs.file_ == nullptr)
+            return false;
+        
+        return strcmp(lhs.file_, rhs.file_) == -1;
     }
 
-    std::string to_string() const
+    std::string ToString() const
     {
         std::string s("{file:");
         if (file_) s += file_;

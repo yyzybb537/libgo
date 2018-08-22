@@ -31,6 +31,11 @@ int Reactor::InitializeReactorCount(uint8_t n)
     return 0;
 }
 
+int Reactor::GetReactorThreadCount()
+{
+    return sReactors_.size();
+}
+
 Reactor::Reactor()
 {
 }

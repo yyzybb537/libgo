@@ -2,6 +2,7 @@
 #include "../context/fcontext.h"
 #include "../scheduler/processer.h"
 #include <string.h>
+#include <stdarg.h>
 #include <poll.h>
 #if defined(LIBGO_SYS_Unix)
 #include <sys/time.h>
@@ -112,6 +113,32 @@ const char* PollEvent2Str(short int event)
 unsigned long NativeThreadID()
 {
     return reinterpret_cast<unsigned long>(pthread_self());
+}
+
+std::string Format(const char* fmt, ...)
+{
+    va_list ap;
+    va_start(ap, fmt);
+    char buf[4096];
+    int len = vsnprintf(buf, sizeof(buf), fmt, ap);
+    va_end(ap);
+    return std::string(buf, len);
+}
+
+std::string P(const char* fmt, ...)
+{
+    va_list ap;
+    va_start(ap, fmt);
+    char buf[4096];
+    int len = vsnprintf(buf, sizeof(buf) - 1, fmt, ap);
+    buf[len] = '\n';
+    buf[len+1] = '\0';
+    va_end(ap);
+    return std::string(buf, len + 1);
+}
+std::string P()
+{
+    return "\n";
 }
 
 } //namespace co
