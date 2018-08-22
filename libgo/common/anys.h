@@ -124,7 +124,7 @@ public:
             std::size_t space = keyInfo.align + keyInfo.size - 1;
             char *base = storage_ + offset;
             void *ptr = base;
-            if (!std::align(keyInfo.align, keyInfo.size, ptr, space))
+            if (!align(keyInfo.align, keyInfo.size, ptr, space))
                 throw std::logic_error("Anys::get call std::align error");
             offset += (char*)ptr - base;
             offsets_[i] = offset;
@@ -174,6 +174,21 @@ public:
 
             char *p = storage_ + offsets_[i];
             keyInfo.destructor(p);
+        }
+    }
+
+    // Copy from g++ std.
+    inline void* align(size_t __align, size_t __size, void*& __ptr, size_t& __space) noexcept
+    {
+        const auto __intptr = reinterpret_cast<uintptr_t>(__ptr);
+        const auto __aligned = (__intptr - 1u + __align) & -__align;
+        const auto __diff = __aligned - __intptr;
+        if ((__size + __diff) > __space)
+            return nullptr;
+        else
+        {
+            __space -= __diff;
+            return __ptr = reinterpret_cast<void*>(__aligned);
         }
     }
 };
