@@ -66,6 +66,6 @@ TEST(AsyncPool, AsyncPool)
                     EXPECT_EQ(threadId, NativeThreadID());
 //                    printf("run callback\n");
                 });
-    while (val != c * 3)
+    while (val != c * 3 + 2)
         cbPoint->Run();
 }
