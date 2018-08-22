@@ -43,22 +43,18 @@ TEST(testMallocFree, testMallocFree)
         go_stack(8192) []{};
 
     EXPECT_EQ(malloc_c, 11);
-    EXPECT_EQ(free_c, 1);
 
     WaitUntilNoTask();
 
     EXPECT_EQ(malloc_c, 11);
-    EXPECT_EQ(free_c, 11);
 
     go []{
         go []{};
     };
 
     EXPECT_EQ(malloc_c, 12);
-    EXPECT_EQ(free_c, 11);
 
     WaitUntilNoTask();
 
     EXPECT_EQ(malloc_c, 13);
-    EXPECT_EQ(free_c, 13);
 }
