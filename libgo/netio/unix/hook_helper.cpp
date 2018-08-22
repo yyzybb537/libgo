@@ -28,7 +28,7 @@ void HookHelper::OnCreate(int fd, eFdType fdType, bool isNonBlocking,
         SocketAttribute sockAttr)
 {
     FdContextPtr ctx(new FdContext(fd, fdType, isNonBlocking, sockAttr));
-    Insert(fd, ctx, true);
+    Insert(fd, ctx);
 }
 
 void HookHelper::OnClose(int fd)
@@ -50,7 +50,7 @@ void HookHelper::OnDup(int from, int to)
     FdContextPtr ctx = GetFdContext(from);
     if (!ctx) return ;
 
-    Insert(to, ctx->Clone(to), false);
+    Insert(to, ctx->Clone(to));
 }
 
 HookHelper::FdSlotPtr HookHelper::GetSlot(int fd)
@@ -74,7 +74,7 @@ FdContextPtr HookHelper::GetFdContext(int fd)
     return ctx;
 }
 
-void HookHelper::Insert(int fd, FdContextPtr ctx, bool bNew)
+void HookHelper::Insert(int fd, FdContextPtr ctx)
 {
     int bucketIdx = fd & kBucketCount;
     std::unique_lock<std::mutex> lock(bucketMtx_[bucketIdx]);
@@ -85,9 +85,7 @@ void HookHelper::Insert(int fd, FdContextPtr ctx, bool bNew)
 
     FdContextPtr closedCtx;
     std::unique_lock<LFLock> lock2(slot->lock_);
-    if (!bNew) {
-        closedCtx.swap(slot->ctx_);
-    }
+    closedCtx.swap(slot->ctx_);
     slot->ctx_ = ctx;
     lock2.unlock();
 

@@ -36,7 +36,7 @@ extern int __select(int nfds, fd_set *readfds, fd_set *writefds,
                           fd_set *exceptfds, struct timeval *timeout);
 extern unsigned int __sleep(unsigned int seconds);
 extern int __nanosleep(const struct timespec *req, struct timespec *rem);
-extern int __close(int);
+extern int __libc_close(int);
 extern int __fcntl(int __fd, int __cmd, ...);
 extern int __ioctl(int fd, unsigned long int request, ...);
 extern int __getsockopt(int sockfd, int level, int optname,
@@ -92,7 +92,7 @@ void __initStaticHook() {
     ignores += reinterpret_cast<long>(&__sleep);
     ignores += reinterpret_cast<long>(&__usleep);
     ignores += reinterpret_cast<long>(&__nanosleep);
-    ignores += reinterpret_cast<long>(&__close);
+    ignores += reinterpret_cast<long>(&__libc_close);
     ignores += reinterpret_cast<long>(&__fcntl);
     ignores += reinterpret_cast<long>(&__ioctl);
     ignores += reinterpret_cast<long>(&__getsockopt);

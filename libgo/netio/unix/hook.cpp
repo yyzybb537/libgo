@@ -282,12 +282,13 @@ int socket(int domain, int type, int protocol)
     if (!socket_f) initHook();
 
     Task* tk = Processer::GetCurrentTask();
-    DebugPrint(dbg_hook, "task(%s) hook socket.", tk->DebugInfo());
 
     int sock = socket_f(domain, type, protocol);
     if (sock >= 0) {
         HookHelper::getInstance().OnCreate(sock, eFdType::eSocket, false, SocketAttribute(domain, type, protocol));
     }
+
+    DebugPrint(dbg_hook, "task(%s) hook socket, returns %d.", tk->DebugInfo(), sock);
     return sock;
 }
 
@@ -831,6 +832,16 @@ int close(int fd)
     return close_f(fd);
 }
 
+int __close(int fd)
+{
+    if (!close_f) initHook();
+    Task* tk = Processer::GetCurrentTask();
+    DebugPrint(dbg_hook, "task(%s) hook __close(fd=%d).", tk->DebugInfo(), fd);
+            
+    HookHelper::getInstance().OnClose(fd);
+    return close_f(fd);
+}
+
 int fcntl(int __fd, int __cmd, ...)
 {
     if (!fcntl_f) initHook();
@@ -1063,7 +1074,7 @@ ATTRIBUTE_WEAK extern int __select(int nfds, fd_set *readfds, fd_set *writefds,
                           fd_set *exceptfds, struct timeval *timeout);
 ATTRIBUTE_WEAK extern unsigned int __sleep(unsigned int seconds);
 ATTRIBUTE_WEAK extern int __nanosleep(const struct timespec *req, struct timespec *rem);
-ATTRIBUTE_WEAK extern int __close(int);
+ATTRIBUTE_WEAK extern int __libc_close(int);
 ATTRIBUTE_WEAK extern int __fcntl(int __fd, int __cmd, ...);
 ATTRIBUTE_WEAK extern int __ioctl(int fd, unsigned long int request, ...);
 ATTRIBUTE_WEAK extern int __getsockopt(int sockfd, int level, int optname,
@@ -1169,7 +1180,7 @@ static int doInitHook()
         sleep_f = &__sleep;
         usleep_f = &__usleep;
         nanosleep_f = &__nanosleep;
-        close_f = &__close;
+        close_f = &__libc_close;
         fcntl_f = &__fcntl;
         ioctl_f = &__ioctl;
         getsockopt_f = &__getsockopt;
