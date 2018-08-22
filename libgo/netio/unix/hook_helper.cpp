@@ -85,9 +85,7 @@ void HookHelper::Insert(int fd, FdContextPtr ctx, bool bNew)
 
     FdContextPtr closedCtx;
     std::unique_lock<LFLock> lock2(slot->lock_);
-    if (bNew) {
-        assert(!slot->ctx_);
-    } else {
+    if (!bNew) {
         closedCtx.swap(slot->ctx_);
     }
     slot->ctx_ = ctx;
