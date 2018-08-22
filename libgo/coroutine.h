@@ -12,6 +12,7 @@
 #include "pool/async_coroutine_pool.h"
 #include "defer/defer.h"
 #include "debug/listener.h"
+#include "debug/debugger.h"
 
 #define go_alias ::co::__go(__FILE__, __LINE__)-
 #define go go_alias

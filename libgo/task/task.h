@@ -3,6 +3,7 @@
 #include "../common/ts_queue.h"
 #include "../common/anys.h"
 #include "../context/context.h"
+#include "../debug/debugger.h"
 
 namespace co
 {
@@ -22,8 +23,9 @@ struct TaskGroupKey {};
 typedef Anys<TaskGroupKey> TaskAnys;
 
 class Processer;
+
 struct Task
-    : public TSQueueHook, public SharedRefObject
+    : public TSQueueHook, public SharedRefObject, public CoDebugger::DebuggerBase<Task>
 {
     TaskState state_ = TaskState::runnable;
     uint64_t id_;
@@ -32,29 +34,6 @@ struct Task
     TaskF fn_;
     std::exception_ptr eptr_;           // 保存exception的指针
     TaskAnys anys_;
-
-//    uint64_t id_;
-//    bool is_affinity_ = false;  // 协程亲缘性
-//    std::string debug_info_;
-//    SourceLocation location_;
-//
-//    // Network IO block所需的数据
-//    // shared_ptr不具有线程安全性, 只能在协程中和SchedulerSwitch中使用.
-//    IoSentryPtr io_sentry_;     
-//
-//    BlockObject* block_ = nullptr;      // sys_block等待的block对象
-//    uint32_t block_sequence_ = 0;       // sys_block等待序号(用于做超时校验)
-//    CoTimerPtr block_timer_;         // sys_block带超时等待所用的timer
-//	MininumTimeDurationType block_timeout_{ 0 }; // sys_block超时时间
-//    bool is_block_timeout_ = false;     // sys_block的等待是否超时
-//
-//    int sleep_ms_ = 0;                  // 睡眠时间
-//
-//    // defer专用的cls存储
-//    void *defer_cls_ = nullptr;
-//
-//    // cls变量表
-//    CLSMap cls_map_;
 
     Task(TaskF const& fn, std::size_t stack_size);
     ~Task();

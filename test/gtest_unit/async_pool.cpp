@@ -45,12 +45,12 @@ TEST(AsyncPool, AsyncPool)
 
     std::atomic<int> val{0};
 
-    AsyncCoroutinePool::CallbackPoint cbPoint;
-    cbPoint.SetNotifyFunc([&]{ 
+    AsyncCoroutinePool::CallbackPoint *cbPoint = new AsyncCoroutinePool::CallbackPoint;
+    cbPoint->SetNotifyFunc([&]{ 
 //            printf("notified!\n");
             ++val;
             });
-    gPool->AddCallbackPoint(&cbPoint);
+    gPool->AddCallbackPoint(cbPoint);
 
     gPool->Post<R>(&calc, &cb1);
     gPool->Post<R>(&calc, &cb2);
@@ -67,5 +67,5 @@ TEST(AsyncPool, AsyncPool)
 //                    printf("run callback\n");
                 });
     while (val != c * 3)
-        cbPoint.Run();
+        cbPoint->Run();
 }

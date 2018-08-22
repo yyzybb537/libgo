@@ -14,7 +14,7 @@ template <typename F>
 class Timer : public IdCounter<Timer<F>>
 {
 public:
-    struct Element : public TSQueueHook, public RefObject, public ObjectCounter<Element>, public IdCounter<Element>
+    struct Element : public TSQueueHook, public RefObject, public IdCounter<Element>
     {
         F cb_;
         LFLock active_;
