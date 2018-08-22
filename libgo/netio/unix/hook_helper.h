@@ -32,6 +32,7 @@ public:
     FdContextPtr GetFdContext(int fd);
 
 public:
+    // 有些socket的close行为hook不到, 创建时如果有旧的context直接close掉即可.
     void OnCreate(int fd, eFdType fdType, bool isNonBlocking = false,
             SocketAttribute sockAttr = SocketAttribute());
 
@@ -44,12 +45,12 @@ public:
 private:
     FdSlotPtr GetSlot(int fd);
 
-    void Insert(int fd, FdContextPtr ctx, bool bNew);
+    void Insert(int fd, FdContextPtr ctx);
 
 private:
     typedef std::unordered_map<int, FdSlotPtr> Slots;
-    Slots buckets_[kBucketCount];
-    std::mutex bucketMtx_[kBucketCount];
+    Slots buckets_[kBucketCount+1];
+    std::mutex bucketMtx_[kBucketCount+1];
 };
 
 } // namespace co
