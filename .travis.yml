@@ -18,10 +18,10 @@ install:
 
 script: 
     - mkdir build; pushd build;
-    - cmake .. && make -j4 && make test_small && make tutorial && make run_test
-    - sudo rm * -rf && cmake .. -DWITH_SAFE_SIGNAL=ON && make -j4 && make test_small && make tutorial && make run_test
-    - sudo rm * -rf && cmake .. -DENABLE_BOOST_CONTEXT=ON && make -j4 && make test_small && make tutorial && make run_test
-    - sudo rm * -rf && cmake .. -DENABLE_BOOST_CONTEXT=ON -DWITH_SAFE_SIGNAL=ON && make -j4 && make test_small && make tutorial && make run_test
+    - cmake .. && make -j4
+    - popd;
+    - pushd test/gtest_unit; mkdir build; pushd build;
+    - cmake .. && make -j4 && ../runall.sh
     - popd;
 
 after_success:
@@ -30,6 +30,7 @@ after_success:
 branches:
     only:
     - dev
+    - 3.0
     - master
 
 notifications:
