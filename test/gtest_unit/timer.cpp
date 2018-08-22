@@ -58,12 +58,12 @@ TEST(Timer, OnTime2)
 TEST(Timer, OnTime3)
 {
     GTimer gtimer;
-    int c = 1000;
+    int c = 100;
     co_chan<void> q(c);
     const int ms = 100;
     for (int i = 0; i < c; i++)
         timer.ExpireAt(std::chrono::milliseconds(ms), [&]{
-                TIMER_CHECK(gtimer, ms, cMiss);
+                TIMER_CHECK(gtimer, ms, 100);
                 q << nullptr;
                 });
     for (int i = 0; i < c; i++)
