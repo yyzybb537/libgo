@@ -6,6 +6,8 @@
 #include <string.h>
 #include <libgo/libgo.h>
 #include <atomic>
+#include <poll.h>
+#include <fcntl.h>
 using namespace std;
 
 #define OUT(x) cout << #x << " = " << x << endl
@@ -21,6 +23,7 @@ using namespace std;
 enum eTestType {
     oneway,
     pingpong,
+    nonblock_pingpong,
 };
 
 int testType = 0;
@@ -54,11 +57,52 @@ void routineCreate(F f) {
     }
 }
 
+void initSock(int sock) {
+    if (testType == nonblock_pingpong) {
+        int flag = fcntl(sock, F_GETFL);
+        ASSERT_RES(flag);
+        int res = fcntl(sock, F_SETFL, flag | O_NONBLOCK);
+        ASSERT_RES(res);
+    }
+}
+
+ssize_t recv(int sock, char *buf, size_t len) {
+    if (testType == nonblock_pingpong) {
+        struct pollfd pfd;
+        pfd.fd = sock;
+        pfd.events = POLLIN;
+        poll(&pfd, 1, -1);
+        if (pfd.revents & POLLIN) {
+            return ::read(sock, buf, len);
+        }
+    }
+
+    return ::read(sock, buf, len);
+}
+
+ssize_t send(int sock, char *buf, size_t len) {
+    if (testType == nonblock_pingpong) {
+        ssize_t res = ::write(sock, buf, len);
+        if (res > 0) return res;
+
+        struct pollfd pfd;
+        pfd.fd = sock;
+        pfd.events = POLLOUT;
+        poll(&pfd, 1, -1);
+        if (pfd.revents & POLLOUT) {
+            return ::write(sock, buf, len);
+        }
+    }
+
+    return ::write(sock, buf, len);
+}
+
 void doRecv(int sock) {
     printf("fd %d connected.\n", sock);
+    initSock(sock);
     char *buf = new char[cBufSize];
     for (;;) {
-        ssize_t res = read(sock, buf, cBufSize);
+        ssize_t res = recv(sock, buf, cBufSize);
         if (res == -1 && res == EAGAIN)
             continue;
 
@@ -71,8 +115,8 @@ void doRecv(int sock) {
         gBytes += res;
         gQps ++;
 
-        if (testType == pingpong) {
-            write(sock, buf, res);
+        if (testType != oneway) {
+            send(sock, buf, res);
         }
     }
 }
@@ -85,7 +129,7 @@ void doAccept() {
     addr.sin_family = AF_INET;
     addr.sin_port = htons(9007);
     addr.sin_addr.s_addr = inet_addr("127.0.0.1");
-    int res = bind(sock, (struct sockaddr*)&addr, sizeof(addr));
+    int res = ::bind(sock, (struct sockaddr*)&addr, sizeof(addr));
     ASSERT_RES(res);
 
     res = listen(sock, 128);
@@ -106,9 +150,10 @@ void doAccept() {
 
 void doSend(int sock) {
     printf("fd %d connected.\n", sock);
+    initSock(sock);
     char *buf = new char[cBufSize];
     for (;;) {
-        ssize_t res = write(sock, buf, cBufSize);
+        ssize_t res = send(sock, buf, cBufSize);
         if (res == -1 && res == EAGAIN)
             continue;
 
@@ -121,8 +166,8 @@ void doSend(int sock) {
         gBytes += res;
         gQps ++;
 
-        if (testType == pingpong) {
-            read(sock, buf, cBufSize);
+        if (testType != oneway) {
+            recv(sock, buf, cBufSize);
         }
     }
 }
@@ -145,7 +190,8 @@ int main(int argc, char** argv) {
     if (argc <= 1) {
         printf("Usage: %s ClientOrServer OpenCoroutine TestType Conn BufSize\n", argv[0]);
         printf("\n");
-        printf("TestType: 0 - oneway, 1 - pingpong\n");
+        printf("ClientOrServer: 0 - server, 1 - client\n");
+        printf("TestType: 0 - oneway, 1 - pingpong, 2 - nonblock_pingpong\n");
         exit(1);
     }
 
