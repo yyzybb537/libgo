@@ -14,6 +14,8 @@
 #include "debug/listener.h"
 #include "debug/debugger.h"
 
+#define LIBGO_VERSION 300
+
 #define go_alias ::co::__go(__FILE__, __LINE__)-
 #define go go_alias
 
