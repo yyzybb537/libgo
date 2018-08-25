@@ -72,7 +72,7 @@ public:
     static bool IsCoroutine();
 
     // 协程切出
-    static void StaticCoYield();
+    ALWAYS_INLINE static void StaticCoYield();
 
     // 挂起标识
     struct SuspendEntry {
@@ -111,7 +111,7 @@ private:
     // 暂兼用于负载指数
     std::size_t RunnableSize();
 
-    void CoYield();
+    ALWAYS_INLINE void CoYield();
 
     // 新创建、阻塞后触发的协程add进来
     void AddTaskRunnable(Task *tk);
@@ -152,5 +152,28 @@ private:
 
     bool WakeupBySelf(IncursivePtr<Task> const& tkPtr, uint64_t id);
 };
+
+ALWAYS_INLINE void Processer::StaticCoYield()
+{
+    auto proc = GetCurrentProcesser();
+    if (proc) proc->CoYield();
+}
+
+ALWAYS_INLINE void Processer::CoYield()
+{
+    Task *tk = GetCurrentTask();
+    assert(tk);
+
+    ++ tk->yieldCount_;
+
+#if ENABLE_DEBUGGER
+    DebugPrint(dbg_yield, "yield task(%s) state = %s", tk->DebugInfo(), GetTaskStateName(tk->state_));
+    if (Listener::GetTaskListener())
+        Listener::GetTaskListener()->onSwapOut(tk->id_);
+#endif
+
+    tk->SwapOut();
+}
+
 
 } //namespace co

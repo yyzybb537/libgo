@@ -147,7 +147,7 @@ struct CoroutineOptions
 
     CoroutineOptions();
 
-    inline static CoroutineOptions& getInstance()
+    ALWAYS_INLINE static CoroutineOptions& getInstance()
     {
         static CoroutineOptions obj;
         return obj;

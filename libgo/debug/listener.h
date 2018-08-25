@@ -98,6 +98,7 @@ public:
     };
 
 public:
+#if ENABLE_DEBUGGER
     ALWAYS_INLINE static TaskListener*& GetTaskListener() {
         static TaskListener* task_listener = nullptr;
         return task_listener;
@@ -106,6 +107,7 @@ public:
     static void SetTaskListener(TaskListener* listener) {
         GetTaskListener() = listener;
     }
+#endif
 };
 
 } // namespace co

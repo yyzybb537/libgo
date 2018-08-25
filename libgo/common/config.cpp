@@ -22,7 +22,6 @@ static int staticInitialize()
 {
     // scheduler
     TaskRefInit(Affinity);
-    TaskRefInit(YieldCount);
     TaskRefInit(Location);
     TaskRefInit(DebugInfo);
     TaskRefInit(SuspendId);

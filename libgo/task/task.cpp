@@ -28,16 +28,20 @@ const char* GetTaskStateName(TaskState state)
 void Task::Run()
 {
     auto call_fn = [this]() {
+#if ENABLE_DEBUGGER
         if (Listener::GetTaskListener()) {
             Listener::GetTaskListener()->onStart(this->id_);
         }
+#endif
 
         this->fn_();
         this->fn_ = TaskF(); //让协程function对象的析构也在协程中执行
 
+#if ENABLE_DEBUGGER
         if (Listener::GetTaskListener()) {
             Listener::GetTaskListener()->onCompleted(this->id_);
         }
+#endif
     };
 
     if (CoroutineOptions::getInstance().exception_handle == eCoExHandle::immedaitely_throw) {
@@ -51,15 +55,19 @@ void Task::Run()
             std::exception_ptr eptr = std::current_exception();
             DebugPrint(dbg_exception, "task(%s) catched exception.", DebugInfo());
 
+#if ENABLE_DEBUGGER
             if (Listener::GetTaskListener()) {
                 Listener::GetTaskListener()->onException(this->id_, eptr);
             }
+#endif
         }
     }
 
+#if ENABLE_DEBUGGER
     if (Listener::GetTaskListener()) {
         Listener::GetTaskListener()->onFinished(this->id_);
     }
+#endif
 
     state_ = TaskState::done;
     Processer::StaticCoYield();

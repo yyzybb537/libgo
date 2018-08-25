@@ -35,6 +35,8 @@ struct Task
     std::exception_ptr eptr_;           // 保存exception的指针
     TaskAnys anys_;
 
+    uint64_t yieldCount_ = 0;
+
     Task(TaskF const& fn, std::size_t stack_size);
     ~Task();
 

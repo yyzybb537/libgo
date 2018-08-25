@@ -71,20 +71,28 @@ void Processer::Process()
             }
         }
 
+#if ENABLE_DEBUGGER
         DebugPrint(dbg_scheduler, "Run [Proc(%d) QueueSize:%lu] --------------------------", id_, RunnableSize());
+#endif
 
         addNewQuota_ = 1;
         while (runningTask_ && !isStop) {
             runningTask_->state_ = TaskState::runnable;
             runningTask_->proc_ = this;
+
+#if ENABLE_DEBUGGER
             DebugPrint(dbg_switch, "enter task(%s)", runningTask_->DebugInfo());
             if (Listener::GetTaskListener())
                 Listener::GetTaskListener()->onSwapIn(runningTask_->id_);
+#endif
+
             ++switchCount_;
 
             runningTask_->SwapIn();
 
+#if ENABLE_DEBUGGER
             DebugPrint(dbg_switch, "leave task(%s) state=%d", runningTask_->DebugInfo(), (int)runningTask_->state_);
+#endif
 
             switch (runningTask_->state_) {
                 case TaskState::runnable:
@@ -145,27 +153,6 @@ void Processer::Process()
             }
         }
     }
-}
-
-void Processer::StaticCoYield()
-{
-    auto proc = GetCurrentProcesser();
-    if (proc) proc->CoYield();
-}
-
-void Processer::CoYield()
-{
-    Task *tk = GetCurrentTask();
-    assert(tk);
-
-    DebugPrint(dbg_yield, "yield task(%s) state = %s", tk->DebugInfo(), GetTaskStateName(tk->state_));
-
-    ++ TaskRefYieldCount(tk);
-
-    if (Listener::GetTaskListener())
-        Listener::GetTaskListener()->onSwapOut(tk->id_);
-
-    tk->SwapOut();
 }
 
 Task* Processer::GetCurrentTask()
@@ -359,6 +346,7 @@ bool Processer::WakeupBySelf(IncursivePtr<Task> const& tkPtr, uint64_t id)
         DebugPrint(dbg_suspend, "tk(%s) Wakeup. tk->state_ = %s", tk->DebugInfo(), GetTaskStateName(tk->state_));
         ++ TaskRefSuspendId(tk);
         bool ret = waitQueue_.eraseWithoutLock(tk, true);
+        (void)ret;
         assert(ret);
     }
 

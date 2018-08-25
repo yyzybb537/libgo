@@ -56,7 +56,7 @@ message("----------------------------------")
 if (UNIX)
     set(CMAKE_CXX_FLAGS "-std=c++11 -fPIC -Wall -m64 ${CMAKE_CXX_FLAGS}")
     set(CMAKE_CXX_FLAGS_DEBUG "-g ${CMAKE_CXX_FLAGS}")
-    set(CMAKE_CXX_FLAGS_RELEASE "-g -O3 ${CMAKE_CXX_FLAGS}")
+    set(CMAKE_CXX_FLAGS_RELEASE "-g -O3 -DNDEBUG ${CMAKE_CXX_FLAGS}")
 
     set(CMAKE_ASM_SOURCE_FILE_EXTENSIONS S)
     message("--> select asm source file, please wait about 5 seconds ...")

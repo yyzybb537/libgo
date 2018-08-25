@@ -47,9 +47,11 @@ void Scheduler::CreateTask(TaskF const& fn, TaskOpt const& opt)
     ++taskCount_;
 
     DebugPrint(dbg_task, "task(%s) created.", TaskDebugInfo(tk));
+#if ENABLE_DEBUGGER
     if (Listener::GetTaskListener()) {
         Listener::GetTaskListener()->onCreated(tk->id_);
     }
+#endif
 
     AddTaskRunnable(tk);
 }
@@ -352,7 +354,7 @@ uint64_t Scheduler::GetCurrentTaskID()
 uint64_t Scheduler::GetCurrentTaskYieldCount()
 {
     Task* tk = Processer::GetCurrentTask();
-    return tk ? TaskRefYieldCount(tk) : 0;
+    return tk ? tk->yieldCount_ : 0;
 }
 
 void Scheduler::SetCurrentTaskDebugInfo(std::string const& info)

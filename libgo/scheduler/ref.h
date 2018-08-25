@@ -7,7 +7,6 @@ namespace co
 {
 
 TaskRefDefine(bool, Affinity)
-TaskRefDefine(uint64_t, YieldCount)
 TaskRefDefine(SourceLocation, Location)
 TaskRefDefine(std::string, DebugInfo)
 TaskRefDefine(atomic_t<uint64_t>, SuspendId)
