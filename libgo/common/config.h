@@ -46,8 +46,13 @@
 # define ALWAYS_INLINE inline
 #endif
 
-#define LIKELY(x) __builtin_expect(!!(x), 1)
-#define UNLIKELY(x) __builtin_expect(!!(x), 0)
+#if defined(LIBGO_SYS_Unix)
+# define LIKELY(x) __builtin_expect(!!(x), 1)
+# define UNLIKELY(x) __builtin_expect(!!(x), 0)
+#else
+# define LIKELY(x) x
+# define UNLIKELY(x) x
+#endif
 
 #if defined(LIBGO_SYS_Linux)
 # define ATTRIBUTE_WEAK __attribute__((weak))
@@ -160,8 +165,14 @@ std::string GetCurrentTime();
 const char* BaseFile(const char* file);
 const char* PollEvent2Str(short int event);
 unsigned long NativeThreadID();
-std::string Format(const char* fmt, ...) __attribute__((format(printf,1,2)));
-std::string P(const char* fmt, ...) __attribute__((format(printf,1,2)));
+
+#if defined(LIBGO_SYS_Unix)
+# define GCC_FORMAT_CHECK __attribute__((format(printf,1,2)))
+#else
+# define GCC_FORMAT_CHECK
+#endif
+std::string Format(const char* fmt, ...) GCC_FORMAT_CHECK;
+std::string P(const char* fmt, ...) GCC_FORMAT_CHECK;
 std::string P();
 
 class ErrnoStore {

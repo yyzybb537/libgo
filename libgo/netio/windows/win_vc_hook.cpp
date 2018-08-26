@@ -1,6 +1,6 @@
 #include <WinSock2.h>
 #include <Windows.h>
-#include <xhook.h>
+#include "xhook/xhook.h"
 #include "../../scheduler/scheduler.h"
 
 namespace co {
@@ -55,9 +55,8 @@ namespace co {
     {
         int ret = WSAIoctl_f(s, dwIoControlCode, lpvInBuffer, cbInBuffer, lpvOutBuffer, cbOutBuffer, lpcbBytesReturned, lpOverlapped, lpCompletionRoutine);
         int err = WSAGetLastError();
-        if (ret == 0 && cmd == FIONBIO) {
-            int v = *argp;
-            setsockopt(s, SOL_SOCKET, SO_GROUP_PRIORITY, (const char*)&v, sizeof(v));
+        if (ret == 0 && dwIoControlCode == FIONBIO) {
+            setsockopt(s, SOL_SOCKET, SO_GROUP_PRIORITY, (const char*)lpvInBuffer, cbInBuffer);
         }
         WSASetLastError(err);
         return ret;
@@ -91,7 +90,7 @@ namespace co {
 
     static inline int WINAPI safe_select(int nfds, fd_set *readfds, fd_set *writefds, fd_set *exceptfds)
     {
-        //Task *tk = g_Scheduler.GetCurrentTask();
+        //Task *tk = Processer::GetCurrentTask();
         //DebugPrint(dbg_hook, "task(%s) safe_select(nfds=%d, rfds=%p, wfds=%p, efds=%p).",
         //    tk ? tk->DebugInfo() : "nil", (int)nfds, readfds, writefds, exceptfds);
         static const struct timeval zero_tmv { 0, 0 };
@@ -128,7 +127,7 @@ namespace co {
     {
         static const struct timeval zero_tmv{0, 0};
         int timeout_ms = timeout ? (timeout->tv_sec * 1000 + timeout->tv_usec / 1000) : -1;
-        Task *tk = g_Scheduler.GetCurrentTask();
+        Task *tk = Processer::GetCurrentTask();
         DebugPrint(dbg_hook, "task(%s) Hook select(nfds=%d, rfds=%p, wfds=%p, efds=%p, timeout=%d).", 
             tk ? tk->DebugInfo() : "nil", (int)nfds, readfds, writefds, exceptfds, timeout_ms);
 
@@ -170,7 +169,7 @@ namespace co {
                 }
             }
 
-            g_Scheduler.SleepSwitch(delta_time);
+			::Sleep(delta_time);
             if (delta_time < 16)
                 delta_time <<= 2;
         }
@@ -184,7 +183,7 @@ namespace co {
     template <typename OriginF, typename ... Args>
     static int connect_mode_hook(OriginF fn, const char* fn_name, SOCKET s, Args && ... args)
     {
-        Task *tk = g_Scheduler.GetCurrentTask();
+        Task *tk = Processer::GetCurrentTask();
         bool is_nonblocking = IsNonblocking(s);
         DebugPrint(dbg_hook, "task(%s) Hook %s(s=%d)(nonblocking:%d).", 
             tk ? tk->DebugInfo() : "nil", fn_name, (int)s, (int)is_nonblocking);
@@ -275,7 +274,7 @@ namespace co {
     template <typename R, typename OriginF, typename ... Args>
     static R read_mode_hook(OriginF fn, const char* fn_name, int flags, SOCKET s, Args && ... args)
     {
-        Task *tk = g_Scheduler.GetCurrentTask();
+        Task *tk = Processer::GetCurrentTask();
         bool is_nonblocking = IsNonblocking(s);
         DebugPrint(dbg_hook, "task(%s) Hook %s(s=%d)(nonblocking:%d)(flags:%d).",
             tk ? tk->DebugInfo() : "nil", fn_name, (int)s, (int)is_nonblocking, (int)flags);
@@ -474,7 +473,7 @@ namespace co {
     template <typename R, typename OriginF, typename ... Args>
     static R write_mode_hook(OriginF fn, const char* fn_name, int flags, SOCKET s, Args && ... args)
     {
-        Task *tk = g_Scheduler.GetCurrentTask();
+        Task *tk = Processer::GetCurrentTask();
         bool is_nonblocking = IsNonblocking(s);
         DebugPrint(dbg_hook, "task(%s) Hook %s(s=%d)(nonblocking:%d)(flags:%d).",
             tk ? tk->DebugInfo() : "nil", fn_name, (int)s, (int)is_nonblocking, (int)flags);

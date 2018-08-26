@@ -112,7 +112,11 @@ const char* PollEvent2Str(short int event)
 }
 unsigned long NativeThreadID()
 {
+#if defined(LIBGO_SYS_Unix)
     return reinterpret_cast<unsigned long>(pthread_self());
+#else
+	return (unsigned long)GetCurrentThreadId();
+#endif
 }
 
 std::string Format(const char* fmt, ...)
