@@ -92,24 +92,22 @@ libgo有以下特点：
         		$ cmake .. -G"Visual Studio 14 2015 Win64" -DBOOST_ROOT="e:\\boost_1_61_0"
 
 ### 注意事项(WARNING)：
-* 
 
-        协程中尽量不要使用TLS, 或依赖于TLS实现的不可重入的库函数。
-        如果不可避免地使用, 要注意在协程切换后要停止访问切换前产生的TLS数据。
+	协程中尽量不要使用TLS, 或依赖于TLS实现的不可重入的库函数。
+	如果不可避免地使用, 要注意在协程切换后要停止访问切换前产生的TLS数据。
 
 ### 可能产生协程切换的行为有以下几种：
 
-    * 用户调用co_yield主动让出cpu.
-    * 竞争协程锁、channel读写
-    * sleep系列的系统调用
-    * poll, select, epoll_wait这类等待事件触发的系统调用
-    * DNS相关系统调用(gethostbyname系列)
-    * 在阻塞式socket上的connect、accept、数据读写操作
-    * 在pipe上的数据读写操作
+* 用户调用co_yield主动让出cpu.
+* 竞争协程锁、channel读写
+* sleep系列的系统调用
+* poll, select, epoll_wait这类等待事件触发的系统调用
+* DNS相关系统调用(gethostbyname系列)
+* 在阻塞式socket上的connect、accept、数据读写操作
+* 在pipe上的数据读写操作
 
 
 ### Linux系统上Hook的系统调用列表：
-* 
 
 		connect   
 		read      
@@ -138,8 +136,7 @@ libgo有以下特点：
 
 	以上系统调用都是可能阻塞的系统调用, 在协程中使用均不再阻塞整个线程, 阻塞等待期间CPU可以切换到其他协程执行.
     在原生线程中执行的被HOOK的系统调用, 与原系统调用的行为保持100%一致, 不会有任何改变.
-
-*  
+  
 		socket
 		socketpair
 		pipe
@@ -157,7 +154,6 @@ libgo有以下特点：
     以上系统调用不会造成阻塞, 虽然也被Hook, 但并不会完全改变其行为, 仅用于跟踪socket的选项和状态. 
 
 ### Windows系统上Hook的系统调用列表：
-* 
 
 		ioctlsocket                                                                        
 		WSAIoctl                                                                           
