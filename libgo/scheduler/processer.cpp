@@ -102,17 +102,22 @@ void Processer::Process()
                         if (next) {
                             runningTask_ = next;
                             runningTask_->check_ = runnableQueue_.check_;
+                            break;
                         }
-                        lock.unlock();
 
-                        if (!next) {
-                            if (addNewQuota_ > 0 && AddNewTasks()) {
+                        if (addNewQuota_ < 1 || newQueue_.emptyUnsafe()) {
+                            runningTask_ = nullptr;
+                        } else {
+                            lock.unlock();
+                            if (AddNewTasks()) {
                                 runnableQueue_.next(runningTask_, runningTask_);
                                 -- addNewQuota_;
                             } else {
+                                std::unique_lock<TaskQueue::lock_t> lock2(runnableQueue_.LockRef());
                                 runningTask_ = nullptr;
                             }
                         }
+
                     }
                     break;
 

@@ -3,8 +3,11 @@
 #include <atomic>
 #include <string>
 #include "../../libgo/libgo.h"
-#define TEST_MIN_THREAD 1
-#define TEST_MAX_THREAD 1
+#if TEST_MIN_THREAD
+#else
+#define TEST_MIN_THREAD 8
+#define TEST_MAX_THREAD 8
+#endif
 #include "../gtest_unit/gtest_exit.h"
 using namespace std;
 
@@ -32,9 +35,9 @@ void test_atomic()
 void test_switch(int coro)
 {
     auto start = chrono::steady_clock::now();
-    int *done = new int(0);
+    std::atomic<int> *done = new std::atomic<int>{0};
     for (int i = 0; i < coro; ++i)
-        go co_stack(4096) [=]{
+        go co_stack(8192) [=]{
             for (int i = 0; i < N / coro; ++i)
                 co_yield;
             if (++*done == coro) {
