@@ -1,7 +1,7 @@
 #include <WinSock2.h>
 #include <Windows.h>
 #include <xhook.h>
-#include "../scheduler.h"
+#include "../../scheduler/scheduler.h"
 
 namespace co {
 
@@ -54,20 +54,20 @@ namespace co {
         )
     {
         int ret = WSAIoctl_f(s, dwIoControlCode, lpvInBuffer, cbInBuffer, lpvOutBuffer, cbOutBuffer, lpcbBytesReturned, lpOverlapped, lpCompletionRoutine);
-        //int err = WSAGetLastError();
-        //if (ret == 0 && cmd == FIONBIO) {
-        //    int v = *argp;
-        //    setsockopt(s, SOL_SOCKET, SO_GROUP_PRIORITY, (const char*)&v, sizeof(v));
-        //}
-        //WSASetLastError(err);
+        int err = WSAGetLastError();
+        if (ret == 0 && cmd == FIONBIO) {
+            int v = *argp;
+            setsockopt(s, SOL_SOCKET, SO_GROUP_PRIORITY, (const char*)&v, sizeof(v));
+        }
+        WSASetLastError(err);
         return ret;
     }
 
-    bool SetNonblocking(SOCKET s, bool is_nonblocking)
-    {
-        u_long v = is_nonblocking ? 1 : 0;
-        return ioctlsocket(s, FIONBIO, &v) == 0;
-    }
+//    bool SetNonblocking(SOCKET s, bool is_nonblocking)
+//    {
+//        u_long v = is_nonblocking ? 1 : 0;
+//        return ioctlsocket(s, FIONBIO, &v) == 0;
+//    }
 
     bool IsNonblocking(SOCKET s)
     {
@@ -481,24 +481,6 @@ namespace co {
         if (!tk || is_nonblocking || (flags & e_nonblocking_op))
             return fn(s, std::forward<Args>(args)...);
 
-        // async WSARecv
-        if (!SetNonblocking(s, true))
-            return fn(s, std::forward<Args>(args)...);
-
-        R ret = fn(s, std::forward<Args>(args)...);
-        if (ret != -1) {
-            SetNonblocking(s, false);
-            return ret;
-        }
-
-        // If connection is closed, the Bytes will setted 0, and ret is 0, and WSAGetLastError() returns 0.
-        int err = WSAGetLastError();
-        if (WSAEWOULDBLOCK != err && WSAEINPROGRESS != err) {
-            SetNonblocking(s, false);
-            WSASetLastError(err);
-            return ret;
-        }
-
         // wait data arrives.
         int timeout = 0;
         if (!(flags & e_no_timeout)) {
@@ -510,13 +492,11 @@ namespace co {
         fd_set wfds;
         FD_ZERO(&wfds);
         FD_SET(s, &wfds);
-        select(1, NULL, &wfds, NULL, timeout ? &tm : NULL);
+        if (1 == select(1, NULL, &wfds, NULL, timeout ? &tm : NULL))
+            return fn(s, std::forward<Args>(args)...);
 
-        ret = fn(s, std::forward<Args>(args)...);
-        err = WSAGetLastError();
-        SetNonblocking(s, false);
-        WSASetLastError(err);
-        return ret;
+        WSASetLastError(WSAEWOULDBLOCK);
+        return -1;
     }
 
     typedef int ( WINAPI *WSASend_t)(

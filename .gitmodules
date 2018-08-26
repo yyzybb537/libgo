@@ -1,3 +1,0 @@
-[submodule "xhook"]
-	path = third_party/xhook
-	url = https://github.com/XBased/xhook.git
