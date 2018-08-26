@@ -140,19 +140,19 @@ libgo有以下特点：
     在原生线程中执行的被HOOK的系统调用, 与原系统调用的行为保持100%一致, 不会有任何改变.
 
 *  
-        socket
-        socketpair
-        pipe
-        pipe2
-	close     
-	__close
-	fcntl     
-	ioctl     
-	getsockopt
-	setsockopt
-	dup       
-	dup2      
-	dup3      
+		socket
+		socketpair
+		pipe
+		pipe2
+		close     
+		__close
+		fcntl     
+		ioctl     
+		getsockopt
+		setsockopt
+		dup       
+		dup2      
+		dup3      
 
     以上系统调用不会造成阻塞, 虽然也被Hook, 但并不会完全改变其行为, 仅用于跟踪socket的选项和状态. 
 
