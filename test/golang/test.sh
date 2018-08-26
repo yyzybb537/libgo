@@ -1,7 +1,7 @@
 #!/bin/sh
 
 isMac=`uname -a | grep Darwin -c || echo -n`
-threads=$@
+threads=$1
 test -z "$threads" && threads=1
 echo "Test Thread Number:" $threads
 echo "------------- compiling ---------------"
@@ -19,5 +19,5 @@ echo "-----------------------------------"
 
 echo "------------- golang --------------"
 go version
-go test -cpu $threads golang_test.go -test.bench=".*"
+go run golang.go $threads
 echo "-----------------------------------"
