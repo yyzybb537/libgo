@@ -93,9 +93,9 @@ libgo有以下特点：
 
 ### 性能
 
-![switch1](imgs/switch_cost.png)
+<img width="400" src="imgs/switch_cost.png"/>
 
-![switch2](imgs/switch_speed.png)
+<img width="600" src="imgs/switch_speed.png"/>
 
 ### 注意事项(WARNING)：
 
