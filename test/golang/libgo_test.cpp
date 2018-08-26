@@ -2,6 +2,7 @@
 #include <iostream>
 #include <atomic>
 #include <string>
+#include <stdio.h>
 #include "../../libgo/libgo.h"
 #if !defined(TEST_MIN_THREAD)
 #define TEST_MIN_THREAD 1
@@ -15,9 +16,9 @@ static const int N = 10000000;
 template <typename T>
 void dump(string name, int n, T start, T end)
 {
-    cout << name << "    " << n << "      " << 
-        chrono::duration_cast<chrono::nanoseconds>(end - start).count() / n << " ns/op" << endl;
-//    cout << "ok. cost " << chrono::duration_cast<chrono::milliseconds>(end - start).count() << " ms" << endl;
+    long nanos = chrono::duration_cast<chrono::nanoseconds>(end - start).count();
+    long nPerSecond = 100000 * (long)n / nanos;
+    printf("%s    %d    %ld ns/op    %ld w/s\n", name.c_str(), n, nanos/n, nPerSecond);
 }
 
 void test_atomic()
@@ -37,11 +38,11 @@ void test_switch(int coro)
     std::atomic<int> *done = new std::atomic<int>{0};
     for (int i = 0; i < coro; ++i)
         go co_stack(8192) [=]{
-            for (int i = 0; i < N / coro; ++i)
+            for (int i = 0; i < N * 10 / coro; ++i)
                 co_yield;
             if (++*done == coro) {
                 auto end = chrono::steady_clock::now();
-                dump("BenchmarkSwitch_" + std::to_string(coro), N, start, end);
+                dump("BenchmarkSwitch_" + std::to_string(coro), N * 10, start, end);
                 delete done;
             }
         };
