@@ -91,6 +91,12 @@ libgo有以下特点：
         		例如：
         		$ cmake .. -G"Visual Studio 14 2015 Win64" -DBOOST_ROOT="e:\\boost_1_61_0"
 
+### 性能
+
+![switch1](imgs/switch_cost.png)
+
+![switch2](imgs/switch_speed.png)
+
 ### 注意事项(WARNING)：
 
 	协程中尽量不要使用TLS, 或依赖于TLS实现的不可重入的库函数。
