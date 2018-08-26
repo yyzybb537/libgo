@@ -4,10 +4,6 @@ import(
 	"runtime"
 )
 
-func init() {
-	runtime.GOMAXPROCS(1)
-}
-
 func BenchmarkSwitch_1(b *testing.B) {
 	c := make(chan bool)
 	go func(){

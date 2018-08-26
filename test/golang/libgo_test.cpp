@@ -3,10 +3,9 @@
 #include <atomic>
 #include <string>
 #include "../../libgo/libgo.h"
-#if TEST_MIN_THREAD
-#else
-#define TEST_MIN_THREAD 8
-#define TEST_MAX_THREAD 8
+#if !defined(TEST_MIN_THREAD)
+#define TEST_MIN_THREAD 1
+#define TEST_MAX_THREAD 1
 #endif
 #include "../gtest_unit/gtest_exit.h"
 using namespace std;
