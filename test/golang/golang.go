@@ -6,6 +6,7 @@ import(
 	"fmt"
 	"os"
 	"strconv"
+	"sync/atomic"
 )
 
 func Switch_1(n int) {
@@ -24,7 +25,8 @@ func Switch_1(n int) {
 
 func Switch_1000(n int) {
 	nCoro := 1000
-	c := make(chan bool, nCoro)
+	var done int64 = 0
+	c := make(chan bool, 1)
 	for i := 0; i < nCoro; i++ {
 		go func(){
 			for i := 0; i < n / nCoro; i++ {
@@ -32,13 +34,13 @@ func Switch_1000(n int) {
 				runtime.Gosched()
 			}
 
-			c <- true
+			if atomic.AddInt64(&done, 1) == int64(nCoro) {
+				c <- true
+			}
 		}()
 	}
 
-	for i := 0; i < nCoro; i++ {
-		<-c
-	}
+	<-c
 }
 
 func Channel_0(n int) {
@@ -84,8 +86,10 @@ func main() {
 	var n int64 = 10000000
 	var N int = int(n)
 
-	nThreads, _ := strconv.Atoi(os.Args[1])
-	runtime.GOMAXPROCS(nThreads)
+	if len(os.Args) > 1 {
+		nThreads, _ := strconv.Atoi(os.Args[1])
+		runtime.GOMAXPROCS(nThreads)
+	}
 
 	fmt.Printf("Thread: %d\n", runtime.GOMAXPROCS(0));
 
