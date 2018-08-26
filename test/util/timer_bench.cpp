@@ -11,7 +11,7 @@ using namespace std::chrono;
 #define O(x) cout << x << endl
 
 struct Timer { Timer() : tp(system_clock::now()) {} virtual ~Timer() { auto dur = system_clock::now() - tp; O("Cost " << duration_cast<milliseconds>(dur).count() << " ms"); } system_clock::time_point tp; };
-struct Bench : public Timer { Bench() : val(0) {} virtual ~Bench() { stop(); } void stop() { auto dur = system_clock::now() - tp; O("Per op: " << duration_cast<nanoseconds>(dur).count() / std::max(val, 1L) << " ns"); auto perf = (double)val / duration_cast<milliseconds>(dur).count() / 10; if (perf < 1) O("Performance: " << std::setprecision(3) << perf << " w/s"); else O("Performance: " << perf << " w/s"); } Bench& operator++() { ++val; return *this; } Bench& operator++(int) { ++val; return *this; } Bench& add(long v) { val += v; } long val; };
+struct Bench : public Timer { Bench() : val(0) {} virtual ~Bench() { stop(); } void stop() { auto dur = system_clock::now() - tp; O("Per op: " << duration_cast<nanoseconds>(dur).count() / std::max(val, 1L) << " ns"); auto perf = (double)val / duration_cast<milliseconds>(dur).count() / 10; if (perf < 1) O("Performance: " << std::setprecision(3) << perf << " w/s"); else O("Performance: " << perf << " w/s"); } Bench& operator++() { ++val; return *this; } Bench& operator++(int) { ++val; return *this; } Bench& add(long v) { val += v; return *this; } long val; };
 
 static const int cThreads = 1;
 static const int cVal = 10000000;
@@ -51,7 +51,7 @@ void show() {
             cout << endl;
         }
         cout << "Complete: " << timer.completeSlot_.size() << endl;
-        OUT(timer_type::Element::getCount());
+//        OUT(timer_type::Element::getCount());
         OUT(timer.GetPoolSize());
         sleep(1);
     }
@@ -67,7 +67,7 @@ void insert(int nThread) {
 
 void insertWithStop(int nThread) {
     for (int i = 0; i < cVal; ++i)
-        g_ids[i + cVal * nThread] = timer.StartTimer(milliseconds(1), &emptyFunc);
+        g_ids[i + cVal * nThread] = timer.StartTimer(milliseconds(i + nThread), &emptyFunc);
 }
 void stop(int nThread) {
     for (int i = 0; i < cVal; ++i) {
@@ -79,7 +79,7 @@ void stop(int nThread) {
 int main() {
     thread(&co::FastSteadyClock::ThreadRun).detach();
     usleep(300 * 1000);
-    timer.SetPoolSize(cVal * cThreads, cVal * cThreads, true);
+    timer.SetPoolSize(cVal * cThreads, cVal * cThreads);
 //    thread(&show).detach();
 
     thread([]{
