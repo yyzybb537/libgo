@@ -93,6 +93,15 @@ libgo有以下特点：
 
 ### 性能
 
+libgo和golang一样实现了一个完整的调度器（用户只需创建协程，无需关心协程的执行、挂起、资源回收），因此有了和golang对比单线程协程调度性能的资格（功能不对等的情况下没资格做性能对比）。
+
+libgo的调度器还实现了worksteal算法的多线程负载均衡调度，因此有了和golang对比多线程协程调度性能的资格。
+
+	测试环境：2018款13寸mac笔记本（cpu最低配）
+	操作系统：Mac OSX
+	CPU: 2.3 GHz Intel Core i5（4核心 8线程）
+	测试脚本：$ test/golang/test.sh thread_number
+
 <img width="400" src="imgs/switch_cost.png"/>
 
 <img width="600" src="imgs/switch_speed.png"/>
