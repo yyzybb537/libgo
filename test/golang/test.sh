@@ -1,5 +1,17 @@
 #!/bin/sh
 
+build()
+{
+    wrk=`pwd`
+    cd ../..
+    mkdir -p build
+    cd build
+    cmake .. && make release
+    cd $wrk
+}
+
+test -f ../../build/liblibgo.a || build
+
 isMac=`uname -a | grep Darwin -c || echo -n`
 threads=$1
 test -z "$threads" && threads=1
