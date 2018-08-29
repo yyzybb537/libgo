@@ -239,8 +239,14 @@ void Timer<F>::RunOnce()
 
     Point last;
     last.p64 = point_.p64;
-//    point_.p64 = destPoint.p64;
+
+#if LIBGO_SYS_Windows
+    point_.p64 = destPoint.p64;
+	std::atomic_thread_fence(std::memory_order_release);
+#else
     __atomic_store(&point_.p64, &destPoint.p64, std::memory_order_release);
+#endif
+
     DBG_TIMER_CHECK(dt);
 
     DebugPrint(dbg_timer, "[id=%ld]RunOnce point:<%d><%d><%d><%d> ----> <%d><%d><%d><%d>",
@@ -312,8 +318,14 @@ FastSteadyClock::time_point Timer<F>::NextTrigger(FastSteadyClock::duration max)
             dest - begin_).count() / precision_.count();
     Point & p = *(Point*)&durVal;
     Point last;
-//    last.p64 = point_.p64;
-    __atomic_load(&point_.p64, &last.p64, std::memory_order_acquire);
+
+#if LIBGO_SYS_Windows
+	std::atomic_thread_fence(std::memory_order_acquire);
+	last.p64 = point_.p64;	
+#else 
+	__atomic_load(&point_.p64, &last.p64, std::memory_order_acquire);
+#endif
+
     auto lastTime = last.p64 * precision_ + begin_;
     if (last.p64 >= p.p64) return FastSteadyClock::now();
 
@@ -399,8 +411,12 @@ void Timer<F>::Dispatch(Element * element, bool mainloop)
 {
 sync_retry:
     Point last;
-//    last.p64 = point_.p64;
+#if LIBGO_SYS_Windows
+	std::atomic_thread_fence(std::memory_order_acquire);
+    last.p64 = point_.p64;
+#else
     __atomic_load(&point_.p64, &last.p64, std::memory_order_acquire);
+#endif
     FastSteadyClock::time_point lastTime(begin_ + last.p64 * precision_);
 
     if (!mainloop && element->tp_ <= lastTime) {
@@ -432,7 +448,13 @@ sync_retry:
     {
         std::unique_lock<typename Slot::lock_t> lock(slot.LockRef());
         uint64_t atomicPointP64;
-        __atomic_load(&point_.p64, &atomicPointP64, std::memory_order_acquire);
+#if LIBGO_SYS_Windows
+		std::atomic_thread_fence(std::memory_order_acquire);
+		atomicPointP64 = point_.p64;
+#else 
+		__atomic_load(&point_.p64, &atomicPointP64, std::memory_order_acquire);
+#endif
+       
         if (last.p64 != atomicPointP64) {
             goto sync_retry;
         }
