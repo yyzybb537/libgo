@@ -111,6 +111,8 @@ private:
 
     std::shared_ptr<bool> stop_;
 
+    std::thread dispatchThread_;
+
     // ------------- 兼容旧版架构接口 -------------
 public:
 //    // 调度器调度函数, 内部执行协程、调度协程

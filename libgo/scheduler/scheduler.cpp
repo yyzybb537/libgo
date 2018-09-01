@@ -17,9 +17,39 @@ inline atomic_t<unsigned long long> & GetTaskIdFactory()
     return factory;
 }
 
+std::mutex& ExitListMtx()
+{
+    static std::mutex mtx;
+    return mtx;
+}
+std::vector<std::function<void()>>* ExitList()
+{
+    static std::vector<std::function<void()>> *vec = new std::vector<std::function<void()>>;
+    return vec;
+}
+
+static int onExit(void) {
+    auto vec = ExitList();
+    for (auto fn : *vec) {
+        fn();
+    }
+    vec->clear();
+    return 0;
+}
+
+static int InitOnExit() {
+    onexit(&onExit);
+    return 0;
+}
+
 Scheduler* Scheduler::Create()
 {
-    return new Scheduler;
+    static int ignore = InitOnExit();
+    Scheduler* sched = new Scheduler;
+    std::unique_lock<std::mutex> lock(ExitListMtx());
+    auto vec = ExitList();
+    vec->push_back([=] { delete sched; });
+    return sched;
 }
 
 Scheduler::Scheduler()
@@ -31,6 +61,7 @@ Scheduler::Scheduler()
 
 Scheduler::~Scheduler()
 {
+    Stop();
 }
 
 void Scheduler::CreateTask(TaskF const& fn, TaskOpt const& opt)
@@ -106,7 +137,7 @@ void Scheduler::Start(int minThreadNumber, int maxThreadNumber)
                 DebugPrint(dbg_thread, "Start dispatcher(sched=%p) thread id: %lu", (void*)this, NativeThreadID());
                 this->DispatcherThread();
                 });
-        t.detach();
+        dispatchThread_.swap(t);
     } else {
         DebugPrint(dbg_scheduler, "---> No DispatcherThread");
     }
@@ -118,6 +149,8 @@ void Scheduler::Start(int minThreadNumber, int maxThreadNumber)
 }
 void Scheduler::Stop()
 {
+    if (*stop_) return;
+
     *stop_ = true;
     size_t n = processers_.size();
     for (size_t i = 0; i < n; ++i) {
@@ -125,6 +158,8 @@ void Scheduler::Stop()
         if (p)
             p->NotifyCondition();
     }
+    if (dispatchThread_.joinable())
+        dispatchThread_.join();
 }
 void Scheduler::UseAloneTimerThread()
 {
@@ -173,7 +208,7 @@ void Scheduler::DispatcherThread()
 {
     DebugPrint(dbg_scheduler, "---> Start DispatcherThread");
     typedef std::size_t idx_t;
-    for (;;) {
+    while (!*stop_) {
         // TODO: 用condition_variable降低cpu使用率
         std::this_thread::sleep_for(std::chrono::microseconds(CoroutineOptions::getInstance().dispatcher_thread_cycle_us));
 
