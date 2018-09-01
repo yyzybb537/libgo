@@ -2,6 +2,9 @@
 #include "../common/config.h"
 #include "fcontext.h"
 
+#if defined(LIBGO_SYS_Windows)
+# include "fiber/context.h"
+#else
 namespace co {
 
 class Context
@@ -60,5 +63,6 @@ private:
     uint32_t stackSize_ = 0;
     int protectPage_ = 0;
 };
-
 } // namespace co
+
+#endif

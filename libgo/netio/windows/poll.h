@@ -1,2 +1,2 @@
-#include <WinSock2.h>
-#include <Windows.h>
+#pragma once
+#include <unistd.h>

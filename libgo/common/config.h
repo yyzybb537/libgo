@@ -60,6 +60,16 @@
 # define ATTRIBUTE_WEAK __attribute__((weak_import))
 #endif
 
+#if defined(LIBGO_SYS_Windows)
+#pragma warning(disable : 4996)
+#endif
+
+#if defined(LIBGO_SYS_Windows)
+# define FCONTEXT_CALL __stdcall
+#else
+# define FCONTEXT_CALL
+#endif
+
 #if defined(LIBGO_SYS_Unix)
 #include <unistd.h>
 #include <sys/types.h>
@@ -161,7 +171,7 @@ struct CoroutineOptions
 
 int GetCurrentProcessID();
 int GetCurrentThreadID();
-std::string GetCurrentTime();
+std::string GetCurrentTimeStr();
 const char* BaseFile(const char* file);
 const char* PollEvent2Str(short int event);
 unsigned long NativeThreadID();
@@ -201,7 +211,7 @@ extern std::mutex gDbgLock;
             ::co::ErrnoStore es; \
             std::unique_lock<std::mutex> lock(::co::gDbgLock); \
             fprintf(::co::CoroutineOptions::getInstance().debug_output, "[%s][%05d][%04d]%s:%d:(%s)\t " fmt "\n", \
-                    ::co::GetCurrentTime().c_str(),\
+                    ::co::GetCurrentTimeStr().c_str(),\
                     ::co::GetCurrentProcessID(), ::co::GetCurrentThreadID(), \
                     ::co::BaseFile(__FILE__), __LINE__, __FUNCTION__, ##__VA_ARGS__); \
             fflush(::co::CoroutineOptions::getInstance().debug_output); \

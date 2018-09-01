@@ -1,8 +1,17 @@
 #pragma once
+#include <WinSock2.h>
+#include <Windows.h>
 #include <stdint.h>
 
 typedef int64_t ssize_t;
 
-void usleep(uint64_t microseconds);
+typedef int socklen_t;
 
-unsigned int sleep(unsigned int seconds);
+extern "C" {
+    void usleep(uint64_t microseconds);
+
+    unsigned int sleep(unsigned int seconds);
+
+    int poll(struct pollfd *fds, unsigned long nfds, int timeout);
+
+}

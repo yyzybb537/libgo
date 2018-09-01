@@ -44,10 +44,10 @@ struct Task
     {
         ctx_.SwapIn();
     }
-    ALWAYS_INLINE void SwapTo(Task* other)
-    {
-        ctx_.SwapTo(other->ctx_);
-    }
+    //ALWAYS_INLINE void SwapTo(Task* other)
+    //{
+    //    ctx_.SwapTo(other->ctx_);
+    //}
     ALWAYS_INLINE void SwapOut()
     {
         ctx_.SwapOut();

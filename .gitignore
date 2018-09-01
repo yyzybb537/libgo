@@ -2,6 +2,8 @@
 *.t
 *.a
 *.so
+libgo/context/*.asm
+
 third_party/gtest/*
 libgo/common/cmake_config.h
 vs_proj/vs201*

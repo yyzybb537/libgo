@@ -288,7 +288,7 @@ void Scheduler::DispatcherThread()
             }
 
             auto maxP = processers_[actives.rbegin()->second];
-            std::size_t stealN = std::min(maxP->RunnableSize() / 2, waitN * 1024);
+            std::size_t stealN = (std::min)(maxP->RunnableSize() / 2, waitN * 1024);
             auto tasks = maxP->Steal(stealN);
             if (tasks.empty())
                 continue;

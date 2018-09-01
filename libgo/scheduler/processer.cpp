@@ -56,6 +56,10 @@ void Processer::Process()
 {
     GetCurrentProcesser() = this;
 
+#if defined(LIBGO_SYS_Windows)
+    FiberScopedGuard sg();
+#endif
+
     bool & isStop = *stop_;
 
     while (!isStop)

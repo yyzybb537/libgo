@@ -27,7 +27,7 @@ extern "C"
 {
 
 typedef void* fcontext_t;
-typedef void (*fn_t)(intptr_t);
+typedef void (FCONTEXT_CALL *fn_t)(intptr_t);
 
 intptr_t jump_fcontext(fcontext_t * ofc, fcontext_t nfc,
         intptr_t vp, bool preserve_fpu = false);

@@ -77,7 +77,7 @@ int GetCurrentThreadID()
     return proc ? proc->Id() : -1;
 }
 
-std::string GetCurrentTime()
+std::string GetCurrentTimeStr()
 {
 #if defined(LIBGO_SYS_Unix)
     struct tm local;

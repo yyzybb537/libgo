@@ -2,10 +2,10 @@
 #include "../../libgo/libgo.h"
 #include <thread>
 #include "gtest/gtest.h"
-#include <unistd.h>
-#include <sys/socket.h>
-#include <arpa/inet.h>
-#include <poll.h>
+# include <unistd.h>
+# include <sys/socket.h>
+# include <arpa/inet.h>
+# include <poll.h>
 
 #define DEBUG_CHECK_POINT
 
