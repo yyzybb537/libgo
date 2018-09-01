@@ -48,6 +48,11 @@ link_directories(${PROJECT_BINARY_DIR}/..)
 
 aux_source_directory(${PROJECT_SOURCE_DIR} SRC_LIST)
 
+if (WIN32)
+    list(REMOVE_ITEM SRC_LIST ${PROJECT_SOURCE_DIR}/sample4_echo.cpp)
+    list(REMOVE_ITEM SRC_LIST ${PROJECT_SOURCE_DIR}/sample12_listener.cpp)
+endif()
+
 foreach(var ${SRC_LIST})
     string(REGEX REPLACE ".*/" "" var ${var})
     string(REGEX REPLACE ".cpp" "" tgt ${var})

@@ -131,7 +131,7 @@ TEST(Select, TimeoutIs0)
         EXPECT_EQ(g_Scheduler.GetCurrentTaskYieldCount(), yield_count);
 
         int fds[2];
-        int res = tcpSocketPair(AF_LOCAL, SOCK_STREAM, 0, fds);
+        int res = tcpSocketPair(0, SOCK_STREAM, 0, fds);
         EXPECT_EQ(res, 0);
 
         fd_set wfs;
@@ -176,7 +176,7 @@ TEST(Select, TimeoutIsF1)
         EXPECT_EQ(g_Scheduler.GetCurrentTaskYieldCount(), yield_count + 1);
 
         int fds[2];
-        int res = tcpSocketPair(AF_LOCAL, SOCK_STREAM, 0, fds);
+        int res = tcpSocketPair(0, SOCK_STREAM, 0, fds);
         EXPECT_EQ(res, 0);
 
         fd_set wfs;
@@ -220,7 +220,7 @@ TEST(Select, TimeoutIs1)
         auto r = CreateFds(&rd_fds, 2);
         EXPECT_EQ(FD_SIZE(&rd_fds), 2);
         yield_count = g_Scheduler.GetCurrentTaskYieldCount();
-        n = select(std::max(x->nfds_, r->nfds_), &rd_fds, &wr_fds, NULL, gc_new timeval{1, 0});
+        n = select((std::max)(x->nfds_, r->nfds_), &rd_fds, &wr_fds, NULL, gc_new timeval{1, 0});
         EXPECT_TRUE(*x == wr_fds);
         EXPECT_TRUE(FD_ISZERO(&rd_fds));
         EXPECT_EQ(n, 2);

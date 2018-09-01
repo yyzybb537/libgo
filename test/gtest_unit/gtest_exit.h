@@ -235,7 +235,7 @@ int tcpSocketPair(int, int, int, int fds[2])
 
     fds[0] = clientSock;
     fds[1] = newSock;
-    close(listenSock);
+    //close(listenSock);
     return 0;
 }
 
