@@ -30,7 +30,7 @@ namespace co {
     public:
         Context(fn_t fn, intptr_t vp, std::size_t stackSize)
         {
-            DebugPrint(dbg_task, "valloc stack. size=%u", stackSize);
+            DebugPrint(dbg_task, "valloc stack. size=%lu", (unsigned long)stackSize);
 
             SIZE_T commit_size = 4 * 1024;
             ctx_ = CreateFiberEx(commit_size,

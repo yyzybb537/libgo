@@ -2,9 +2,9 @@
 
 namespace co {
 
-static thread_local CLSMap tlm;
 
 CLSMap* GetThreadLocalCLSMap() {
+    static thread_local CLSMap tlm;
     return &tlm;
 }
 
