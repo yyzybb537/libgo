@@ -6,6 +6,11 @@
 
 namespace co {
 
+struct OverlappedEntry : public OVERLAPPED
+{
+    Processer::SuspendEntry entry;
+};
+
 class Reactor
 {
 public:

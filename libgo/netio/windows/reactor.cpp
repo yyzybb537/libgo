@@ -19,14 +19,10 @@ Reactor::Reactor()
         std::thread([=] { this->ThreadRun(); }).detach();
 }
 
-struct OverlappedEntry : public OVERLAPPED
-{
-    Processer::SuspendEntry entry;
-};
 
 Reactor::eWatchResult Reactor::Watch(SOCKET sock, short int pollEvent, Processer::SuspendEntry const& entry)
 {
-    (void)CreateIoCompletionPort((HANDLE)sock, iocp_, (ULONG_PTR)sock, 0);
+    (void)CreateIoCompletionPort((HANDLE)sock, iocp_, (ULONG_PTR)this, 0);
 
     OverlappedEntry* olEntry = new OverlappedEntry;
     olEntry->entry = entry;
@@ -42,7 +38,11 @@ Reactor::eWatchResult Reactor::Watch(SOCKET sock, short int pollEvent, Processer
         res = WSARecv(sock, &dataBuf, 1, &sent, &flags, ol, nullptr);
     } else if (pollEvent & POLLOUT) {
         res = WSASend(sock, &dataBuf, 1, &sent, 0, ol, nullptr);
+    } else {
+        autoDelete.release();
+        return ePending;
     }
+
     if (res = 0)
         return eReady;
  
@@ -62,11 +62,15 @@ void Reactor::ThreadRun()
     DWORD  NumberOfBytes = 0;
     ULONG_PTR CompletionKey = 0;
     OVERLAPPED* ol = NULL;
-    while (FALSE != GetQueuedCompletionStatus(iocp_, &NumberOfBytes, &CompletionKey, &ol, WSA_INFINITE))
+    for (;;)
     {
+        GetQueuedCompletionStatus(iocp_, &NumberOfBytes, &CompletionKey, &ol, WSA_INFINITE);
+        if (CompletionKey != (ULONG_PTR)this) continue;
+
         OverlappedEntry* olEntry = (OverlappedEntry*)ol;
         std::unique_ptr<OverlappedEntry> autoDelete(olEntry);
         Processer::Wakeup(olEntry->entry);
+        delete olEntry;
     }
 }
 

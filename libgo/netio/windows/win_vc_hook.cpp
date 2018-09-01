@@ -1,7 +1,10 @@
 #include <WinSock2.h>
 #include <Windows.h>
+#include <mswsock.h>
+#include <Ws2ipdef.h>
 #include "xhook/xhook.h"
 #include "../../scheduler/scheduler.h"
+#include "reactor.h"
 
 namespace co {
 
@@ -62,12 +65,6 @@ namespace co {
         return ret;
     }
 
-//    bool SetNonblocking(SOCKET s, bool is_nonblocking)
-//    {
-//        u_long v = is_nonblocking ? 1 : 0;
-//        return ioctlsocket(s, FIONBIO, &v) == 0;
-//    }
-
     bool IsNonblocking(SOCKET s)
     {
         int v = 0;
@@ -126,102 +123,114 @@ namespace co {
         )
     {
         static const struct timeval zero_tmv{0, 0};
+        long timeout_us = timeout ? (timeout->tv_sec * 1000000 + timeout->tv_usec) : -1;
         int timeout_ms = timeout ? (timeout->tv_sec * 1000 + timeout->tv_usec / 1000) : -1;
         Task *tk = Processer::GetCurrentTask();
         DebugPrint(dbg_hook, "task(%s) Hook select(nfds=%d, rfds=%p, wfds=%p, efds=%p, timeout=%d).", 
             tk ? tk->DebugInfo() : "nil", (int)nfds, readfds, writefds, exceptfds, timeout_ms);
 
-        if (!tk || !timeout_ms)
+        if (!tk || timeout_us == 0)
             return select_f(nfds, readfds, writefds, exceptfds, timeout);
 
         // async select
         int ret = safe_select(nfds, readfds, writefds, exceptfds);
         if (ret) return ret;
         
-        ULONGLONG start_time = GetTickCount64();
-        int delta_time = 1;
-        while (-1 == timeout_ms || GetTickCount64() - start_time < timeout_ms)
-        {
-            ret = safe_select(nfds, readfds, writefds, exceptfds);
-            if (ret > 0) return ret;
+        Processer::SuspendEntry entry = (timeout_us == -1) ? 
+            Processer::Suspend() : 
+            Processer::Suspend(std::chrono::microseconds(timeout_us));
 
-            if (exceptfds) {
-                // 因为windows的select, 仅在事先监听时才能捕获到error, 因此此处需要手动check
-                fd_set e_result;
-                FD_ZERO(&e_result);
-                for (u_int i = 0; i < exceptfds->fd_count; ++i)
-                {
-                    SOCKET fd = exceptfds->fd_array[i];
-                    int err = 0;
-                    int errlen = sizeof(err);
-                    getsockopt(fd, SOL_SOCKET, SO_ERROR, (char*)&err, &errlen);
-                    if (err) {
-                        FD_SET(fd, &e_result);
-                    }
-                }
+        bool isReady = false;
+        fd_set* fd_sets[3] = { readfds, writefds, exceptfds };
+        short fd_event[3] = { POLLIN, POLLOUT, POLLERR };
+        for (int idx = 0; idx < 3; ++idx) {
+            fd_set* fds = fd_sets[idx];
+            if (!fds) continue;
 
-                if (e_result.fd_count > 0) {
-                    // Some errors were happened.
-                    if (readfds) FD_ZERO(readfds);
-                    if (writefds) FD_ZERO(writefds);
-                    *exceptfds = e_result;
-                    return e_result.fd_count;
+            for (u_int i = 0; i < fds->fd_count; ++i) {
+                auto result = Reactor::getInstance().Watch((SOCKET)fds->fd_array[i], fd_event[idx], entry);
+                if (result == Reactor::eReady && !isReady) {
+                    isReady = true;
+                    Processer::Wakeup(entry);
                 }
             }
-
-			::Sleep(delta_time);
-            if (delta_time < 16)
-                delta_time <<= 2;
         }
 
-        if (readfds) FD_ZERO(readfds);
-        if (writefds) FD_ZERO(writefds);
-        if (exceptfds) FD_ZERO(exceptfds);
-        return 0;
+        Processer::StaticCoYield();
+
+        return safe_select(nfds, readfds, writefds, exceptfds);
+    }
+
+    LPFN_CONNECTEX getConnectExPtr(SOCKET sock)
+    {
+        DWORD numBytes = 0;
+        GUID guid = WSAID_CONNECTEX;
+        LPFN_CONNECTEX ConnectExPtr = NULL;
+        int success = ::WSAIoctl(sock, SIO_GET_EXTENSION_FUNCTION_POINTER,
+            (void*)&guid, sizeof(guid), (void*)&ConnectExPtr, sizeof(ConnectExPtr),
+            &numBytes, NULL, NULL);
+        return ConnectExPtr;
     }
 
     template <typename OriginF, typename ... Args>
-    static int connect_mode_hook(OriginF fn, const char* fn_name, SOCKET s, Args && ... args)
+    static int connect_mode_hook(OriginF fn, const char* fn_name, 
+        SOCKET s, const struct sockaddr *name, int namelen, 
+        Args && ... args)
     {
         Task *tk = Processer::GetCurrentTask();
         bool is_nonblocking = IsNonblocking(s);
         DebugPrint(dbg_hook, "task(%s) Hook %s(s=%d)(nonblocking:%d).", 
             tk ? tk->DebugInfo() : "nil", fn_name, (int)s, (int)is_nonblocking);
         if (!tk || is_nonblocking)
-            return fn(s, std::forward<Args>(args)...);
+            return fn(s, name, namelen, std::forward<Args>(args)...);
 
-        // async connect
-        if (!SetNonblocking(s, true))
-            return fn(s, std::forward<Args>(args)...);
+        if (name->sa_family == AF_INET) {
+            struct sockaddr_in addr = {};
+            addr.sin_family = AF_INET;
+            ::bind(s, (const sockaddr*)&addr, sizeof(addr));
+        } else if (name->sa_family == AF_INET6) {
+            struct sockaddr_in6 addr = {};
+            addr.sin6_family = AF_INET6;
+            ::bind(s, (const sockaddr*)&addr, sizeof(addr));
+        } else {
+            return fn(s, name, namelen, std::forward<Args>(args)...);
+        }
 
-        int ret = fn(s, std::forward<Args>(args)...);
-        if (ret == 0) return 0;
+        Processer::SuspendEntry entry = Processer::Suspend();
+        Reactor::getInstance().Watch(s, 0, entry);
 
-        int err = WSAGetLastError();
-        if (WSAEWOULDBLOCK != err && WSAEINPROGRESS != err)
-            return ret;
-
-        fd_set wfds = {}, efds = {};
-        FD_ZERO(&wfds);
-        FD_ZERO(&efds);
-        FD_SET(s, &wfds);
-        FD_SET(s, &efds);
-        select(1, NULL, &wfds, &efds, NULL);
-        if (!FD_ISSET(s, &efds) && FD_ISSET(s, &wfds)) {
-            SetNonblocking(s, false);
+        LPFN_CONNECTEX ConnectEx = getConnectExPtr(s);
+        DWORD ignore = 0;
+        OverlappedEntry ol = {};
+        ol.entry = entry;
+        BOOL bRet = ConnectEx(s, name, namelen, nullptr, 0, &ignore, &ol);
+        if (bRet) {
+            // complete
+            Processer::Wakeup(entry);
+            Processer::StaticCoYield();
             return 0;
         }
+
+        int err = WSAGetLastError();
+        if (err != ERROR_IO_PENDING) {
+            // error
+            Processer::Wakeup(entry);
+            Processer::StaticCoYield();
+            WSASetLastError(err);
+            return -1;
+        }
+
+        // io pending, waiting for
+        Processer::StaticCoYield();
 
         err = 0;
         int errlen = sizeof(err);
         getsockopt(s, SOL_SOCKET, SO_ERROR, (char*)&err, &errlen);
         if (err) {
-            SetNonblocking(s, false);
             WSASetLastError(err);
-            return SOCKET_ERROR;
+            return -1;
         }
 
-        SetNonblocking(s, false);
         return 0;
     }
 
@@ -278,45 +287,80 @@ namespace co {
         bool is_nonblocking = IsNonblocking(s);
         DebugPrint(dbg_hook, "task(%s) Hook %s(s=%d)(nonblocking:%d)(flags:%d).",
             tk ? tk->DebugInfo() : "nil", fn_name, (int)s, (int)is_nonblocking, (int)flags);
+
         if (!tk || is_nonblocking || (flags & e_nonblocking_op))
             return fn(s, std::forward<Args>(args)...);
 
-        // async WSARecv
-        if (!SetNonblocking(s, true))
-            return fn(s, std::forward<Args>(args)...);
-
-        R ret = fn(s, std::forward<Args>(args)...);
-        if (ret != -1) {    // accept返回SOCKET类型，是无符号整数，所以此处不可判断小于0.
-            SetNonblocking(s, false);
-            return ret;
-        }
-
-        // If connection is closed, the Bytes will setted 0, and ret is 0, and WSAGetLastError() returns 0.
-        int err = WSAGetLastError();
-        if (WSAEWOULDBLOCK != err && WSAEINPROGRESS != err) {
-            SetNonblocking(s, false);
-            WSASetLastError(err);
-            return ret;
-        }
-
-        // wait data arrives.
         int timeout = 0;
         if (!(flags & e_no_timeout)) {
             int timeoutlen = sizeof(timeout);
             getsockopt(s, SOL_SOCKET, SO_RCVTIMEO, (char*)&timeout, &timeoutlen);
         }
 
-        timeval tm{ timeout / 1000, timeout % 1000 * 1000 };
-        fd_set rfds;
-        FD_ZERO(&rfds);
-        FD_SET(s, &rfds);
-        select(1, &rfds, NULL, NULL, timeout ? &tm : NULL);
+        Processer::SuspendEntry entry = timeout == 0 ? 
+            Processer::Suspend() :
+            Processer::Suspend(std::chrono::milliseconds(timeout));
 
-        ret = fn(s, std::forward<Args>(args)...);
-        err = WSAGetLastError();
-        SetNonblocking(s, false);
-        WSASetLastError(err);
-        return ret;
+        auto result = Reactor::getInstance().Watch(s, POLLIN, entry);
+        if (result == Reactor::eError || result == Reactor::eReady) {
+            Processer::Wakeup(entry);
+        }
+
+        Processer::StaticCoYield();
+
+        fd_set readfds, exceptfds;
+        FD_ZERO(&readfds);
+        FD_SET(s, &readfds);
+        FD_ZERO(&exceptfds);
+        FD_SET(s, &exceptfds);
+        int ret = safe_select(0, &readfds, nullptr, &exceptfds);
+        if (ret < 0) {
+            WSASetLastError(WSAEWOULDBLOCK);
+            return -1;
+        }
+
+        return fn(s, std::forward<Args>(args)...);
+    }
+
+    template <typename R, typename OriginF, typename ... Args>
+    static R write_mode_hook(OriginF fn, const char* fn_name, int flags, SOCKET s, Args && ... args)
+    {
+        Task *tk = Processer::GetCurrentTask();
+        bool is_nonblocking = IsNonblocking(s);
+        DebugPrint(dbg_hook, "task(%s) Hook %s(s=%d)(nonblocking:%d)(flags:%d).",
+            tk ? tk->DebugInfo() : "nil", fn_name, (int)s, (int)is_nonblocking, (int)flags);
+        if (!tk || is_nonblocking || (flags & e_nonblocking_op))
+            return fn(s, std::forward<Args>(args)...);
+
+        int timeout = 0;
+        if (!(flags & e_no_timeout)) {
+            int timeoutlen = sizeof(timeout);
+            getsockopt(s, SOL_SOCKET, SO_SNDTIMEO, (char*)&timeout, &timeoutlen);
+        }
+
+        Processer::SuspendEntry entry = timeout == 0 ?
+            Processer::Suspend() :
+            Processer::Suspend(std::chrono::milliseconds(timeout));
+
+        auto result = Reactor::getInstance().Watch(s, POLLOUT, entry);
+        if (result == Reactor::eError || result == Reactor::eReady) {
+            Processer::Wakeup(entry);
+        }
+
+        Processer::StaticCoYield();
+
+        fd_set writefds, exceptfds;
+        FD_ZERO(&writefds);
+        FD_SET(s, &writefds);
+        FD_ZERO(&exceptfds);
+        FD_SET(s, &exceptfds);
+        int ret = safe_select(1, nullptr, &writefds, &exceptfds);
+        if (ret < 0) {
+            WSASetLastError(WSAEWOULDBLOCK);
+            return -1;
+        }
+
+        return fn(s, std::forward<Args>(args)...);
     }
 
     typedef SOCKET (WINAPI *accept_t)(
@@ -470,33 +514,6 @@ namespace co {
             s, lpMsg, lpdwNumberOfBytesRecvd, lpOverlapped, lpCompletionRoutine);
     }
 
-    template <typename R, typename OriginF, typename ... Args>
-    static R write_mode_hook(OriginF fn, const char* fn_name, int flags, SOCKET s, Args && ... args)
-    {
-        Task *tk = Processer::GetCurrentTask();
-        bool is_nonblocking = IsNonblocking(s);
-        DebugPrint(dbg_hook, "task(%s) Hook %s(s=%d)(nonblocking:%d)(flags:%d).",
-            tk ? tk->DebugInfo() : "nil", fn_name, (int)s, (int)is_nonblocking, (int)flags);
-        if (!tk || is_nonblocking || (flags & e_nonblocking_op))
-            return fn(s, std::forward<Args>(args)...);
-
-        // wait data arrives.
-        int timeout = 0;
-        if (!(flags & e_no_timeout)) {
-            int timeoutlen = sizeof(timeout);
-            getsockopt(s, SOL_SOCKET, SO_SNDTIMEO, (char*)&timeout, &timeoutlen);
-        }
-
-        timeval tm{ timeout / 1000, timeout % 1000 * 1000 };
-        fd_set wfds;
-        FD_ZERO(&wfds);
-        FD_SET(s, &wfds);
-        if (1 == select(1, NULL, &wfds, NULL, timeout ? &tm : NULL))
-            return fn(s, std::forward<Args>(args)...);
-
-        WSASetLastError(WSAEWOULDBLOCK);
-        return -1;
-    }
 
     typedef int ( WINAPI *WSASend_t)(
         _In_  SOCKET                             s,
@@ -624,7 +641,7 @@ namespace co {
         BOOL ok = true;
         // ioctlsocket and select functions.
 		ok &= XHookAttach((PVOID*)&ioctlsocket_f, &hook_ioctlsocket) == NO_ERROR;
-        //ok &= Mhook_SetHook((PVOID*)&WSAIoctl_f, &hook_WSAIoctl);
+        ok &= XHookAttach((PVOID*)&WSAIoctl_f, &hook_WSAIoctl);
 		ok &= XHookAttach((PVOID*)&select_f, &hook_select) == NO_ERROR;
 
         // connect-like functions
