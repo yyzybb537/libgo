@@ -15,8 +15,9 @@
 namespace co {
 
 #if defined(LIBGO_SYS_Linux)
-//ATTRIBUTE_WEAK
-extern void initHook();
+ATTRIBUTE_WEAK extern void initHook();
+#elif defined(LIBGO_SYS_Windows)
+    extern void initHook();
 #endif
 
 static int staticInitialize()
@@ -31,6 +32,8 @@ static int staticInitialize()
     TaskRefInit(ClsMap);
 
 #if defined(LIBGO_SYS_Linux)
+    initHook(); 
+#elif defined(LIBGO_SYS_Windows)
     initHook();
 #endif
     return 0;

@@ -9,14 +9,19 @@
 namespace co {
 
     typedef VOID (WINAPI *Sleep_t)(_In_ DWORD dwMilliseconds);
-    static Sleep_t Sleep_f = nullptr;
+    static Sleep_t& Sleep_f() {
+        static Sleep_t fn = (Sleep_t)GetProcAddress(GetModuleHandleA("Kernel32.dll"), "Sleep");
+        if (!fn)
+            fn = (Sleep_t)GetProcAddress(GetModuleHandleA("KernelBase.dll"), "Sleep");
+        return fn;
+    }
 
     static VOID WINAPI hook_Sleep(_In_ DWORD dwMilliseconds)
     {
         Task *tk = Processer::GetCurrentTask();
         DebugPrint(dbg_hook, "task(%s) Hook Sleep(dwMilliseconds=%lu).", tk->DebugInfo(), dwMilliseconds);
         if (!tk) {
-            Sleep_f(dwMilliseconds);
+            Sleep_f()(dwMilliseconds);
             return;
         }
 
@@ -40,7 +45,10 @@ namespace co {
         _In_    long   cmd,
         _Inout_ u_long *argp
         );
-    static ioctlsocket_t ioctlsocket_f = (ioctlsocket_t)GetProcAddress(GetModuleHandleA("Ws2_32.dll"), "ioctlsocket");
+    static ioctlsocket_t& ioctlsocket_f() {
+        static ioctlsocket_t fn = (ioctlsocket_t)GetProcAddress(GetModuleHandleA("Ws2_32.dll"), "ioctlsocket");
+        return fn;
+    }
 
     static int WINAPI hook_ioctlsocket(
         _In_    SOCKET s,
@@ -48,7 +56,7 @@ namespace co {
         _Inout_ u_long *argp
         )
     {
-        int ret = ioctlsocket_f(s, cmd, argp);
+        int ret = ioctlsocket_f()(s, cmd, argp);
         int err = WSAGetLastError();
         if (ret == 0 && cmd == FIONBIO) {
             int v = *argp;
@@ -69,7 +77,10 @@ namespace co {
         _In_  LPWSAOVERLAPPED                    lpOverlapped,
         _In_  LPWSAOVERLAPPED_COMPLETION_ROUTINE lpCompletionRoutine
         );
-    static WSAIoctl_t WSAIoctl_f = (WSAIoctl_t)GetProcAddress(GetModuleHandleA("Ws2_32.dll"), "WSAIoctl");
+    static WSAIoctl_t& WSAIoctl_f() {
+        static WSAIoctl_t fn = (WSAIoctl_t)GetProcAddress(GetModuleHandleA("Ws2_32.dll"), "WSAIoctl");
+        return fn;
+    }
 
     static int WINAPI hook_WSAIoctl(
         _In_  SOCKET                             s,
@@ -83,7 +94,7 @@ namespace co {
         _In_  LPWSAOVERLAPPED_COMPLETION_ROUTINE lpCompletionRoutine
         )
     {
-        int ret = WSAIoctl_f(s, dwIoControlCode, lpvInBuffer, cbInBuffer, lpvOutBuffer, cbOutBuffer, lpcbBytesReturned, lpOverlapped, lpCompletionRoutine);
+        int ret = WSAIoctl_f()(s, dwIoControlCode, lpvInBuffer, cbInBuffer, lpvOutBuffer, cbOutBuffer, lpcbBytesReturned, lpOverlapped, lpCompletionRoutine);
         int err = WSAGetLastError();
         if (ret == 0 && dwIoControlCode == FIONBIO) {
             setsockopt(s, SOL_SOCKET, SO_GROUP_PRIORITY, (const char*)lpvInBuffer, cbInBuffer);
@@ -110,7 +121,10 @@ namespace co {
         _Inout_ fd_set               *exceptfds,
         _In_    const struct timeval *timeout
         );
-    static select_t select_f = (select_t)GetProcAddress(GetModuleHandleA("Ws2_32.dll"), "select");
+    static select_t& select_f() {
+        static select_t fn = (select_t)GetProcAddress(GetModuleHandleA("Ws2_32.dll"), "select");
+        return fn;
+    }
 
     static inline int WINAPI safe_select(int nfds, fd_set *readfds, fd_set *writefds, fd_set *exceptfds)
     {
@@ -132,7 +146,7 @@ namespace co {
             fds[2] = *exceptfds;
             efds = &fds[2];
         }
-        int ret = select_f(nfds, rfds, wfds, efds, &zero_tmv);
+        int ret = select_f()(nfds, rfds, wfds, efds, &zero_tmv);
         if (ret <= 0) return ret;
 
         if (readfds) *readfds = fds[0];
@@ -157,7 +171,7 @@ namespace co {
             tk ? tk->DebugInfo() : "nil", (int)nfds, readfds, writefds, exceptfds, timeout_ms);
 
         if (!tk || timeout_us == 0)
-            return select_f(nfds, readfds, writefds, exceptfds, timeout);
+            return select_f()(nfds, readfds, writefds, exceptfds, timeout);
 
         // async select
         int ret = safe_select(nfds, readfds, writefds, exceptfds);
@@ -266,7 +280,10 @@ namespace co {
         _In_ const struct sockaddr *name,
         _In_ int                   namelen
         );
-    static connect_t connect_f = (connect_t)GetProcAddress(GetModuleHandleA("Ws2_32.dll"), "connect");
+    static connect_t& connect_f() {
+        static connect_t fn = (connect_t)GetProcAddress(GetModuleHandleA("Ws2_32.dll"), "connect");
+        return fn;
+    }
 
     static int WINAPI hook_connect(
         _In_ SOCKET                s,
@@ -274,7 +291,7 @@ namespace co {
         _In_ int                   namelen
         )
     {
-        return connect_mode_hook(connect_f, "connect", s, name, namelen);
+        return connect_mode_hook(connect_f(), "connect", s, name, namelen);
     }
 
     typedef int ( WINAPI *WSAConnect_t)(
@@ -286,7 +303,10 @@ namespace co {
         _In_  LPQOS                 lpSQOS,
         _In_  LPQOS                 lpGQOS
         );
-    static WSAConnect_t WSAConnect_f = (WSAConnect_t)GetProcAddress(GetModuleHandleA("Ws2_32.dll"), "WSAConnect");
+    static WSAConnect_t& WSAConnect_f() {
+        static WSAConnect_t fn = (WSAConnect_t)GetProcAddress(GetModuleHandleA("Ws2_32.dll"), "WSAConnect");
+        return fn;
+    }
 
     static int WINAPI hook_WSAConnect(
         _In_  SOCKET                s,
@@ -298,7 +318,7 @@ namespace co {
         _In_  LPQOS                 lpGQOS
         )
     {
-        return connect_mode_hook(WSAConnect_f, "WSAConnect", s, name, namelen, lpCallerData, lpCalleeData, lpSQOS, lpGQOS);
+        return connect_mode_hook(WSAConnect_f(), "WSAConnect", s, name, namelen, lpCallerData, lpCalleeData, lpSQOS, lpGQOS);
     }
 
     enum e_mode_hook_flags
@@ -395,7 +415,10 @@ namespace co {
         _Out_   struct sockaddr *addr,
         _Inout_ int             *addrlen
         );
-    static accept_t accept_f = (accept_t)GetProcAddress(GetModuleHandleA("Ws2_32.dll"), "accept");
+    static accept_t& accept_f() {
+        static accept_t fn = (accept_t)GetProcAddress(GetModuleHandleA("Ws2_32.dll"), "accept");
+        return fn;
+    }
 
     static SOCKET WINAPI hook_accept(
         _In_    SOCKET          s,
@@ -403,7 +426,7 @@ namespace co {
         _Inout_ int             *addrlen
         )
     {
-        return read_mode_hook<SOCKET>(accept_f, "accept", e_no_timeout, s, addr, addrlen);
+        return read_mode_hook<SOCKET>(accept_f(), "accept", e_no_timeout, s, addr, addrlen);
     }
 
     typedef SOCKET (WINAPI *WSAAccept_t)(
@@ -413,7 +436,10 @@ namespace co {
         _In_    LPCONDITIONPROC lpfnCondition,
         _In_    DWORD_PTR       dwCallbackData
         );
-    static WSAAccept_t WSAAccept_f = (WSAAccept_t)GetProcAddress(GetModuleHandleA("Ws2_32.dll"), "WSAAccept");
+    static WSAAccept_t& WSAAccept_f() {
+        static WSAAccept_t fn = (WSAAccept_t)GetProcAddress(GetModuleHandleA("Ws2_32.dll"), "WSAAccept");
+        return fn;
+    }
 
     static SOCKET WINAPI hook_WSAAccept(
         _In_    SOCKET          s,
@@ -423,7 +449,7 @@ namespace co {
         _In_    DWORD_PTR       dwCallbackData
         )
     {
-        return read_mode_hook<SOCKET>(WSAAccept_f, "WSAAccept", e_no_timeout, s, addr, addrlen, lpfnCondition, dwCallbackData);
+        return read_mode_hook<SOCKET>(WSAAccept_f(), "WSAAccept", e_no_timeout, s, addr, addrlen, lpfnCondition, dwCallbackData);
     }
 
     typedef int ( WINAPI *WSARecv_t)(
@@ -435,7 +461,10 @@ namespace co {
         _In_    LPWSAOVERLAPPED                    lpOverlapped,
         _In_    LPWSAOVERLAPPED_COMPLETION_ROUTINE lpCompletionRoutine
         );
-    static WSARecv_t WSARecv_f = (WSARecv_t)GetProcAddress(GetModuleHandleA("Ws2_32.dll"), "WSARecv");
+    static WSARecv_t& WSARecv_f() {
+        static WSARecv_t fn = (WSARecv_t)GetProcAddress(GetModuleHandleA("Ws2_32.dll"), "WSARecv");
+        return fn;
+    }
 
     static int WINAPI hook_WSARecv(
         _In_    SOCKET                             s,
@@ -447,7 +476,7 @@ namespace co {
         _In_    LPWSAOVERLAPPED_COMPLETION_ROUTINE lpCompletionRoutine
         )
     {
-        return read_mode_hook<int>(WSARecv_f, "WSARecv", lpOverlapped ? e_nonblocking_op : 0, s,
+        return read_mode_hook<int>(WSARecv_f(), "WSARecv", lpOverlapped ? e_nonblocking_op : 0, s,
             lpBuffers, dwBufferCount, lpNumberOfBytesRecvd, lpFlags, lpOverlapped, lpCompletionRoutine);
     }
 
@@ -457,7 +486,10 @@ namespace co {
         _In_  int    len,
         _In_  int    flags
         );
-    static recv_t recv_f = (recv_t)GetProcAddress(GetModuleHandleA("Ws2_32.dll"), "recv");
+    static recv_t& recv_f() {
+        static recv_t fn = (recv_t)GetProcAddress(GetModuleHandleA("Ws2_32.dll"), "recv");
+        return fn;
+    }
 
     static int WINAPI hook_recv(
         _In_  SOCKET s,
@@ -466,7 +498,7 @@ namespace co {
         _In_  int    flags
         )
     {
-        return read_mode_hook<int>(recv_f, "recv", 0, s, buf, len, flags);
+        return read_mode_hook<int>(recv_f(), "recv", 0, s, buf, len, flags);
     }
 
     typedef int ( WINAPI *recvfrom_t)(
@@ -477,7 +509,10 @@ namespace co {
         _Out_       struct sockaddr *from,
         _Inout_opt_ int             *fromlen
         );
-    static recvfrom_t recvfrom_f = (recvfrom_t)GetProcAddress(GetModuleHandleA("Ws2_32.dll"), "recvfrom");
+    static recvfrom_t& recvfrom_f() {
+        static recvfrom_t fn = (recvfrom_t)GetProcAddress(GetModuleHandleA("Ws2_32.dll"), "recvfrom");
+        return fn;
+    }
 
     static int WINAPI hook_recvfrom(
         _In_        SOCKET          s,
@@ -488,7 +523,7 @@ namespace co {
         _Inout_opt_ int             *fromlen
         )
     {
-        return read_mode_hook<int>(recvfrom_f, "recvfrom", 0, s, buf, len, flags, from, fromlen);
+        return read_mode_hook<int>(recvfrom_f(), "recvfrom", 0, s, buf, len, flags, from, fromlen);
     }
 
     typedef int ( WINAPI *WSARecvFrom_t)(
@@ -502,7 +537,10 @@ namespace co {
         _In_    LPWSAOVERLAPPED                    lpOverlapped,
         _In_    LPWSAOVERLAPPED_COMPLETION_ROUTINE lpCompletionRoutine
         );
-    static WSARecvFrom_t WSARecvFrom_f = (WSARecvFrom_t)GetProcAddress(GetModuleHandleA("Ws2_32.dll"), "WSARecvFrom");
+    static WSARecvFrom_t& WSARecvFrom_f() {
+        static WSARecvFrom_t fn = (WSARecvFrom_t)GetProcAddress(GetModuleHandleA("Ws2_32.dll"), "WSARecvFrom");
+        return fn;
+    }
 
     static int WINAPI hook_WSARecvFrom(
         _In_    SOCKET                             s,
@@ -516,7 +554,7 @@ namespace co {
         _In_    LPWSAOVERLAPPED_COMPLETION_ROUTINE lpCompletionRoutine
         )
     {
-        return read_mode_hook<int>(WSARecvFrom_f, "WSARecvFrom", lpOverlapped ? e_nonblocking_op : 0,
+        return read_mode_hook<int>(WSARecvFrom_f(), "WSARecvFrom", lpOverlapped ? e_nonblocking_op : 0,
             s, lpBuffers, dwBufferCount, lpNumberOfBytesRecvd, lpFlags, lpFrom, lpFromlen, lpOverlapped, lpCompletionRoutine);
     }
 
@@ -527,7 +565,10 @@ namespace co {
         _In_    LPWSAOVERLAPPED                    lpOverlapped,
         _In_    LPWSAOVERLAPPED_COMPLETION_ROUTINE lpCompletionRoutine
         );
-    static WSARecvMsg_t WSARecvMsg_f = (WSARecvMsg_t)GetProcAddress(GetModuleHandleA("Ws2_32.dll"), "WSARecvMsg");
+    static WSARecvMsg_t& WSARecvMsg_f() {
+        static WSARecvMsg_t fn = (WSARecvMsg_t)GetProcAddress(GetModuleHandleA("Ws2_32.dll"), "WSARecvMsg");
+        return fn;
+    }
 
     static int WINAPI  hook_WSARecvMsg(
         _In_    SOCKET                             s,
@@ -537,7 +578,7 @@ namespace co {
         _In_    LPWSAOVERLAPPED_COMPLETION_ROUTINE lpCompletionRoutine
         )
     {
-        return read_mode_hook<int>(WSARecvMsg_f, "WSARecvMsg", lpOverlapped ? e_nonblocking_op : 0,
+        return read_mode_hook<int>(WSARecvMsg_f(), "WSARecvMsg", lpOverlapped ? e_nonblocking_op : 0,
             s, lpMsg, lpdwNumberOfBytesRecvd, lpOverlapped, lpCompletionRoutine);
     }
 
@@ -551,7 +592,10 @@ namespace co {
         _In_  LPWSAOVERLAPPED                    lpOverlapped,
         _In_  LPWSAOVERLAPPED_COMPLETION_ROUTINE lpCompletionRoutine
         );
-    static WSASend_t WSASend_f = (WSASend_t)GetProcAddress(GetModuleHandleA("Ws2_32.dll"), "WSASend");
+    static WSASend_t& WSASend_f() {
+        static WSASend_t fn = (WSASend_t)GetProcAddress(GetModuleHandleA("Ws2_32.dll"), "WSASend");
+        return fn;
+    }
 
     static int WINAPI hook_WSASend(
         _In_  SOCKET                             s,
@@ -563,7 +607,7 @@ namespace co {
         _In_  LPWSAOVERLAPPED_COMPLETION_ROUTINE lpCompletionRoutine
         )
     {
-        return write_mode_hook<int>(WSASend_f, "WSASend", lpOverlapped ? e_nonblocking_op : 0,
+        return write_mode_hook<int>(WSASend_f(), "WSASend", lpOverlapped ? e_nonblocking_op : 0,
             s, lpBuffers, dwBufferCount, lpNumberOfBytesSent, dwFlags, lpOverlapped, lpCompletionRoutine);
     }
 
@@ -573,7 +617,10 @@ namespace co {
         _In_       int    len,
         _In_       int    flags
         );
-    static send_t send_f = (send_t)GetProcAddress(GetModuleHandleA("Ws2_32.dll"), "send");
+    static send_t& send_f() {
+        static send_t fn = (send_t)GetProcAddress(GetModuleHandleA("Ws2_32.dll"), "send");
+        return fn;
+    }
 
     static int WINAPI hook_send(
         _In_       SOCKET s,
@@ -582,7 +629,7 @@ namespace co {
         _In_       int    flags
         )
     {
-        return write_mode_hook<int>(send_f, "send", 0, s, buf, len, flags);
+        return write_mode_hook<int>(send_f(), "send", 0, s, buf, len, flags);
     }
 
     typedef int ( WINAPI *sendto_t)(
@@ -593,7 +640,10 @@ namespace co {
         _In_       const struct sockaddr *to,
         _In_       int                   tolen
         );
-    static sendto_t sendto_f = (sendto_t)GetProcAddress(GetModuleHandleA("Ws2_32.dll"), "sendto");
+    static sendto_t& sendto_f() {
+        static sendto_t fn = (sendto_t)GetProcAddress(GetModuleHandleA("Ws2_32.dll"), "sendto");
+        return fn;
+    }
 
     static int WINAPI hook_sendto(
         _In_       SOCKET                s,
@@ -604,7 +654,7 @@ namespace co {
         _In_       int                   tolen
         )
     {
-        return write_mode_hook<int>(sendto_f, "sendto", 0, s, buf, len, flags, to, tolen);
+        return write_mode_hook<int>(sendto_f(), "sendto", 0, s, buf, len, flags, to, tolen);
     }
 
     typedef int ( WINAPI *WSASendTo_t)(
@@ -618,7 +668,10 @@ namespace co {
         _In_  LPWSAOVERLAPPED                    lpOverlapped,
         _In_  LPWSAOVERLAPPED_COMPLETION_ROUTINE lpCompletionRoutine
         );
-    static WSASendTo_t WSASendTo_f = (WSASendTo_t)GetProcAddress(GetModuleHandleA("Ws2_32.dll"), "WSASendTo");
+    static WSASendTo_t& WSASendTo_f() {
+        static WSASendTo_t fn = (WSASendTo_t)GetProcAddress(GetModuleHandleA("Ws2_32.dll"), "WSASendTo");
+        return fn;
+    }
 
     static int WINAPI hook_WSASendTo(
         _In_  SOCKET                             s,
@@ -632,7 +685,7 @@ namespace co {
         _In_  LPWSAOVERLAPPED_COMPLETION_ROUTINE lpCompletionRoutine
         )
     {
-        return write_mode_hook<int>(WSASendTo_f, "WSASendTo", lpOverlapped ? e_nonblocking_op : 0,
+        return write_mode_hook<int>(WSASendTo_f(), "WSASendTo", lpOverlapped ? e_nonblocking_op : 0,
             s, lpBuffers, dwBufferCount, lpNumberOfBytesSent, dwFlags, lpTo, iToLen, lpOverlapped, lpCompletionRoutine);
     }
 
@@ -644,7 +697,10 @@ namespace co {
         _In_  LPWSAOVERLAPPED                    lpOverlapped,
         _In_  LPWSAOVERLAPPED_COMPLETION_ROUTINE lpCompletionRoutine
         );
-    static WSASendMsg_t WSASendMsg_f = (WSASendMsg_t)GetProcAddress(GetModuleHandleA("Ws2_32.dll"), "WSASendMsg");
+    static WSASendMsg_t& WSASendMsg_f() {
+        static WSASendMsg_t fn = (WSASendMsg_t)GetProcAddress(GetModuleHandleA("Ws2_32.dll"), "WSASendMsg");
+        return fn;
+    }
 
     static int WINAPI hook_WSASendMsg(
         _In_  SOCKET                             s,
@@ -655,53 +711,48 @@ namespace co {
         _In_  LPWSAOVERLAPPED_COMPLETION_ROUTINE lpCompletionRoutine
         )
     {
-        return write_mode_hook<int>(WSASendMsg_f, "WSASendMsg", lpOverlapped ? e_nonblocking_op : 0,
+        return write_mode_hook<int>(WSASendMsg_f(), "WSASendMsg", lpOverlapped ? e_nonblocking_op : 0,
             s, lpMsg, dwFlags, lpNumberOfBytesSent, lpOverlapped, lpCompletionRoutine);
     }
 
-    void coroutine_hook_init()
+    void initHook()
     {
 		XHookRestoreAfterWith();
 		XHookTransactionBegin();
 		XHookUpdateThread(GetCurrentThread());
 
-        if (!Sleep_f)
-            Sleep_f = (Sleep_t)GetProcAddress(GetModuleHandleA("Kernel32.dll"), "Sleep");
 
-        if (!Sleep_f)
-            Sleep_f = (Sleep_t)GetProcAddress(GetModuleHandleA("KernelBase.dll"), "Sleep");
+        BOOL ok = TRUE;
 
-        BOOL ok = !!Sleep_f;
-
-        ok &= XHookAttach((PVOID*)&Sleep_f, &hook_Sleep) == NO_ERROR;
+        ok &= XHookAttach((PVOID*)&Sleep_f(), &hook_Sleep) == NO_ERROR;
 
         // ioctlsocket and select functions.
-		ok &= XHookAttach((PVOID*)&ioctlsocket_f, &hook_ioctlsocket) == NO_ERROR;
-        ok &= XHookAttach((PVOID*)&WSAIoctl_f, &hook_WSAIoctl);
-		ok &= XHookAttach((PVOID*)&select_f, &hook_select) == NO_ERROR;
+		ok &= XHookAttach((PVOID*)&ioctlsocket_f(), &hook_ioctlsocket) == NO_ERROR;
+        ok &= XHookAttach((PVOID*)&WSAIoctl_f(), &hook_WSAIoctl) == NO_ERROR;
+		ok &= XHookAttach((PVOID*)&select_f(), &hook_select) == NO_ERROR;
 
         // connect-like functions
-		ok &= XHookAttach((PVOID*)&connect_f, &hook_connect) == NO_ERROR;
-		ok &= XHookAttach((PVOID*)&WSAConnect_f, &hook_WSAConnect) == NO_ERROR;
+		ok &= XHookAttach((PVOID*)&connect_f(), &hook_connect) == NO_ERROR;
+		ok &= XHookAttach((PVOID*)&WSAConnect_f(), &hook_WSAConnect) == NO_ERROR;
 
         // accept-like functions
-		ok &= XHookAttach((PVOID*)&accept_f, &hook_accept) == NO_ERROR;
-		ok &= XHookAttach((PVOID*)&WSAAccept_f, &hook_WSAAccept) == NO_ERROR;
+		ok &= XHookAttach((PVOID*)&accept_f(), &hook_accept) == NO_ERROR;
+		ok &= XHookAttach((PVOID*)&WSAAccept_f(), &hook_WSAAccept) == NO_ERROR;
         
         // recv-like functions
-		ok &= XHookAttach((PVOID*)&recv_f, &hook_recv) == NO_ERROR;
-		ok &= XHookAttach((PVOID*)&recvfrom_f, &hook_recvfrom) == NO_ERROR;
-		ok &= XHookAttach((PVOID*)&WSARecv_f, &hook_WSARecv) == NO_ERROR;
-		ok &= XHookAttach((PVOID*)&WSARecvFrom_f, &hook_WSARecvFrom) == NO_ERROR;
-        if (WSARecvMsg_f) // This function minimum support os is Windows 8.
-			ok &= XHookAttach((PVOID*)&WSARecvMsg_f, &hook_WSARecvMsg) == NO_ERROR;
+		ok &= XHookAttach((PVOID*)&recv_f(), &hook_recv) == NO_ERROR;
+		ok &= XHookAttach((PVOID*)&recvfrom_f(), &hook_recvfrom) == NO_ERROR;
+		ok &= XHookAttach((PVOID*)&WSARecv_f(), &hook_WSARecv) == NO_ERROR;
+		ok &= XHookAttach((PVOID*)&WSARecvFrom_f(), &hook_WSARecvFrom) == NO_ERROR;
+        if (WSARecvMsg_f()) // This function minimum support os is Windows 8.
+			ok &= XHookAttach((PVOID*)&WSARecvMsg_f(), &hook_WSARecvMsg) == NO_ERROR;
 
         // send-like functions
-		ok &= XHookAttach((PVOID*)&send_f, &hook_send) == NO_ERROR;
-		ok &= XHookAttach((PVOID*)&sendto_f, &hook_sendto) == NO_ERROR;
-		ok &= XHookAttach((PVOID*)&WSASend_f, &hook_WSASend) == NO_ERROR;
-		ok &= XHookAttach((PVOID*)&WSASendTo_f, &hook_WSASendTo) == NO_ERROR;
-		ok &= XHookAttach((PVOID*)&WSASendMsg_f, &hook_WSASendMsg) == NO_ERROR;
+		ok &= XHookAttach((PVOID*)&send_f(), &hook_send) == NO_ERROR;
+		ok &= XHookAttach((PVOID*)&sendto_f(), &hook_sendto) == NO_ERROR;
+		ok &= XHookAttach((PVOID*)&WSASend_f(), &hook_WSASend) == NO_ERROR;
+		ok &= XHookAttach((PVOID*)&WSASendTo_f(), &hook_WSASendTo) == NO_ERROR;
+		ok &= XHookAttach((PVOID*)&WSASendMsg_f(), &hook_WSASendMsg) == NO_ERROR;
 		XHookTransactionCommit();
         
         if (!ok) {

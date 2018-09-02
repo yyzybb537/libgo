@@ -177,10 +177,22 @@ struct CheckPoint
   GTEST_TEST_BOOLEAN_(!(condition), #condition, true, false, \
                       GTEST_FATAL_FAILURE_)
 
+#if defined(LIBGO_SYS_Windows)
+struct __autoInitWSA {
+    __autoInitWSA() {
+        WSAData wsaData;
+        WSAStartup(MAKEWORD(2, 2), &wsaData);
+    }
+};
+__autoInitWSA g___autoInitWSA;
+#endif
+
 int tcpSocketPair(int, int, int, int fds[2])
 {
     int listenSock = socket(AF_INET, SOCK_STREAM, 0);
-    if (listenSock < 0) return -1;
+    if (listenSock < 0) {
+        return -1;
+    }
 
     struct sockaddr_in addr;
     addr.sin_family = AF_INET;

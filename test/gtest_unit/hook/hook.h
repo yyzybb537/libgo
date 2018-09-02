@@ -51,7 +51,7 @@ inline int fill_send_buffer(int fd)
         pfd.events = POLLOUT;
         if (poll(&pfd, 1, 1000) <= 0)
             break;
-        c += write(fd, buf, fillSlice);
+        c += ::send(fd, buf, fillSlice, 0);
 //        printf("fill %d bytes\n", c);
         CHECK_POINT();
     }

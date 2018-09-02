@@ -1,3 +1,7 @@
+#define XHOOKS_INTERNAL 1
+#include <Windows.h>
+#include "xhook.h"
+
 // UpdateImports32 aka UpdateImports64
 static BOOL UPDATE_IMPORTS_XX(HANDLE hProcess,
                               HMODULE hModule,

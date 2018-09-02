@@ -22,7 +22,8 @@ Reactor::Reactor()
 
 Reactor::eWatchResult Reactor::Watch(SOCKET sock, short int pollEvent, Processer::SuspendEntry const& entry)
 {
-    (void)CreateIoCompletionPort((HANDLE)sock, iocp_, (ULONG_PTR)this, 0);
+    HANDLE hRet = CreateIoCompletionPort((HANDLE)sock, iocp_, (ULONG_PTR)this, 0);
+    int err = WSAGetLastError();
 
     OverlappedEntry* olEntry = new OverlappedEntry;
     olEntry->entry = entry;
@@ -49,7 +50,8 @@ Reactor::eWatchResult Reactor::Watch(SOCKET sock, short int pollEvent, Processer
     if (res == -2)
         return eError;
 
-    if (res == -1 && WSAGetLastError() == ERROR_IO_PENDING) {
+    err = WSAGetLastError();
+    if (res == -1 && err == ERROR_IO_PENDING) {
         autoDelete.release();
         return ePending;
     }

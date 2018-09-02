@@ -50,6 +50,7 @@ aux_source_directory(${PROJECT_SOURCE_DIR} SRC_LIST)
 
 if (WIN32)
     list(REMOVE_ITEM SRC_LIST ${PROJECT_SOURCE_DIR}/sample4_echo.cpp)
+    list(REMOVE_ITEM SRC_LIST ${PROJECT_SOURCE_DIR}/sample9_curl.cpp)
     list(REMOVE_ITEM SRC_LIST ${PROJECT_SOURCE_DIR}/sample12_listener.cpp)
 endif()
 
