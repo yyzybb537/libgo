@@ -98,6 +98,8 @@ public:
     FastSteadyClock::time_point NextTrigger(FastSteadyClock::duration max);
 
     std::string DebugInfo();
+    // 设置结束标志位, 用于安全退出
+    void Stop();
 
 private:
     void Init();
@@ -118,6 +120,8 @@ private:
 
 //private:
 public:
+    volatile bool stop_ = false;
+
     int maxPoolSize_ = 0;
     Pool pool_;
 
@@ -206,7 +210,7 @@ typename Timer<F>::TimerId Timer<F>::StartTimer(FastSteadyClock::time_point tp, 
 template <typename F>
 void Timer<F>::ThreadRun()
 {
-    for (;;) {
+    while (!stop_) {
         RunOnce();
 
 //        auto s = FastSteadyClock::now();
@@ -215,6 +219,12 @@ void Timer<F>::ThreadRun()
 //        DebugPrint(dbg_timer, "[id=%ld]Thread sleep %ld us", this->getId(),
 //                std::chrono::duration_cast<std::chrono::microseconds>(e - s).count());
     }
+}
+
+template <typename F>
+void Timer<F>::Stop()
+{
+    stop_ = true;
 }
 
 template <typename F>

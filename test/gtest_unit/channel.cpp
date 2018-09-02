@@ -236,13 +236,30 @@ TEST(Channel, capacity1Try)
     int i = 0;
     // try pop
     {
-        go [&]{ EXPECT_FALSE(ch.TryPop(i)); EXPECT_YIELD(0); SLEEP(100); EXPECT_TRUE(ch.TryPop(i)); EXPECT_YIELD(1); };
-        go [&]{ SLEEP(50); ch << 1; EXPECT_YIELD(1);};
+        go [&]{ 
+            EXPECT_FALSE(ch.TryPop(i));
+            EXPECT_YIELD(0); 
+            SLEEP(100); 
+            EXPECT_TRUE(ch.TryPop(i)); 
+            EXPECT_YIELD(1); 
+        };
+        go [&]{ 
+            SLEEP(50); 
+            ch << 1; 
+            EXPECT_YIELD(1);
+        };
         WaitUntilNoTask();
         EXPECT_EQ(i, 1);
 
-        go [=]{ ch << 2; EXPECT_YIELD(0);};
-        go [&]{ SLEEP(50); EXPECT_TRUE(ch.TryPop(i)); EXPECT_YIELD(1); };
+        go [=]{ 
+            ch << 2; 
+            EXPECT_YIELD(0);
+        };
+        go [&]{ 
+            SLEEP(50); 
+            EXPECT_TRUE(ch.TryPop(i)); 
+            EXPECT_YIELD(1); 
+        };
         WaitUntilNoTask();
         EXPECT_EQ(i, 2);
     }

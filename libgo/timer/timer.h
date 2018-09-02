@@ -34,6 +34,8 @@ class CoTimer {
 
         Channel<void> trigger_{1};
 
+        Channel<void> quit_{1};
+
         volatile bool terminate_ = false;
     };
 

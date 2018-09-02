@@ -37,11 +37,16 @@ void CoTimer::CoTimerImpl::RunInCoroutine()
             trigger_.TryPop(nullptr);
         }
     }
+
+    quit_ << nullptr;
 }
 
 void CoTimer::CoTimerImpl::Stop()
 {
+    if (terminate_) return;
+
     terminate_ = true;
+    quit_ >> nullptr;
 }
 
 CoTimer::CoTimerImpl::TimerId

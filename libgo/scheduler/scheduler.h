@@ -113,40 +113,7 @@ private:
 
     std::thread dispatchThread_;
 
-    // ------------- 兼容旧版架构接口 -------------
-public:
-//    // 调度器调度函数, 内部执行协程、调度协程
-//    uint32_t Run();
-//
-//    // 循环Run直到没有协程为止
-//    // @loop_task_count: 不计数的常驻协程.
-//    //    例如：loop_task_count == 2时, 还剩最后2个协程的时候这个函数就会return.
-//    // @remarks: 这个接口会至少执行一次Run.
-//    void RunUntilNoTask(uint32_t loop_task_count = 0);
-//    
-//    // 无限循环执行Run
-//    void RunLoop();
-//
-//    /// sleep switch
-//    //  \timeout_ms min value is 0.
-//    void SleepSwitch(int timeout_ms);
-//
-//    /// ------------------------------------------------------------------------
-//    // @{ 定时器
-//    template <typename DurationOrTimepoint>
-//    TimerId ExpireAt(DurationOrTimepoint const& dur_or_tp, CoTimer::fn_t const& fn)
-//    {
-//        TimerId id = timer_mgr_.ExpireAt(dur_or_tp, fn);
-//        DebugPrint(dbg_timer, "add timer id=%llu", (long long unsigned)id->GetId());
-//        return id;
-//    }
-//
-//    bool CancelTimer(TimerId timer_id);
-//    bool BlockCancelTimer(TimerId timer_id);
-//    // }@
-//    /// ------------------------------------------------------------------------
-
-    // --------------------------------------------
+    std::thread timerThread_;
 };
 
 } //namespace co

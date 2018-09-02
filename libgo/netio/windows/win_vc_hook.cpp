@@ -8,6 +8,33 @@
 
 namespace co {
 
+    typedef VOID (WINAPI *Sleep_t)(_In_ DWORD dwMilliseconds);
+    static Sleep_t Sleep_f = nullptr;
+
+    static VOID WINAPI hook_Sleep(_In_ DWORD dwMilliseconds)
+    {
+        Task *tk = Processer::GetCurrentTask();
+        DebugPrint(dbg_hook, "task(%s) Hook Sleep(dwMilliseconds=%lu).", tk->DebugInfo(), dwMilliseconds);
+        if (!tk) {
+            Sleep_f(dwMilliseconds);
+            return;
+        }
+
+        if (dwMilliseconds > 0)
+            Processer::Suspend(std::chrono::milliseconds(dwMilliseconds));
+
+        Processer::StaticCoYield();
+    }
+
+    WINSOCK_API_LINKAGE
+        int
+        WSAAPI
+        WSAPoll(
+            _Inout_ LPWSAPOLLFD fdArray,
+            _In_ ULONG fds,
+            _In_ INT timeout
+        );
+
     typedef int (WINAPI *ioctlsocket_t)(
         _In_    SOCKET s,
         _In_    long   cmd,
@@ -638,7 +665,16 @@ namespace co {
 		XHookTransactionBegin();
 		XHookUpdateThread(GetCurrentThread());
 
-        BOOL ok = true;
+        if (!Sleep_f)
+            Sleep_f = (Sleep_t)GetProcAddress(GetModuleHandleA("Kernel32.dll"), "Sleep");
+
+        if (!Sleep_f)
+            Sleep_f = (Sleep_t)GetProcAddress(GetModuleHandleA("KernelBase.dll"), "Sleep");
+
+        BOOL ok = !!Sleep_f;
+
+        ok &= XHookAttach((PVOID*)&Sleep_f, &hook_Sleep) == NO_ERROR;
+
         // ioctlsocket and select functions.
 		ok &= XHookAttach((PVOID*)&ioctlsocket_f, &hook_ioctlsocket) == NO_ERROR;
         ok &= XHookAttach((PVOID*)&WSAIoctl_f, &hook_WSAIoctl);
@@ -672,6 +708,7 @@ namespace co {
             fprintf(stderr, "Hook failed!");
             exit(1);
         }
+
     }
 
 } //namespace co

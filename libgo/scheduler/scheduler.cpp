@@ -62,6 +62,8 @@ Scheduler::Scheduler()
 Scheduler::~Scheduler()
 {
     Stop();
+
+    onExit();
 }
 
 void Scheduler::CreateTask(TaskF const& fn, TaskOpt const& opt)
@@ -124,10 +126,11 @@ void Scheduler::Start(int minThreadNumber, int maxThreadNumber)
     // 唤醒协程的定时器线程
     if (timer_) {
         timer_->SetPoolSize(1000, 100);
-        std::thread([this]{ 
+        std::thread t([this]{ 
                 DebugPrint(dbg_thread, "Start alone timer(sched=%p) thread id: %lu", (void*)this, NativeThreadID());
                 this->timer_->ThreadRun(); 
-            }).detach();
+            });
+        timerThread_.swap(t);
     }
 
     // 调度线程
@@ -158,18 +161,26 @@ void Scheduler::Stop()
         if (p)
             p->NotifyCondition();
     }
+
+    if (timer_) timer_->Stop();
+
     if (dispatchThread_.joinable())
         dispatchThread_.join();
+
+    if (timerThread_.joinable())
+        timerThread_.join();
 }
 void Scheduler::UseAloneTimerThread()
 {
     TimerType * timer = new TimerType;
 
     if (!started_.try_lock()) {
-        std::thread([this, timer]{ 
+        timer->SetPoolSize(1000, 100);
+        std::thread t([this, timer]{ 
                 DebugPrint(dbg_thread, "Start alone timer(sched=%p) thread id: %lu", (void*)this, NativeThreadID());
                 timer->ThreadRun(); 
-                }).detach();
+                });
+        timerThread_.swap(t);
     } else {
         started_.unlock();
     }
@@ -179,12 +190,19 @@ void Scheduler::UseAloneTimerThread()
 }
 
 static Scheduler::TimerType& staticGetTimer() {
-    static Scheduler::TimerType timer;
-    std::thread([&]{ 
+    static Scheduler::TimerType *ptimer = new Scheduler::TimerType;
+    std::thread *pt = new std::thread([=]{ 
             DebugPrint(dbg_thread, "Start global timer thread id: %lu", NativeThreadID());
-            timer.ThreadRun(); 
-            }).detach();
-    return timer;
+            ptimer->ThreadRun();
+            });
+    std::unique_lock<std::mutex> lock(ExitListMtx());
+    auto vec = ExitList();
+    vec->push_back([=] {
+            ptimer->Stop();
+            if (pt->joinable())
+                pt->join();
+        });
+    return *ptimer;
 }
 
 Scheduler::TimerType & Scheduler::StaticGetTimer() {
@@ -395,33 +413,5 @@ void Scheduler::SetCurrentTaskDebugInfo(std::string const& info)
     if (!tk) return ;
     TaskRefDebugInfo(tk) = info;
 }
-
-//bool Scheduler::CancelTimer(TimerId timer_id)
-//{
-//    bool ok = timer_mgr_.Cancel(timer_id);
-//    DebugPrint(dbg_timer, "cancel timer %llu %s", (long long unsigned)timer_id->GetId(),
-//            ok ? "success" : "failed");
-//    return ok;
-//}
-//
-//bool Scheduler::BlockCancelTimer(TimerId timer_id)
-//{
-//    bool ok = timer_mgr_.BlockCancel(timer_id);
-//    DebugPrint(dbg_timer, "block_cancel timer %llu %s", (long long unsigned)timer_id->GetId(),
-//            ok ? "success" : "failed");
-//    return ok;
-//}
-//
-//ThreadPool& Scheduler::GetThreadPool()
-//{
-//    if (!thread_pool_) {
-//        std::unique_lock<LFLock> lock(thread_pool_init_);
-//        if (!thread_pool_) {
-//            thread_pool_ = new ThreadPool;
-//        }
-//    }
-//
-//    return *thread_pool_;
-//}
 
 } //namespace co
