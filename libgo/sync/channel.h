@@ -125,6 +125,7 @@ private:
         uint64_t dbg_mask_;
 
         struct Entry {
+            std::shared_ptr<LFLock> alive_;
             Processer::SuspendEntry entry_;
             T * t_;
             bool * ok_;
@@ -313,6 +314,12 @@ private:
                     auto entry = waitQueue.front();
                     waitQueue.pop();
 
+                    std::unique_lock<LFLock> aliveLock(*entry.alive_, std::defer_lock);
+                    if (!aliveLock.try_lock()) {
+                        DebugPrint(dbg_mask_ & dbg_channel, "[id=%ld] close zombies coroutine by not alive.", this->getId());
+                        continue;
+                    }
+
                     if (entry.ok_)
                         *entry.ok_ = false;
 
@@ -333,14 +340,17 @@ private:
         template <typename Duration>
         void Wait(Op op, std::unique_lock<LFLock> & lock, T * ptr, bool * ok, Duration dur)
         {
+            std::shared_ptr<LFLock> alive(new LFLock);
+
             auto & waitQueue = op == op_read ? rQueue_ : wQueue_;
             if (Processer::IsCoroutine()) {
                 DebugPrint(dbg_mask_ & dbg_channel, "[id=%ld] channel coroutine wait. dur=%ld ns",
                         this->getId(), (long)std::chrono::duration_cast<std::chrono::nanoseconds>(dur).count());
                 if (dur.count() == 0)
-                    waitQueue.push(Entry{Processer::Suspend(), ptr, ok});
+                    waitQueue.push(Entry{alive, Processer::Suspend(), ptr, ok});
                 else 
                     waitQueue.push(Entry{
+                            alive, 
                             Processer::Suspend(std::chrono::duration_cast<FastSteadyClock::duration>(dur)),
                             ptr,
                             ok});
@@ -350,10 +360,12 @@ private:
             } else {
                 DebugPrint(dbg_mask_ & dbg_channel, "[id=%ld] channel native thread wait. dur=%ld ms",
                         this->getId(), (long)std::chrono::duration_cast<std::chrono::milliseconds>(dur).count());
-                waitQueue.push(Entry{Processer::SuspendEntry{}, ptr, ok});
+                waitQueue.push(Entry{alive, Processer::SuspendEntry{}, ptr, ok});
                 auto & cv = op == op_read ? rCv_ : wCv_;
                 cv.wait(lock);
             }
+
+            alive->lock();
         }
 
         int Notify(Op op)
@@ -363,6 +375,12 @@ private:
             while (!waitQueue.empty()) {
                 auto entry = waitQueue.front();
                 waitQueue.pop();
+
+                std::unique_lock<LFLock> aliveLock(*entry.alive_, std::defer_lock);
+                if (!aliveLock.try_lock()) {
+                    DebugPrint(dbg_mask_ & dbg_channel, "[id=%ld] notify zombies coroutine by not alive.", this->getId());
+                    continue;
+                }
 
                 // read or write
                 T back;
