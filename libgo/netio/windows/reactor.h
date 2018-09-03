@@ -3,13 +3,20 @@
 #include "../../scheduler/processer.h"
 #include <WinSock2.h>
 #include <Windows.h>
+#include <atomic>
 
 namespace co {
 
 struct OverlappedEntry : public OVERLAPPED
 {
     Processer::SuspendEntry entry;
+    std::atomic<long> id;
+
+    static std::atomic<long> s_id;
+
+    OverlappedEntry() : id(++s_id) {}
 };
+
 
 class Reactor
 {

@@ -52,6 +52,8 @@ void setTimeo(int socketfd, int type, int ms) {
 
 void timed()
 {
+    co_opt.debug = co::dbg_hook;
+
     int fds[2];
     int res = tcpSocketPair(0, SOCK_STREAM, 0, fds);
     ASSERT_EQ(res, 0);
