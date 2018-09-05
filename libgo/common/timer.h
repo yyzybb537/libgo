@@ -150,8 +150,8 @@ Timer<F>::Timer()
     begin_ = FastSteadyClock::now();
     point_.p64 = 0;
     pool_.check_ = this;
-//    precision_ = std::chrono::microseconds(100);
-    precision_ = std::chrono::microseconds(1000);
+    precision_ = std::chrono::microseconds(100);
+//    precision_ = std::chrono::microseconds(1000);
 }
 
 template <typename F>
@@ -246,44 +246,59 @@ void Timer<F>::RunOnce()
     __atomic_store(&point_.p64, &destPoint.p64, std::memory_order_release);
     DBG_TIMER_CHECK(dt);
 
-    // 寻找此次需要转动的最大刻度
-    int topLevel = 0;
-    for (int i = 7; i >= 0; --i) {
-        if (delta.p8[i] > 0) {
-            topLevel = i;
-            break;
-        }
-    }
-    DBG_TIMER_CHECK(dt);
-
-    DebugPrint(dbg_timer, "[id=%ld]RunOnce point:<%d><%d><%d> ----> <%d><%d><%d>, topLevel=%d",
+    DebugPrint(dbg_timer, "[id=%ld]RunOnce point:<%d><%d><%d><%d> ----> <%d><%d><%d><%d>",
             this->getId(),
-            (int)last.p8[0], (int)last.p8[1], (int)last.p8[2],
-            (int)point_.p8[0], (int)point_.p8[1], (int)point_.p8[2],
-            topLevel);
+            (int)last.p8[0], (int)last.p8[1], (int)last.p8[2], (int)last.p8[3],
+            (int)point_.p8[0], (int)point_.p8[1], (int)point_.p8[2], (int)point_.p8[3]
+            );
     DBG_TIMER_CHECK(dt);
 
-    // 低于此刻度的, 都可以直接trigger了
-    for (int i = 0; i < topLevel; ++i) {
-        for (auto & slot : slots_[i])
-            Trigger(slot);
+    // 未扫完的级别 
+    int triggerLevel = 0;
+
+    // 每级Wheel扫过了几个slot
+    int triggerSlots[8] = {};
+
+    const uint64_t additions[8] = {(uint64_t)1, (uint64_t)1 << 8, (uint64_t)1 << 16, (uint64_t)1 << 32, (uint64_t)1 << 40,
+        (uint64_t)1 << 48, (uint64_t)1 << 56, std::numeric_limits<uint64_t>::max()};
+
+    Point pos;
+
+    Slot dispatchers;
+
+    uint64_t i = 0;
+    while (i < delta.p64) {
+        pos.p64 = last.p64 + i;
+
+        int lv = triggerLevel;
+        int slotIdx = pos.p8[lv];
+        
+        DebugPrint(dbg_timer, "[id=%ld]RunOnce Trigger(i=%d) [L=%d][%d]", this->getId(), (int)i, lv, slotIdx);
+        Trigger(slots_[lv][slotIdx]);
+        if (++triggerSlots[lv] == 256)
+            ++triggerLevel;
+
+        while (pos.p64 > 0 && slotIdx == 0) {
+            // 升级
+            ++lv;
+            slotIdx = pos.p8[lv];
+            DebugPrint(dbg_timer, "[id=%ld]RunOnce Dispatch [L=%d][%d]", this->getId(), lv, slotIdx);
+            dispatchers.push(slots_[lv][slotIdx].pop_all());
+            ++triggerSlots[lv];
+        }
+
+        uint64_t add = additions[triggerLevel];
+        if (triggerLevel > 0) {
+            uint64_t levelupSteps = (256 - pos.p8[triggerLevel - 1]) * additions[triggerLevel - 1];
+            if (levelupSteps > 0)
+                add = (std::min)(levelupSteps, add);
+        }
+
+        i += add;
     }
     DBG_TIMER_CHECK(dt);
 
-    // 已经划过的顶级刻度
-    for (int k = 0; k < delta.p8[topLevel]; ++k) {
-        int j = (last.p8[topLevel] + k) & 0xff;
-        Trigger(slots_[topLevel][j]);
-    }
-    DBG_TIMER_CHECK(dt);
-
-    int splitLevel = ((int)last.p8[topLevel] + delta.p8[topLevel]) > 0xff ? topLevel + 1 : topLevel;
-
-    // 拆分最后一个刻度
-    if (splitLevel > 0) {
-        Slot & slot = slots_[splitLevel][point_.p8[splitLevel]];
-        Dispatch(slot, now);
-    }
+    Dispatch(dispatchers, now);
     DBG_TIMER_CHECK(dt);
 
     DebugPrint(dbg_timer, "[id=%ld]RunOnce Done. DbgTimer: %s", this->getId(), dt.ToString().c_str());

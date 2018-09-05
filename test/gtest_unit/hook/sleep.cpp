@@ -23,8 +23,10 @@ void do_sleep(sleep_type type, int timeout)
     switch (type)
     {
         case sleep_type::syscall_sleep:
-            sleep(timeout / 1000);
-            break;
+            if (timeout % 1000 == 0) {
+                sleep(timeout / 1000);
+                break;
+            }
 
         case sleep_type::syscall_usleep:
             usleep(timeout * 1000);
@@ -77,16 +79,44 @@ TEST_P(Sleep, sleep0)
 
 TEST_P(Sleep, sleep1)
 {
+    auto t = 1000;
     int c = 0, n = 2;
     for (int i = 0; i < n; ++i)
-        go [&c, this]{
-            do_sleep(type_, 1000);
+        go [&c, this, t]{
+            do_sleep(type_, t);
             ++c;
         };
 
     GTimer gt;
     WaitUntilNoTask();
-    TIMER_CHECK(gt, 1000, 100);
+    TIMER_CHECK(gt, t, 100);
+}
+
+TEST_P(Sleep, sleep2)
+{
+    int n = 10;
+    for (int i = 0; i < n; ++i)
+        go [this]{
+            auto t = rand() % 100 + 100;
+            GTimer gt;
+            do_sleep(type_, t);
+            TIMER_CHECK(gt, t, 100);
+        };
+
+    WaitUntilNoTask();
+}
+
+TEST(SleepLong, sleep3)
+{
+    go []{
+        sleep(8);
+    };
+
+    GTimer gt;
+    WaitUntilNoTask();
+    TIMER_CHECK(gt, 8000, 100);
+
+//    co_opt.debug = dbg_timer;
 }
 
 INSTANTIATE_TEST_CASE_P(

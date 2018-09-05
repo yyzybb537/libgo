@@ -32,7 +32,7 @@ inline void __WaitUntilNoTask(co::Scheduler & scheduler, int line, std::size_t v
     int i = 0;
     while (scheduler.TaskCount() > val) {
         usleep(1000);
-        if (++i == 5000) {
+        if (++i == 9000) {
             printf("LINE: %d, TaskCount: %d\n", line, (int)g_Scheduler.TaskCount());
         }
     }
