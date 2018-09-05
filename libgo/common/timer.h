@@ -150,7 +150,8 @@ Timer<F>::Timer()
     begin_ = FastSteadyClock::now();
     point_.p64 = 0;
     pool_.check_ = this;
-    precision_ = std::chrono::microseconds(100);
+//    precision_ = std::chrono::microseconds(100);
+    precision_ = std::chrono::microseconds(1000);
 }
 
 template <typename F>
