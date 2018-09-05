@@ -69,6 +69,9 @@ public:
 
     typedef Timer<std::function<void()>> TimerType;
 
+public:
+    inline TimerType & GetTimer() { return timer_ ? *timer_ : StaticGetTimer(); }
+
 private:
     Scheduler();
     ~Scheduler();
@@ -89,8 +92,6 @@ private:
     void DispatcherThread();
 
     void NewProcessThread();
-
-    inline TimerType & GetTimer() { return timer_ ? *timer_ : StaticGetTimer(); }
 
     TimerType & StaticGetTimer();
 

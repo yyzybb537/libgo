@@ -100,6 +100,8 @@ public:
     // 检查下一次触发还需要多久
     FastSteadyClock::time_point NextTrigger(FastSteadyClock::duration max);
 
+    std::string DebugInfo();
+
 private:
     void Init();
 
@@ -253,10 +255,11 @@ void Timer<F>::RunOnce()
     }
     DBG_TIMER_CHECK(dt);
 
-    DebugPrint(dbg_timer, "[id=%ld]RunOnce point:<%d><%d><%d> ----> <%d><%d><%d>",
+    DebugPrint(dbg_timer, "[id=%ld]RunOnce point:<%d><%d><%d> ----> <%d><%d><%d>, topLevel=%d",
             this->getId(),
             (int)last.p8[0], (int)last.p8[1], (int)last.p8[2],
-            (int)point_.p8[0], (int)point_.p8[1], (int)point_.p8[2]);
+            (int)point_.p8[0], (int)point_.p8[1], (int)point_.p8[2],
+            topLevel);
     DBG_TIMER_CHECK(dt);
 
     // 低于此刻度的, 都可以直接trigger了
@@ -463,6 +466,24 @@ void Timer<F>::DeleteElement(Element* element)
     }
     else
         delete element;
+}
+
+template <typename F>
+std::string Timer<F>::DebugInfo()
+{
+    std::string s;
+    s += P("-------- Point: <%d><%d><%d><%d> ---------",
+            (int)point_.p8[0], (int)point_.p8[1], (int)point_.p8[2], (int)point_.p8[3]);
+    s += P("------------- Timer Tasks --------------");
+    for (int i = 0; i < 8; ++i) {
+        for (int j = 0; j < 256; ++j) {
+            Slot & slot = slots_[i][j];
+            std::size_t count = slot.size();
+            if (count == 0) continue;
+            s += P("slot[%d][%d] -> count = %d\n", i, j, (int)count);
+        }
+    }
+    return s;
 }
 
 } // namespace co
