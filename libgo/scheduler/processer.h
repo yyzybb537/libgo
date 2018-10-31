@@ -3,6 +3,10 @@
 #include "../common/clock.h"
 #include "../task/task.h"
 #include "../common/ts_queue.h"
+
+#if ENABLE_DEBUGGER
+#include "../debug/listener.h"
+#endif
 #include <condition_variable>
 #include <mutex>
 #include <atomic>
