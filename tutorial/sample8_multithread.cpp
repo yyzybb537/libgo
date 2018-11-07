@@ -11,26 +11,30 @@
 using namespace std;
 using namespace std::chrono;
 
+const int nWork = 100;
+
 // 大计算量的函数
 int c = 0;
 std::atomic<int> done{0};
 void foo()
 {
-    int v = 1;
+    int v = (int)pthread_self();
     for (int i = 1; i < 20000000; ++i) {
         v *= i;
     }
     c += v;
 
-    if (++done == 200)
+    if (++done == nWork * 2)
         co_sched.Stop();
 }
 
 int main()
 {
+    co_opt.cycle_timeout_us = 1000 * 1000;
+
     // 普通的for循环做法
     auto start = system_clock::now();
-    for (int i = 0; i < 100; ++i)
+    for (int i = 0; i < nWork; ++i)
         foo();
     auto end = system_clock::now();
     cout << "for-loop, cost ";
@@ -38,7 +42,7 @@ int main()
 
     // 使用libgo做并行计算
     start = system_clock::now();
-    for (int i = 0; i < 100; ++i)
+    for (int i = 0; i < nWork; ++i)
         go foo;
 
     // 创建8个线程去并行执行所有协程 (由worksteal算法自动做负载均衡)
