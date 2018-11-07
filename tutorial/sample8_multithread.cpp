@@ -30,6 +30,7 @@ void foo()
 
 int main()
 {
+    // 编写cpu密集型程序时, 可以延长协程执行的超时判断阈值, 避免频繁的worksteal产生
     co_opt.cycle_timeout_us = 1000 * 1000;
 
     // 普通的for循环做法
