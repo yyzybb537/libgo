@@ -180,16 +180,6 @@ retry:
                             this->getId(), (int)queue_.size(), (int)notified);
                     return true;
                 }
-
-                if (bWait && (deadline == FastSteadyClock::time_point{} || deadline > FastSteadyClock::now())) {
-                    if (deadline == FastSteadyClock::time_point{}) {
-                        wCv_.wait(lock);
-                        goto retry;
-                    } else {
-                        if (wCv_.wait_until(lock, deadline) == std::cv_status::no_timeout)
-                            goto retry;
-                    }
-                }
             } else {
                 // 无缓冲
                 if (rCv_.notify_one()) {
@@ -197,22 +187,22 @@ retry:
                     DebugPrint(dbg_mask_ & dbg_channel, "[id=%ld] Push return true, zero capacity. Notified=1", this->getId());
                     return true;
                 }
+            }
                 
-                if (bWait && (deadline == FastSteadyClock::time_point{} || deadline > FastSteadyClock::now())) {
-                    auto fn = [this, t]{
-                        queue_.emplace_back(t);
-                    };
+            if (bWait && (deadline == FastSteadyClock::time_point{} || deadline > FastSteadyClock::now())) {
+                auto fn = [this, t]{
+                    queue_.emplace_back(t);
+                };
 
-                    if (deadline == FastSteadyClock::time_point{}) {
-                        if (wCv_.wait(lock, fn) == std::cv_status::no_timeout)
-                            return true;
-                    } else {
-                        if (wCv_.wait_until(lock, deadline, fn) == std::cv_status::no_timeout)
-                            return true;
-                    }
-
-                    goto retry;
+                if (deadline == FastSteadyClock::time_point{}) {
+                    if (wCv_.wait(lock, fn) == std::cv_status::no_timeout)
+                        return true;
+                } else {
+                    if (wCv_.wait_until(lock, deadline, fn) == std::cv_status::no_timeout)
+                        return true;
                 }
+
+                goto retry;
             }
 
             DebugPrint(dbg_mask_ & dbg_channel, "[id=%ld] Push return false, capacity size=%d",
@@ -244,14 +234,12 @@ retry:
                 return false;
             }
             
-            if (capacity_ == 0) {
-                // 无缓冲
-                if (wCv_.notify_one()) {
-                    t = queue_.front();
-                    queue_.pop_front();
-                    DebugPrint(dbg_mask_ & dbg_channel, "[id=%ld] Pop return true, Zero capacity. Notified=1", this->getId());
-                    return true;
-                }
+            // 无缓冲
+            if (wCv_.notify_one()) {
+                t = queue_.front();
+                queue_.pop_front();
+                DebugPrint(dbg_mask_ & dbg_channel, "[id=%ld] Pop return true, Zero capacity. Notified=1", this->getId());
+                return true;
             }
 
             if (bWait && (deadline == FastSteadyClock::time_point{} || deadline > FastSteadyClock::now())) {
