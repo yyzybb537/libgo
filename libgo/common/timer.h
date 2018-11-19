@@ -45,9 +45,6 @@ public:
             this->DecrementRef();
             return true;
         }
-
-        // 切换齿轮时, 如果isValid == false, 则直接DecrementRef
-        inline bool isValid() { return !active_.is_lock(); }
     };
     typedef TSQueue<Element> Slot;
     typedef TSQueue<Element> Pool;

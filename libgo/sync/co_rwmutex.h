@@ -2,7 +2,7 @@
 #include "../common/config.h"
 #include "../scheduler/processer.h"
 #include <queue>
-#include <condition_variable>
+#include "co_condition_variable.h"
 
 namespace co
 {
@@ -11,13 +11,11 @@ namespace co
 class CoRWMutex
 {
     LFLock lock_;
-    std::queue<Processer::SuspendEntry> rQueue_;
-    std::queue<Processer::SuspendEntry> wQueue_;
     long lockState_;  // 0:无锁, >=1:读锁, -1:写锁
 
     // 兼容原生线程
-    std::condition_variable_any rCv_;
-    std::condition_variable_any wCv_;
+    ConditionVariableAny rCv_;
+    ConditionVariableAny wCv_;
 
     // 是否写优先
     bool writePriority_;

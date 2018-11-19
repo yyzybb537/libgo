@@ -50,15 +50,15 @@ struct LFLock
         while (flag.test_and_set(std::memory_order_acquire)) ;
     }
 
-    // PS: 这是一个可能没有内存一致性的接口, 使用的时候要小心cpu缓存不能及时刷新的问题.
-    ALWAYS_INLINE bool is_lock()
-    {
-#if defined(LIBGO_SYS_Linux)
-        return flag._M_i;
-#elif defined(LIBGO_SYS_FreeBSD)
-        return flag.__a_;
-#endif
-    }
+//    ALWAYS_INLINE bool is_lock()
+//    {
+//        if (try_lock()) {
+//            unlock();
+//            return false;
+//        }
+//
+//        return true;
+//    }
 
     ALWAYS_INLINE bool try_lock()
     {

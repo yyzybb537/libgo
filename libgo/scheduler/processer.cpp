@@ -297,6 +297,15 @@ Processer::SuspendEntry Processer::Suspend(FastSteadyClock::duration dur)
             });
     return entry;
 }
+Processer::SuspendEntry Processer::Suspend(FastSteadyClock::time_point timepoint)
+{
+    SuspendEntry entry = Suspend();
+    GetCurrentScheduler()->GetTimer().StartTimer(timepoint,
+            [entry]() mutable {
+                Processer::Wakeup(entry);
+            });
+    return entry;
+}
 
 Processer::SuspendEntry Processer::SuspendBySelf(Task* tk)
 {

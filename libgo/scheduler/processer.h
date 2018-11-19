@@ -99,6 +99,7 @@ public:
 
     // 挂起当前协程, 并在指定时间后自动唤醒
     static SuspendEntry Suspend(FastSteadyClock::duration dur);
+    static SuspendEntry Suspend(FastSteadyClock::time_point timepoint);
 
     // 唤醒协程
     static bool Wakeup(SuspendEntry const& entry);

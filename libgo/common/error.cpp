@@ -68,4 +68,17 @@ void ThrowError(eCoErrorCode code)
     throw std::system_error(MakeCoErrorCode(code));
 }
 
+co_exception::co_exception() {}
+co_exception::co_exception(std::string const& errMsg)
+    : errMsg_(errMsg)
+{
+}
+
+void ThrowException(std::string const& errMsg)
+{
+    DebugPrint(dbg_exception, "throw co_exception %s", errMsg.c_str());
+    if (std::uncaught_exception()) return ;
+    throw co_exception(errMsg);
+}
+
 } //namespace co

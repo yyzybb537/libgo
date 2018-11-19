@@ -14,17 +14,17 @@ CoRWMutex::~CoRWMutex()
 {
     assert(lock_.try_lock());
     assert(lockState_ == 0);
-    assert(rQueue_.empty());
-    assert(wQueue_.empty());
     readView_.self_ = writeView_.self_ = nullptr;
 }
 
 void CoRWMutex::RLock()
 {
     std::unique_lock<LFLock> lock(lock_);
+
+retry:
     if (writePriority_) {
         // 写优先
-        if (lockState_ >= 0 && wQueue_.empty()) {
+        if (lockState_ >= 0 && wCv_.empty()) {
             ++lockState_;
             return ;
         }
@@ -36,16 +36,8 @@ void CoRWMutex::RLock()
         }
     }
 
-    if (Processer::IsCoroutine()) {
-        // 协程
-        rQueue_.push(Processer::Suspend());
-        lock.unlock();
-        Processer::StaticCoYield();
-    } else {
-        // 原生线程
-        rQueue_.push(Processer::SuspendEntry{});
-        rCv_.wait(lock);
-    }
+    rCv_.wait(lock);
+    goto retry;
 }
 bool CoRWMutex::RTryLock()
 {
@@ -69,21 +61,15 @@ void CoRWMutex::RUnlock()
 void CoRWMutex::WLock()
 {
     std::unique_lock<LFLock> lock(lock_);
+
+retry:
     if (lockState_ == 0) {
         lockState_ = -1;
         return ;
     }
 
-    if (Processer::IsCoroutine()) {
-        // 协程
-        wQueue_.push(Processer::Suspend());
-        lock.unlock();
-        Processer::StaticCoYield();
-    } else {
-        // 原生线程
-        wQueue_.push(Processer::SuspendEntry{});
-        wCv_.wait(lock);
-    }
+    wCv_.wait(lock);
+    goto retry;
 }
 bool CoRWMutex::WTryLock()
 {
@@ -99,46 +85,18 @@ void CoRWMutex::WUnlock()
     std::unique_lock<LFLock> lock(lock_);
     assert(lockState_ == -1);
 
+    lockState_ = 0;
     TryWakeUp();
 }
 
 void CoRWMutex::TryWakeUp()
 {
-    lockState_ = -1;
-
     // 优先唤醒写等待
-    while (!wQueue_.empty()) {
-        auto entry = wQueue_.front();
-        wQueue_.pop();
-
-        if (entry) {
-            // 协程
-            if (Processer::Wakeup(entry))
-                return ;
-        } else {
-            // 原生线程
-            wCv_.notify_one();
-            return ;
-        }
-    }
-
-    lockState_ = 0;
+    if (wCv_.notify_one())
+        return ;
 
     // 唤醒读等待
-    while (!rQueue_.empty()) {
-        auto entry = rQueue_.front();
-        rQueue_.pop();
-
-        if (entry) {
-            // 协程
-            if (Processer::Wakeup(entry))
-                ++lockState_;
-        } else {
-            // 原生线程
-            rCv_.notify_one();
-            ++lockState_;
-        }
-    }
+    rCv_.notify_all();
 }
 
 bool CoRWMutex::IsLock()

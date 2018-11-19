@@ -2,7 +2,7 @@
 #include "../common/config.h"
 #include "../scheduler/processer.h"
 #include "../scheduler/scheduler.h"
-#include <condition_variable>
+#include "co_condition_variable.h"
 
 namespace co
 {
@@ -27,72 +27,72 @@ public:
 
     Channel const& operator<<(T t) const
     {
-        impl_->Push(t, true, std::chrono::seconds(0));
+        impl_->Push(t, true);
         return *this;
     }
 
     Channel const& operator>>(T & t) const
     {
-        impl_->Pop(t, true, std::chrono::seconds(0));
+        impl_->Pop(t, true);
         return *this;
     }
 
     Channel const& operator>>(std::nullptr_t ignore) const
     {
         T t;
-        impl_->Pop(t, true, std::chrono::seconds(0));
+        impl_->Pop(t, true);
         return *this;
     }
 
     bool TryPush(T t) const
     {
-        return impl_->Push(t, false, std::chrono::seconds(0));
+        return impl_->Push(t, false);
     }
 
     bool TryPop(T & t) const
     {
-        return impl_->Pop(t, false, std::chrono::seconds(0));
+        return impl_->Pop(t, false);
     }
 
     bool TryPop(std::nullptr_t ignore) const
     {
         T t;
-        return impl_->Pop(t, false, std::chrono::seconds(0));
+        return impl_->Pop(t, false);
     }
 
     template <typename Rep, typename Period>
     bool TimedPush(T t, std::chrono::duration<Rep, Period> dur) const
     {
-        return impl_->Push(t, true, dur);
+        return impl_->Push(t, true, dur + FastSteadyClock::now());
     }
 
     bool TimedPush(T t, FastSteadyClock::time_point deadline) const
     {
-        return impl_->Push(t, true, deadline - FastSteadyClock::now());
+        return impl_->Push(t, true, deadline);
     }
 
     template <typename Rep, typename Period>
     bool TimedPop(T & t, std::chrono::duration<Rep, Period> dur) const
     {
-        return impl_->Pop(t, true, dur);
+        return impl_->Pop(t, true, dur + FastSteadyClock::now());
     }
 
     bool TimedPop(T & t, FastSteadyClock::time_point deadline) const
     {
-        return impl_->Pop(t, true, deadline - FastSteadyClock::now());
+        return impl_->Pop(t, true, deadline);
     }
 
     template <typename Rep, typename Period>
     bool TimedPop(std::nullptr_t ignore, std::chrono::duration<Rep, Period> dur) const
     {
         T t;
-        return impl_->Pop(t, true, dur);
+        return impl_->Pop(t, true, dur + FastSteadyClock::now());
     }
 
     bool TimedPop(std::nullptr_t ignore, FastSteadyClock::time_point deadline) const
     {
         T t;
-        return impl_->Pop(t, true, deadline - FastSteadyClock::now());
+        return impl_->Pop(t, true, deadline);
     }
 
     bool Unique() const
@@ -124,23 +124,9 @@ private:
         std::deque<T> queue_;
         uint64_t dbg_mask_;
 
-        struct Entry {
-            std::shared_ptr<LFLock> alive_;
-            Processer::SuspendEntry entry_;
-            T * t_;
-            bool * ok_;
-        };
-        std::queue<Entry> wQueue_;
-        std::queue<Entry> rQueue_;
-
         // 兼容原生线程
-        std::condition_variable_any wCv_;
-        std::condition_variable_any rCv_;
-
-        enum Op {
-            op_read = 0,
-            op_write = 1,
-        };
+        ConditionVariableAny wCv_;
+        ConditionVariableAny rCv_;
 
     public:
         explicit ChannelImpl(std::size_t capacity)
@@ -153,23 +139,10 @@ private:
             DebugPrint(dbg_mask_ & dbg_channel, "[id=%ld] Channel destory.", this->getId());
 
             assert(lock_.try_lock());
-            assert(isEmpty(wQueue_));
-            assert(isEmpty(rQueue_));
         }
 
         void SetDbgMask(uint64_t mask) {
             dbg_mask_ = mask;
-        }
-
-        bool isEmpty(std::queue<Entry> & waitQueue) {
-            while (!waitQueue.empty()) {
-                auto entry = waitQueue.front();
-                waitQueue.pop();
-
-                if (entry.entry_ && entry.entry_.tk_.lock())
-                    return false;
-            }
-            return true;
         }
 
         bool Empty()
@@ -185,16 +158,15 @@ private:
         }
 
         // write
-        template <typename Duration>
-        bool Push(T t, bool bWait, Duration dur)
+        bool Push(T t, bool bWait, FastSteadyClock::time_point deadline = FastSteadyClock::time_point{})
         {
             DebugPrint(dbg_mask_ & dbg_channel, "[id=%ld] Push(bWait=%d, dur=%ld ms)", this->getId(),
-                    (int)bWait, (long)std::chrono::duration_cast<std::chrono::milliseconds>(dur).count());
-
-            // native thread不支持Timedxxx接口
-            assert(dur.count() == 0 || Processer::IsCoroutine());
+                    (int)bWait,
+                    deadline == FastSteadyClock::time_point{} ? 0 :
+                    (long)std::chrono::duration_cast<std::chrono::milliseconds>(deadline - FastSteadyClock::now()).count());
 
             std::unique_lock<LFLock> lock(lock_);
+retry:
             if (closed_) {
                 DebugPrint(dbg_mask_ & dbg_channel, "[id=%ld] Push return false, be closed.", this->getId());
                 return false;
@@ -203,99 +175,97 @@ private:
             if (capacity_ > 0) {
                 if (queue_.size() < capacity_) {
                     queue_.emplace_back(t);
-                    int notified = Notify(op_read);
+                    bool notified = rCv_.notify_one();
                     DebugPrint(dbg_mask_ & dbg_channel, "[id=%ld] Push return true, with capacity. size=%d, Notify=%d",
-                            this->getId(), (int)queue_.size(), notified);
+                            this->getId(), (int)queue_.size(), (int)notified);
                     return true;
                 }
 
-                bool ok = false;
-                if (bWait)
-                    Wait(op_write, lock, &t, &ok, dur);
-
-                DebugPrint(dbg_mask_ & dbg_channel, "[id=%ld] Push return %s, capacity full. size=%d",
-                        this->getId(), ok ? "true" : "false", (int)queue_.size());
-                return ok;
+                if (bWait && (deadline == FastSteadyClock::time_point{} || deadline > FastSteadyClock::now())) {
+                    if (deadline == FastSteadyClock::time_point{}) {
+                        wCv_.wait(lock);
+                        goto retry;
+                    } else {
+                        if (wCv_.wait_until(lock, deadline) == std::cv_status::no_timeout)
+                            goto retry;
+                    }
+                }
             } else {
                 // 无缓冲
-                if (!rQueue_.empty()) {
-                    assert(queue_.empty());
+                if (rCv_.notify_one()) {
                     queue_.emplace_back(t);
-                    if (Notify(op_read)) {
-                        DebugPrint(dbg_mask_ & dbg_channel, "[id=%ld] Push return true, zero capacity. Notified=1", this->getId());
-                        return true;
+                    DebugPrint(dbg_mask_ & dbg_channel, "[id=%ld] Push return true, zero capacity. Notified=1", this->getId());
+                    return true;
+                }
+                
+                if (bWait && (deadline == FastSteadyClock::time_point{} || deadline > FastSteadyClock::now())) {
+                    auto fn = [this, t]{
+                        queue_.emplace_back(t);
+                    };
+
+                    if (deadline == FastSteadyClock::time_point{}) {
+                        if (wCv_.wait(lock, fn) == std::cv_status::no_timeout)
+                            return true;
+                    } else {
+                        if (wCv_.wait_until(lock, deadline, fn) == std::cv_status::no_timeout)
+                            return true;
                     }
 
-                    // 没有正在读等待的协程, 写入的数据清除, 让Pop来触发
-                    queue_.clear();
+                    goto retry;
                 }
-
-                bool ok = false;
-                if (bWait)
-                    Wait(op_write, lock, &t, &ok, dur);
-
-                DebugPrint(dbg_mask_ & dbg_channel, "[id=%ld] Push return %s, zero capacity.",
-                        this->getId(), ok ? "true" : "false");
-                return ok;
             }
+
+            DebugPrint(dbg_mask_ & dbg_channel, "[id=%ld] Push return false, capacity size=%d",
+                    this->getId(), (int)queue_.size());
+            return false;
         }
 
         // read
-        template <typename Duration>
-        bool Pop(T & t, bool bWait, Duration dur)
+        bool Pop(T & t, bool bWait, FastSteadyClock::time_point deadline = FastSteadyClock::time_point{})
         {
             DebugPrint(dbg_mask_ & dbg_channel, "[id=%ld] Pop(bWait=%d, dur=%ld ms)", this->getId(),
-                    (int)bWait, (long)std::chrono::duration_cast<std::chrono::milliseconds>(dur).count());
-
-            // native thread不支持Timedxxx接口
-            assert(dur.count() == 0 || Processer::IsCoroutine());
+                    (int)bWait,
+                    deadline == FastSteadyClock::time_point{} ? 0 :
+                    (long)std::chrono::duration_cast<std::chrono::milliseconds>(deadline - FastSteadyClock::now()).count());
 
             std::unique_lock<LFLock> lock(lock_);
-            if (capacity_ > 0) {
-                if (!queue_.empty()) {
-                    t = queue_.front();
-                    queue_.pop_front();
-                    int notified = Notify(op_write);
-                    DebugPrint(dbg_mask_ & dbg_channel, "[id=%ld] Pop return true, with capacity. size=%d, Notify=%d",
-                            this->getId(), (int)queue_.size() + 1, notified);
-                    return true;
-                }
-
-                if (closed_) {
-                    DebugPrint(dbg_mask_ & dbg_channel, "[id=%ld] Pop return false, be closed.", this->getId());
-                    return false;
-                }
-
-                bool ok = false;
-                if (bWait)
-                    Wait(op_read, lock, &t, &ok, dur);
-
-                DebugPrint(dbg_mask_ & dbg_channel, "[id=%ld] Pop return %s, capacity empty. size=%d",
-                        this->getId(), ok ? "true" : "false", (int)queue_.size());
-                return ok;
-            } else {
-                // 无缓冲
-                if (closed_) {
-                    DebugPrint(dbg_mask_ & dbg_channel, "[id=%ld] Pop return false, zero capacity, be closed.", this->getId());
-                    return false;
-                }
-
-                if (Notify(op_write)) {
-                    assert(!queue_.empty());
-                    t = queue_.front();
-                    queue_.pop_front();
-                    DebugPrint(dbg_mask_ & dbg_channel, "[id=%ld] Pop return true, zero capacity. Notified=1", this->getId());
-                    return true;
-                }
-
-                bool ok = false;
-                if (bWait)
-                    Wait(op_read, lock, &t, &ok, dur);
-
-                DebugPrint(dbg_mask_ & dbg_channel, "[id=%ld] Pop return %s, zero capacity.",
-                        this->getId(), ok ? "true" : "false");
-                return ok;
+retry:
+            if (!queue_.empty()) {
+                t = queue_.front();
+                queue_.pop_front();
+                int notified = wCv_.notify_one();
+                DebugPrint(dbg_mask_ & dbg_channel, "[id=%ld] Pop return true, with capacity. size=%d, Notify=%d",
+                        this->getId(), (int)queue_.size() + 1, notified);
+                return true;
             }
+
+            if (closed_) {
+                DebugPrint(dbg_mask_ & dbg_channel, "[id=%ld] Pop return false, be closed.", this->getId());
+                return false;
+            }
+            
+            if (capacity_ == 0) {
+                // 无缓冲
+                if (wCv_.notify_one()) {
+                    t = queue_.front();
+                    queue_.pop_front();
+                    DebugPrint(dbg_mask_ & dbg_channel, "[id=%ld] Pop return true, Zero capacity. Notified=1", this->getId());
+                    return true;
+                }
+            }
+
+            if (bWait && (deadline == FastSteadyClock::time_point{} || deadline > FastSteadyClock::now())) {
+                if (deadline == FastSteadyClock::time_point{}) {
+                    rCv_.wait(lock);
+                    goto retry;
+                } else {
+                    if (rCv_.wait_until(lock, deadline) == std::cv_status::no_timeout)
+                        goto retry;
+                }
+            }
+
+            DebugPrint(dbg_mask_ & dbg_channel, "[id=%ld] Pop return false.", this->getId());
+            return false;
         }
 
         void Close()
@@ -306,129 +276,8 @@ private:
             DebugPrint(dbg_mask_ & dbg_channel, "[id=%ld] Channel Closed. size=%d", this->getId(), (int)queue_.size());
 
             closed_ = true;
-            std::queue<Entry> *pQueues[2] = {&rQueue_, &wQueue_};
-            std::condition_variable_any *pCv[2] = {&rCv_, &wCv_};
-            for (int i = 0; i < 2; ++i) {
-                auto & waitQueue = *pQueues[i];
-                while (!waitQueue.empty()) {
-                    auto entry = waitQueue.front();
-                    waitQueue.pop();
-
-                    std::unique_lock<LFLock> aliveLock(*entry.alive_, std::defer_lock);
-                    if (!aliveLock.try_lock()) {
-                        DebugPrint(dbg_mask_ & dbg_channel, "[id=%ld] close zombies coroutine by not alive.", this->getId());
-                        continue;
-                    }
-
-                    if (entry.ok_)
-                        *entry.ok_ = false;
-
-                    if (entry.entry_) {
-                        if (Processer::Wakeup(entry.entry_)) {
-                            DebugPrint(dbg_mask_ & dbg_channel, "[id=%ld] close wakeup coroutine.", this->getId());
-                        } else {
-                            DebugPrint(dbg_mask_ & dbg_channel, "[id=%ld] close zombies coroutine.", this->getId());
-                        }
-                    } else {
-                        DebugPrint(dbg_mask_ & dbg_channel, "[id=%ld] close wakeup native thread.", this->getId());
-                        pCv[i]->notify_one();
-                    }
-                }
-            }
-        }
-
-        template <typename Duration>
-        void Wait(Op op, std::unique_lock<LFLock> & lock, T * ptr, bool * ok, Duration dur)
-        {
-            std::shared_ptr<LFLock> alive(new LFLock);
-
-            auto & waitQueue = op == op_read ? rQueue_ : wQueue_;
-            if (Processer::IsCoroutine()) {
-                DebugPrint(dbg_mask_ & dbg_channel, "[id=%ld] channel coroutine wait. dur=%ld ns",
-                        this->getId(), (long)std::chrono::duration_cast<std::chrono::nanoseconds>(dur).count());
-                if (dur.count() == 0)
-                    waitQueue.push(Entry{alive, Processer::Suspend(), ptr, ok});
-                else 
-                    waitQueue.push(Entry{
-                            alive, 
-                            Processer::Suspend(std::chrono::duration_cast<FastSteadyClock::duration>(dur)),
-                            ptr,
-                            ok});
-
-                lock.unlock();
-                Processer::StaticCoYield();
-            } else {
-                DebugPrint(dbg_mask_ & dbg_channel, "[id=%ld] channel native thread wait. dur=%ld ms",
-                        this->getId(), (long)std::chrono::duration_cast<std::chrono::milliseconds>(dur).count());
-                waitQueue.push(Entry{alive, Processer::SuspendEntry{}, ptr, ok});
-                auto & cv = op == op_read ? rCv_ : wCv_;
-                cv.wait(lock);
-            }
-
-            alive->lock();
-        }
-
-        int Notify(Op op)
-        {
-            int res = 0;
-            auto & waitQueue = op == op_read ? rQueue_ : wQueue_;
-            while (!waitQueue.empty()) {
-                auto entry = waitQueue.front();
-                waitQueue.pop();
-
-                std::unique_lock<LFLock> aliveLock(*entry.alive_, std::defer_lock);
-                if (!aliveLock.try_lock()) {
-                    DebugPrint(dbg_mask_ & dbg_channel, "[id=%ld] notify zombies coroutine by not alive.", this->getId());
-                    continue;
-                }
-
-                // read or write
-                T back;
-                if (op == op_read) {
-                    std::swap(back, *entry.t_);
-                    *entry.t_ = queue_.front();
-                    *entry.ok_ = true;
-                } else {
-                    queue_.emplace_back(*entry.t_);
-                    *entry.ok_ = true;
-                }
-
-                bool ok = false;
-                if (entry.entry_) {
-                    if (Processer::Wakeup(entry.entry_)) {
-                        ok = true;
-                        DebugPrint(dbg_mask_ & dbg_channel, "[id=%ld] notify wakeup coroutine.", this->getId());
-                    } else {
-                        DebugPrint(dbg_mask_ & dbg_channel, "[id=%ld] notify zombies coroutine.", this->getId());
-                    }
-                } else {
-                    auto & cv = op == op_read ? rCv_ : wCv_;
-                    cv.notify_one();
-                    DebugPrint(dbg_mask_ & dbg_channel, "[id=%ld] notify wakeup native thread.", this->getId());
-                    ok = true;
-                }
-
-                if (!ok) {
-                    // rollback
-                    if (op == op_read) {
-                        std::swap(back, *entry.t_);
-                    } else {
-                        queue_.pop_back();
-                    }
-                    *entry.ok_ = false;
-                } else {
-                    // pop
-                    if (op == op_read) {
-                        queue_.pop_front();
-                    }
-                }
-
-                if (ok) {
-                    ++res;
-                    break;
-                }
-            }
-            return res;
+            wCv_.notify_all();
+            rCv_.notify_all();
         }
     };
 };

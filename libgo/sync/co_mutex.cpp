@@ -11,28 +11,21 @@ CoMutex::CoMutex() : isLocked_(false)
 CoMutex::~CoMutex()
 {
     assert(lock_.try_lock());
-    assert(queue_.empty());
     assert(!isLocked_);
 }
 
 void CoMutex::lock()
 {
     std::unique_lock<LFLock> lock(lock_);
+
+retry:
     if (!isLocked_) {
         isLocked_ = true;
         return ;
     }
 
-    if (Processer::IsCoroutine()) {
-        // 协程
-        queue_.push(Processer::Suspend());
-        lock.unlock();
-        Processer::StaticCoYield();
-    } else {
-        // 原生线程
-        queue_.push(Processer::SuspendEntry{});
-        cv_.wait(lock);
-    }
+    cv_.wait(lock);
+    goto retry;
 }
 
 bool CoMutex::try_lock()
@@ -55,23 +48,8 @@ void CoMutex::unlock()
 {
     std::unique_lock<LFLock> lock(lock_);
     assert(isLocked_);
-    
-    while (!queue_.empty()) {
-        auto entry = queue_.front();
-        queue_.pop();
-
-        if (entry) {
-            // 协程
-            if (Processer::Wakeup(entry))
-                return ;
-        } else {
-            // 原生线程
-            cv_.notify_one();
-            return ;
-        }
-    }
-
     isLocked_ = false;
+    cv_.notify_one();
     return ;
 }
 

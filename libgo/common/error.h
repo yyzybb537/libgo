@@ -1,6 +1,7 @@
 #pragma once
 #include <system_error>
 #include <string>
+#include <exception>
 
 namespace co
 {
@@ -34,5 +35,23 @@ const std::error_category& GetCoErrorCategory();
 std::error_code MakeCoErrorCode(eCoErrorCode code);
 
 void ThrowError(eCoErrorCode code);
+
+class co_exception
+    : public std::exception
+{
+public:
+    co_exception();
+    explicit co_exception(std::string const& errMsg);
+
+    const char* what() const noexcept override
+    {
+        return errMsg_.c_str();
+    }
+
+private:
+    std::string errMsg_;
+};
+
+void ThrowException(std::string const& errMsg);
 
 } //namespace co
