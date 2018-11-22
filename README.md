@@ -52,6 +52,7 @@ libgo有以下特点：
             $ mkdir build
             $ cd build
             $ cmake ..
+            $ sudo make uninstall
             $ sudo make install
 
           如果希望编译可调试的版本, "cmake .." 命令执行完毕后执行:
