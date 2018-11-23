@@ -125,6 +125,7 @@ public:
 };
 
 int main(int argc, char** argv) {
+#if ENABLE_DEBUGGER
     CoListenerSample listener;
 
     //设置协程监听器，如果设置为NULL则为取消监听
@@ -152,6 +153,7 @@ int main(int argc, char** argv) {
     std::thread([]{ co_sleep(200); co_sched.Stop(); }).detach();
 
     co_sched.Start();
+#endif
     return 0;
 }
 
