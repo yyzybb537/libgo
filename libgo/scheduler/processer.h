@@ -119,13 +119,15 @@ private:
     ALWAYS_INLINE void CoYield();
 
     // 新创建、阻塞后触发的协程add进来
-    void AddTaskRunnable(Task *tk);
+    void AddTask(Task *tk);
 
     // 调度
     void Process();
 
     // 偷来的协程add进来
-    void AddTaskRunnable(SList<Task> && slist);
+    void AddTask(SList<Task> && slist);
+
+    void OnAddTask();
 
     void NotifyCondition();
 
