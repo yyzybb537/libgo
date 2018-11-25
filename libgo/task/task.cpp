@@ -24,6 +24,28 @@ const char* GetTaskStateName(TaskState state)
         return "Unkown";
     }
 }
+#define __DEF_2Name(x) case SchedulerEvent::x: return #x
+const char* GetSchedulerEventName(SchedulerEvent event)
+{
+    switch (event) {
+    __DEF_2Name(uninitialized);
+    __DEF_2Name(fatal);
+    __DEF_2Name(swapIn);
+    __DEF_2Name(swapOut_runnable);
+    __DEF_2Name(swapOut_block);
+    __DEF_2Name(swapOut_done);
+    __DEF_2Name(suspend);
+    __DEF_2Name(wakeup);
+    __DEF_2Name(addIntoNewQueue);
+    __DEF_2Name(addIntoRunnableQueue);
+    __DEF_2Name(addIntoWaitQueue);
+    __DEF_2Name(addIntoStealList);
+    __DEF_2Name(popRunnableQueue);
+    __DEF_2Name(pushRunnableQueue);
+    default:
+        return "Unkown";
+    }
+}
 
 void Task::Run()
 {
@@ -80,7 +102,7 @@ void Task::StaticRun(intptr_t vp)
 }
 
 Task::Task(TaskF const& fn, std::size_t stack_size)
-    : ctx_(&Task::StaticRun, (intptr_t)this, stack_size), fn_(fn)
+    : ctx_(&Task::StaticRun, (intptr_t)this, stack_size), fn_(fn), stateHistory_(64)
 {
 //    DebugPrint(dbg_task, "task(%s) construct. this=%p", DebugInfo(), this);
 }

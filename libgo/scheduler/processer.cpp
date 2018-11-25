@@ -29,6 +29,9 @@ Scheduler* Processer::GetCurrentScheduler()
 void Processer::AddTaskRunnable(Task *tk)
 {
     DebugPrint(dbg_scheduler, "task(%s) add into proc(%u)", tk->DebugInfo(), id_);
+
+    tk->UpdateSchedulerEvent(SchedulerEvent::addIntoNewQueue, Id());
+
     newQueue_.push(tk);
     newQueue_.AssertLink();
 
@@ -41,6 +44,10 @@ void Processer::AddTaskRunnable(Task *tk)
 void Processer::AddTaskRunnable(SList<Task> && slist)
 {
     DebugPrint(dbg_scheduler, "task(num=%d) add into proc(%u)", (int)slist.size(), id_);
+
+    for (Task &tk : slist)
+        tk.UpdateSchedulerEvent(SchedulerEvent::addIntoNewQueue, Id());
+
     newQueue_.push(std::move(slist));
     newQueue_.AssertLink();
 
@@ -88,6 +95,8 @@ void Processer::Process()
 
             ++switchCount_;
 
+            runningTask_->UpdateSchedulerEvent(SchedulerEvent::swapIn, Id());
+
             runningTask_->SwapIn();
 
 #if ENABLE_DEBUGGER
@@ -97,6 +106,8 @@ void Processer::Process()
             switch (runningTask_->state_) {
                 case TaskState::runnable:
                     {
+                        runningTask_->UpdateSchedulerEvent(SchedulerEvent::swapOut_runnable, Id());
+
                         std::unique_lock<TaskQueue::lock_t> lock(runnableQueue_.LockRef());
                         auto next = (Task*)runningTask_->next;
                         if (next) {
@@ -123,6 +134,8 @@ void Processer::Process()
 
                 case TaskState::block:
                     {
+                        runningTask_->UpdateSchedulerEvent(SchedulerEvent::swapOut_block, Id());
+
                         std::unique_lock<TaskQueue::lock_t> lock(runnableQueue_.LockRef());
                         runningTask_ = nextTask_;
                         nextTask_ = nullptr;
@@ -132,6 +145,8 @@ void Processer::Process()
                 case TaskState::done:
                 default:
                     {
+                        runningTask_->UpdateSchedulerEvent(SchedulerEvent::swapOut_done, Id());
+
                         runnableQueue_.next(runningTask_, nextTask_);
                         if (!nextTask_ && addNewQuota_ > 0) {
                             if (AddNewTasks()) {
@@ -203,7 +218,11 @@ bool Processer::AddNewTasks()
 {
     if (newQueue_.emptyUnsafe()) return false;
 
-    runnableQueue_.push(newQueue_.pop_all());
+    auto slist = newQueue_.pop_all();
+    for (Task &tk : slist)
+        tk.UpdateSchedulerEvent(SchedulerEvent::addIntoRunnableQueue, Id());
+
+    runnableQueue_.push(std::move(slist));
     newQueue_.AssertLink();
     return true;
 }
@@ -234,20 +253,41 @@ SList<Task> Processer::Steal(std::size_t n)
         newQueue_.AssertLink();
         auto slist = newQueue_.pop_back(n);
         newQueue_.AssertLink();
+
+        for (Task &tk : slist)
+            tk.UpdateSchedulerEvent(SchedulerEvent::addIntoStealList, Id());
+
         if (slist.size() >= n)
             return slist;
 
         std::unique_lock<TaskQueue::lock_t> lock(runnableQueue_.LockRef());
         bool pushRunningTask = false, pushNextTask = false;
-        if (runningTask_)
+        if (runningTask_) {
             pushRunningTask = runnableQueue_.eraseWithoutLock(runningTask_, true) || slist.erase(runningTask_, newQueue_.check_);
-        if (nextTask_)
+            if (pushRunningTask) {
+                runningTask_->UpdateSchedulerEvent(SchedulerEvent::pushRunnableQueue, Id());
+            }
+        }
+        if (nextTask_) {
             pushNextTask = runnableQueue_.eraseWithoutLock(nextTask_, true) || slist.erase(nextTask_, newQueue_.check_);
+            if (pushNextTask) {
+                nextTask_->UpdateSchedulerEvent(SchedulerEvent::popRunnableQueue, Id());
+            }
+        }
+
         auto slist2 = runnableQueue_.pop_backWithoutLock(n - slist.size());
-        if (pushRunningTask)
+        for (Task &tk : slist2)
+            tk.UpdateSchedulerEvent(SchedulerEvent::addIntoStealList, Id());
+
+        if (pushRunningTask) {
             runnableQueue_.pushWithoutLock(runningTask_);
-        if (pushNextTask)
+            runningTask_->UpdateSchedulerEvent(SchedulerEvent::pushRunnableQueue, Id());
+        }
+
+        if (pushNextTask) {
             runnableQueue_.pushWithoutLock(nextTask_);
+            nextTask_->UpdateSchedulerEvent(SchedulerEvent::pushRunnableQueue, Id());
+        }
         lock.unlock();
 
         slist2.append(std::move(slist));
@@ -260,17 +300,37 @@ SList<Task> Processer::Steal(std::size_t n)
         auto slist = newQueue_.pop_all();
         newQueue_.AssertLink();
 
+        for (Task &tk : slist)
+            tk.UpdateSchedulerEvent(SchedulerEvent::addIntoStealList, Id());
+
         std::unique_lock<TaskQueue::lock_t> lock(runnableQueue_.LockRef());
         bool pushRunningTask = false, pushNextTask = false;
-        if (runningTask_)
+        if (runningTask_) {
             pushRunningTask = runnableQueue_.eraseWithoutLock(runningTask_, true) || slist.erase(runningTask_, newQueue_.check_);
-        if (nextTask_)
+            if (pushRunningTask) {
+                runningTask_->UpdateSchedulerEvent(SchedulerEvent::pushRunnableQueue, Id());
+            }
+        }
+        if (nextTask_) {
             pushNextTask = runnableQueue_.eraseWithoutLock(nextTask_, true) || slist.erase(nextTask_, newQueue_.check_);
+            if (pushNextTask) {
+                nextTask_->UpdateSchedulerEvent(SchedulerEvent::popRunnableQueue, Id());
+            }
+        }
+
         auto slist2 = runnableQueue_.pop_allWithoutLock();
-        if (pushRunningTask)
+        for (Task &tk : slist2)
+            tk.UpdateSchedulerEvent(SchedulerEvent::addIntoStealList, Id());
+
+        if (pushRunningTask) {
             runnableQueue_.pushWithoutLock(runningTask_);
-        if (pushNextTask)
+            runningTask_->UpdateSchedulerEvent(SchedulerEvent::pushRunnableQueue, Id());
+        }
+
+        if (pushNextTask) {
             runnableQueue_.pushWithoutLock(nextTask_);
+            nextTask_->UpdateSchedulerEvent(SchedulerEvent::pushRunnableQueue, Id());
+        }
         lock.unlock();
 
         slist2.append(std::move(slist));
@@ -312,6 +372,8 @@ Processer::SuspendEntry Processer::SuspendBySelf(Task* tk)
     assert(tk == runningTask_);
     assert(tk->state_ == TaskState::runnable);
 
+    tk->UpdateSchedulerEvent(SchedulerEvent::suspend, Id());
+
     tk->state_ = TaskState::block;
     uint64_t id = ++ TaskRefSuspendId(tk);
 
@@ -325,7 +387,11 @@ Processer::SuspendEntry Processer::SuspendBySelf(Task* tk)
 
     DebugPrint(dbg_suspend, "tk(%s) Suspend. nextTask(%s)", tk->DebugInfo(), nextTask_->DebugInfo());
 
-    runnableQueue_.erase(runningTask_);
+    bool ret = runnableQueue_.erase(runningTask_);
+    (void)ret;
+    assert(ret);
+
+    runningTask_->UpdateSchedulerEvent(SchedulerEvent::addIntoWaitQueue, Id());
     waitQueue_.push(runningTask_);
     return SuspendEntry{ WeakPtr<Task>(tk), id };
 }
@@ -358,6 +424,7 @@ bool Processer::WakeupBySelf(IncursivePtr<Task> const& tkPtr, uint64_t id)
         if (id != TaskRefSuspendId(tk)) return false;
         DebugPrint(dbg_suspend, "tk(%s) Wakeup. tk->state_ = %s", tk->DebugInfo(), GetTaskStateName(tk->state_));
         ++ TaskRefSuspendId(tk);
+        tk->UpdateSchedulerEvent(SchedulerEvent::wakeup, Id());
         bool ret = waitQueue_.eraseWithoutLock(tk, true);
         (void)ret;
         assert(ret);
