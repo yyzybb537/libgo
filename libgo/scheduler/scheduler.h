@@ -84,7 +84,7 @@ private:
     static void DeleteTask(RefObject* tk, void* arg);
 
     // 将一个协程加入可执行队列中
-    void AddTaskRunnable(Task* tk);
+    void AddTask(Task* tk);
 
     // dispatcher线程函数
     // 1.根据待执行协程计算负载, 将高负载的P中的协程steal一些给空载的P

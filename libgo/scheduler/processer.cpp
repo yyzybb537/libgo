@@ -26,7 +26,7 @@ Scheduler* Processer::GetCurrentScheduler()
     return proc ? proc->scheduler_ : nullptr;
 }
 
-void Processer::AddTaskRunnable(Task *tk)
+void Processer::AddTask(Task *tk)
 {
     DebugPrint(dbg_scheduler, "task(%s) add into proc(%u)", tk->DebugInfo(), id_);
 
@@ -35,13 +35,10 @@ void Processer::AddTaskRunnable(Task *tk)
     newQueue_.push(tk);
     newQueue_.AssertLink();
 
-    if (IsWaiting()) {
-        waiting_ = false;
-        NotifyCondition();
-    }
+    OnAddTask();
 }
 
-void Processer::AddTaskRunnable(SList<Task> && slist)
+void Processer::AddTask(SList<Task> && slist)
 {
     DebugPrint(dbg_scheduler, "task(num=%d) add into proc(%u)", (int)slist.size(), id_);
 
@@ -51,6 +48,11 @@ void Processer::AddTaskRunnable(SList<Task> && slist)
     newQueue_.push(std::move(slist));
     newQueue_.AssertLink();
 
+    OnAddTask();
+}
+
+void Processer::OnAddTask()
+{
     if (IsWaiting()) {
         waiting_ = false;
         NotifyCondition();
@@ -430,7 +432,8 @@ bool Processer::WakeupBySelf(IncursivePtr<Task> const& tkPtr, uint64_t id)
         assert(ret);
     }
 
-    AddTaskRunnable(tk);
+    runnableQueue_.push(tk);
+    OnAddTask();
     return true;
 }
 

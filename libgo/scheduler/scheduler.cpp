@@ -53,7 +53,7 @@ void Scheduler::CreateTask(TaskF const& fn, TaskOpt const& opt)
     }
 #endif
 
-    AddTaskRunnable(tk);
+    AddTask(tk);
 }
 
 void Scheduler::DeleteTask(RefObject* tk, void* arg)
@@ -267,11 +267,11 @@ void Scheduler::DispatcherThread()
                         break;
 
                     auto p = processers_[it->second];
-                    p->AddTaskRunnable(std::move(in));
+                    p->AddTask(std::move(in));
                     newActives.insert(ActiveMap::value_type{p->RunnableSize(), it->second});
                 }
                 if (!tasks.empty())
-                    processers_[range.first->second]->AddTaskRunnable(std::move(tasks));
+                    processers_[range.first->second]->AddTask(std::move(tasks));
 
                 for (auto it = range.first; it != range.second; ++it) {
                     auto p = processers_[it->second];
@@ -306,26 +306,26 @@ void Scheduler::DispatcherThread()
                     break;
 
                 auto p = processers_[it->second];
-                p->AddTaskRunnable(std::move(in));
+                p->AddTask(std::move(in));
             }
             if (!tasks.empty())
-                processers_[range.first->second]->AddTaskRunnable(std::move(tasks));
+                processers_[range.first->second]->AddTask(std::move(tasks));
         }
     }
 }
 
-void Scheduler::AddTaskRunnable(Task* tk)
+void Scheduler::AddTask(Task* tk)
 {
     DebugPrint(dbg_scheduler, "Add task(%s) to runnable list.", tk->DebugInfo());
     auto proc = tk->proc_;
     if (proc && proc->active_) {
-        proc->AddTaskRunnable(tk);
+        proc->AddTask(tk);
         return ;
     }
 
     proc = Processer::GetCurrentProcesser();
     if (proc && proc->active_) {
-        proc->AddTaskRunnable(tk);
+        proc->AddTask(tk);
         return ;
     }
 
@@ -337,7 +337,7 @@ void Scheduler::AddTaskRunnable(Task* tk)
         if (proc && proc->active_)
             break;
     }
-    proc->AddTaskRunnable(tk);
+    proc->AddTask(tk);
 }
 
 uint32_t Scheduler::TaskCount()
