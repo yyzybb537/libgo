@@ -130,7 +130,7 @@ struct CoroutineOptions
     bool enable_coro_stat = false;
 
     // 单协程执行超时时长(单位：微秒) (超过时长会强制steal剩余任务, 派发到其他线程)
-    uint32_t cycle_timeout_us = 10 * 1000; 
+    uint32_t cycle_timeout_us = 100 * 1000; 
 
     // 调度线程的触发频率(单位：微秒)
     uint32_t dispatcher_thread_cycle_us = 1000; 
