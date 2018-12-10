@@ -66,7 +66,7 @@ libgo有以下特点：
             
         3.全静态链接: (libgo放到最前面链接)
 
-            g++ -std=c++11 test.cpp -llibgo -Wl,--whole-archive -lstatic_hook -lc -Wl,--no-whole-archive [-lother_libs] -static
+            g++ -std=c++11 test.cpp -llibgo -Wl,--whole-archive -lstatic_hook -lc -lpthread -Wl,--no-whole-archive [-lother_libs] -static
 
  *    Windows: (目前windows只支持2.x版本，3.0的windows支持还要等一段时间) 
 
