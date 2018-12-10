@@ -1,13 +1,14 @@
 #include <iostream>
 #include <gtest/gtest.h>
 #include <chrono>
+#include <atomic>
 #include <boost/thread.hpp>
 #include "gtest_exit.h"
 #include "coroutine.h"
 using namespace std;
 using namespace co;
 
-int rollback = 0;
+std::atomic_int rollback{0};
 
 struct A
 {
