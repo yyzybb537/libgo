@@ -85,7 +85,7 @@ libgo有以下特点：
 			比如vs2013(x64)：
 			$ cmake .. -G"Visual Studio 12 2013 Win64"
         
-        3.使用时需要添加两个include目录：src和src/windows, 或将这两个目录下的头文件拷贝出来使用
+        3.使用时需要include目录：libgo
         
         4.如果想要执行测试代码, 需要依赖boost库. 且在cmake参数中设置BOOST_ROOT:
         
