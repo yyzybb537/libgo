@@ -15,7 +15,8 @@
 namespace co {
 
 #if defined(LIBGO_SYS_Linux)
-ATTRIBUTE_WEAK extern void initHook();
+//ATTRIBUTE_WEAK
+extern void initHook();
 #endif
 
 static int staticInitialize()

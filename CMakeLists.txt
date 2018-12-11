@@ -92,6 +92,8 @@ if (NOT DISABLE_HOOK)
     elseif (WIN32)
         aux_source_directory(${PROJECT_SOURCE_DIR}/libgo/netio/windows CO_SRC_LIST)
     endif()
+else()
+    aux_source_directory(${PROJECT_SOURCE_DIR}/libgo/netio/disable_hook CO_SRC_LIST)
 endif()
 
 set(TARGET "libgo")

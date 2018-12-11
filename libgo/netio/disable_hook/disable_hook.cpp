@@ -1,0 +1,3 @@
+namespace co {
+    void initHook() {}
+}
