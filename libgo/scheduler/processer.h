@@ -69,6 +69,8 @@ public:
 
     static Scheduler* GetCurrentScheduler();
 
+    inline Scheduler* GetScheduler() { return scheduler_; }
+
     // 获取当前正在执行的协程
     static Task* GetCurrentTask();
 

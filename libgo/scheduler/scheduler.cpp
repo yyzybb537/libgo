@@ -46,7 +46,7 @@ void Scheduler::CreateTask(TaskF const& fn, TaskOpt const& opt)
     TaskRefLocation(tk).Init(opt.file_, opt.lineno_);
     ++taskCount_;
 
-    DebugPrint(dbg_task, "task(%s) created.", TaskDebugInfo(tk));
+    DebugPrint(dbg_task, "task(%s) created in scheduler(%p).", TaskDebugInfo(tk), (void*)this);
 #if ENABLE_DEBUGGER
     if (Listener::GetTaskListener()) {
         Listener::GetTaskListener()->onCreated(tk->id_);
@@ -324,7 +324,7 @@ void Scheduler::AddTask(Task* tk)
     }
 
     proc = Processer::GetCurrentProcesser();
-    if (proc && proc->active_) {
+    if (proc && proc->active_ && proc->GetScheduler() == this) {
         proc->AddTask(tk);
         return ;
     }

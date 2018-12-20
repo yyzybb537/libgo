@@ -28,7 +28,7 @@ Scheduler* Processer::GetCurrentScheduler()
 
 void Processer::AddTask(Task *tk)
 {
-    DebugPrint(dbg_scheduler, "task(%s) add into proc(%u)", tk->DebugInfo(), id_);
+    DebugPrint(dbg_task | dbg_scheduler, "task(%s) add into proc(%u)(%p)", tk->DebugInfo(), id_, (void*)this);
     newQueue_.push(tk);
     newQueue_.AssertLink();
 
