@@ -1,5 +1,3 @@
 #pragma once
 
 #define ENABLE_DEBUGGER ${ENABLE_DEBUGGER}
-
-#define WITH_SAFE_SIGNAL ${WITH_SAFE_SIGNAL}

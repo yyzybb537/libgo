@@ -7,9 +7,6 @@
 #include <time.h>
 #include "ref.h"
 #include <thread>
-#if WITH_SAFE_SIGNAL
-#include "hook_signal.h"
-#endif
 
 namespace co
 {
