@@ -28,23 +28,25 @@ std::vector<std::function<void()>>* ExitList()
     return vec;
 }
 
-static int onExit(void) {
+static void onExit(void) {
     auto vec = ExitList();
     for (auto fn : *vec) {
         fn();
     }
     vec->clear();
-    return 0;
+//    return 0;
 }
 
 static int InitOnExit() {
-    onexit(&onExit);
+    atexit(&onExit);
     return 0;
 }
 
 Scheduler* Scheduler::Create()
 {
     static int ignore = InitOnExit();
+    (void)ignore;
+
     Scheduler* sched = new Scheduler;
     std::unique_lock<std::mutex> lock(ExitListMtx());
     auto vec = ExitList();
