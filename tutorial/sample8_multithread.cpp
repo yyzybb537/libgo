@@ -18,7 +18,7 @@ int c = 0;
 std::atomic<int> done{0};
 void foo()
 {
-    int v = (int)pthread_self();
+    int v = (int)rand();
     for (int i = 1; i < 20000000; ++i) {
         v *= i;
     }
