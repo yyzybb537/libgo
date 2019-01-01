@@ -64,8 +64,6 @@ Scheduler::Scheduler()
 Scheduler::~Scheduler()
 {
     Stop();
-
-    onExit();
 }
 
 void Scheduler::CreateTask(TaskF const& fn, TaskOpt const& opt)

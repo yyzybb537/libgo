@@ -22,7 +22,7 @@ using namespace co;
 void setNonblocking(int fd) {
 #if defined(LIBGO_SYS_Unix)
     int flags = fcntl(fd, F_GETFL);
-    res = fcntl(fd, F_SETFL, flags | O_NONBLOCK);
+    int res = fcntl(fd, F_SETFL, flags | O_NONBLOCK);
     EXPECT_EQ(res, 0);
 #elif defined(LIBGO_SYS_Windows)
     u_long arg = 1;

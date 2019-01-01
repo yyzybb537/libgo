@@ -94,13 +94,16 @@ TEST_P(Sleep1, sleep1)
     TIMER_CHECK(gt, t, 100);
 }
 
-TEST_P(Sleep, sleep2)
+TEST_P(Sleep1, sleep2)
 {
     int n = 10;
     for (int i = 0; i < n; ++i)
         go [this]{
-            auto t = rand() % 100 + 100;
+            auto t = rand() % 100 + 1000;
             GTimer gt;
+            if (type_ == sleep_type::syscall_sleep) {
+                t = 1000;
+            }
             do_sleep(type_, t);
             TIMER_CHECK(gt, t, 100);
         };
