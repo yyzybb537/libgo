@@ -73,7 +73,7 @@ void Task::Run()
     Processer::StaticCoYield();
 }
 
-void Task::StaticRun(intptr_t vp)
+FCONTEXT_CALL void Task::StaticRun(intptr_t vp)
 {
     Task* tk = (Task*)vp;
     tk->Run();
