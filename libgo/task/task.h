@@ -58,7 +58,7 @@ struct Task
 private:
     void Run();
 
-    FCONTEXT_CALL static void StaticRun(intptr_t vp);
+    static void FCONTEXT_CALL StaticRun(intptr_t vp);
 
     Task(Task const&) = delete;
     Task(Task &&) = delete;
