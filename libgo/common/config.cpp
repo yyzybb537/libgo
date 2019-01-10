@@ -14,10 +14,12 @@
 
 namespace co {
 
-#if defined(LIBGO_SYS_Linux)
-ATTRIBUTE_WEAK extern void initHook();
-#elif defined(LIBGO_SYS_Windows)
+#if ENABLE_HOOK
+  #if defined(LIBGO_SYS_Linux)
+    ATTRIBUTE_WEAK extern void initHook();
+  #elif defined(LIBGO_SYS_Windows)
     extern void initHook();
+  #endif
 #endif
 
 static int staticInitialize()
@@ -31,10 +33,12 @@ static int staticInitialize()
     // cls
     TaskRefInit(ClsMap);
 
-#if defined(LIBGO_SYS_Linux)
+#if ENABLE_HOOK
+  #if defined(LIBGO_SYS_Linux)
     initHook(); 
-#elif defined(LIBGO_SYS_Windows)
+  #elif defined(LIBGO_SYS_Windows)
     initHook();
+  #endif
 #endif
     return 0;
 }

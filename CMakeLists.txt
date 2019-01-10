@@ -24,9 +24,12 @@ else()
     message ("  enable_debugger: no")
 endif()
 
+option(DISABLE_HOOK "disable hook" OFF)
 if (DISABLE_HOOK)
+    set(ENABLE_HOOK 0)
     message ("  enable_hook: no")
 else()
+    set(ENABLE_HOOK 1)
     message ("  enable_hook: yes")
 endif()
 
