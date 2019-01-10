@@ -273,7 +273,7 @@ void Timer<F>::RunOnce()
     int triggerSlots[8] = {};
 
     const uint64_t additions[8] = {(uint64_t)1, (uint64_t)1 << 8, (uint64_t)1 << 16, (uint64_t)1 << 32, (uint64_t)1 << 40,
-        (uint64_t)1 << 48, (uint64_t)1 << 56, std::numeric_limits<uint64_t>::max()};
+        (uint64_t)1 << 48, (uint64_t)1 << 56, (std::numeric_limits<uint64_t>::max)()};
 
     Point pos;
 

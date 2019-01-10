@@ -249,29 +249,27 @@ namespace co {
         }
 
         Processer::SuspendEntry entry = Processer::Suspend();
-        Reactor::getInstance().Watch(s, 0, entry);
+        auto result = Reactor::getInstance().Watch(s, 0, entry);
+        if (result == Reactor::eError) {
+            Processer::Wakeup(entry);
+            Processer::StaticCoYield();
+            WSASetLastError(WSAEBADF);
+            return -1;
+        }
 
         LPFN_CONNECTEX ConnectEx = getConnectExPtr(s);
         DWORD ignore = 0;
         OverlappedEntry *ol = new OverlappedEntry;
+        std::unique_ptr<OverlappedEntry> autoDelete(ol);
         memset(ol, 0, sizeof(OVERLAPPED));
         ol->entry = entry;
         BOOL bRet = ConnectEx(s, name, namelen, nullptr, 0, &ignore, ol);
-        if (bRet) {
-            // complete
-            Processer::Wakeup(entry);
-            Processer::StaticCoYield();
-            delete ol;
-            return 0;
-        }
-
         int err = WSAGetLastError();
-        if (err != ERROR_IO_PENDING) {
+        if (!bRet && err != ERROR_IO_PENDING) {
             // error
             Processer::Wakeup(entry);
             Processer::StaticCoYield();
             WSASetLastError(err);
-            delete ol;
             return -1;
         }
 
@@ -301,32 +299,52 @@ namespace co {
         if (!tk || is_nonblocking)
             return fn(s, addr, addrlen, std::forward<Args>(args)...);
 
+        sockaddr_storage localAddr;
+        int localAddrLen = sizeof(localAddr);
+        int res = getsockname(s, (sockaddr*)&localAddr, &localAddrLen);
+        if (res != 0) {
+            WSASetLastError(WSAEBADF);
+            return -1;
+        }
+
+        int sockType = SOCK_STREAM;
+        int sockTypeLen = sizeof(sockType);
+        res = getsockopt(s, SOL_SOCKET, SO_TYPE, (char*)&sockType, &sockTypeLen);
+        if (res != 0) {
+            WSASetLastError(WSAEBADF);
+            return -1;
+        }
+
         Processer::SuspendEntry entry = Processer::Suspend();
-        Reactor::getInstance().Watch(s, 0, entry);
+        auto result = Reactor::getInstance().Watch(s, 0, entry);
+        if (result == Reactor::eError) {
+            Processer::Wakeup(entry);
+            Processer::StaticCoYield();
+            WSASetLastError(WSAEBADF);
+            return -1;
+        }
 
         LPFN_ACCEPTEX AcceptEx = getAcceptExPtr(s);
         DWORD ignore = 0;
         OverlappedEntry *ol = new OverlappedEntry;
+        std::unique_ptr<OverlappedEntry> autoDelete(ol);
         memset(ol, 0, sizeof(OVERLAPPED));
         ol->entry = entry;
-        SOCKET acceptSocket = WSASocket(addr->sa_family, SOCK_STREAM, 0, NULL, 0, WSA_FLAG_OVERLAPPED);
-        BOOL bRet = AcceptEx(s, acceptSocket, addr, 0, 0, *addrlen, &ignore, ol);
-        if (bRet) {
-            // complete
-            Processer::Wakeup(entry);
-            Processer::StaticCoYield();
-            delete ol;
-            return acceptSocket;
-        }
+        SOCKET acceptSocket = WSASocket(reinterpret_cast<sockaddr_in*>(&localAddr)->sin_family,
+            sockType, 0, NULL, 0, WSA_FLAG_OVERLAPPED);
 
+        //BOOL bRet = AcceptEx(s, acceptSocket, addr, 0, 0, addrlen ? *addrlen : 0, &ignore, ol);
+
+        sockaddr_storage remoteAddr;
+        int remoteAddrLen = sizeof(remoteAddr);
+        BOOL bRet = AcceptEx(s, acceptSocket, &remoteAddr, 0, 0, remoteAddrLen, &ignore, ol);
         int err = WSAGetLastError();
-        if (err != ERROR_IO_PENDING) {
+        if (!bRet && err != ERROR_IO_PENDING) {
             // error
             Processer::Wakeup(entry);
             Processer::StaticCoYield();
-            WSASetLastError(err);
-            delete ol;
             closesocket(acceptSocket);
+            WSASetLastError(err);
             return -1;
         }
 
@@ -337,8 +355,8 @@ namespace co {
         int errlen = sizeof(err);
         getsockopt(acceptSocket, SOL_SOCKET, SO_ERROR, (char*)&err, &errlen);
         if (err) {
-            WSASetLastError(err);
             closesocket(acceptSocket);
+            WSASetLastError(err);
             return -1;
         }
 
@@ -442,6 +460,68 @@ namespace co {
     static connect_t& connect_f() {
         static connect_t fn = (connect_t)GetProcAddress(GetModuleHandleA("Ws2_32.dll"), "connect");
         return fn;
+    }
+
+    typedef SOCKET (WSAAPI *socket_t)(
+            _In_ int af,
+            _In_ int type,
+            _In_ int protocol
+        );
+    static socket_t& socket_f() {
+        static socket_t fn = (socket_t)GetProcAddress(GetModuleHandleA("Ws2_32.dll"), "socket");
+        return fn;
+    }
+
+    static SOCKET WSAAPI hook_socket(int af, int type, int protocol)
+    {
+        return WSASocket(af, type, protocol, NULL, 0, WSA_FLAG_OVERLAPPED);
+    }
+
+    typedef SOCKET (WSAAPI *WSASocketA_t)(
+        _In_ int af,
+        _In_ int type,
+        _In_ int protocol,
+        _In_opt_ LPWSAPROTOCOL_INFOA lpProtocolInfo,
+        _In_ GROUP g,
+        _In_ DWORD dwFlags
+    );
+    static WSASocketA_t& WSASocketA_f() {
+        static WSASocketA_t fn = (WSASocketA_t)GetProcAddress(GetModuleHandleA("Ws2_32.dll"), "WSASocketA");
+        return fn;
+    }
+    typedef SOCKET(WSAAPI *WSASocketW_t)(
+        _In_ int af,
+        _In_ int type,
+        _In_ int protocol,
+        _In_opt_ LPWSAPROTOCOL_INFOW lpProtocolInfo,
+        _In_ GROUP g,
+        _In_ DWORD dwFlags
+        );
+    static WSASocketW_t& WSASocketW_f() {
+        static WSASocketW_t fn = (WSASocketW_t)GetProcAddress(GetModuleHandleA("Ws2_32.dll"), "WSASocketW");
+        return fn;
+    }
+    SOCKET WSAAPI hook_WSASocketA(
+        _In_ int af,
+        _In_ int type,
+        _In_ int protocol,
+        _In_opt_ LPWSAPROTOCOL_INFOA lpProtocolInfo,
+        _In_ GROUP g,
+        _In_ DWORD dwFlags
+        )
+    {
+        return WSASocketA_f()(af, type, protocol, lpProtocolInfo, g, dwFlags);
+    }
+    SOCKET WSAAPI hook_WSASocketW(
+        _In_ int af,
+        _In_ int type,
+        _In_ int protocol,
+        _In_opt_ LPWSAPROTOCOL_INFOW lpProtocolInfo,
+        _In_ GROUP g,
+        _In_ DWORD dwFlags
+    )
+    {
+        return WSASocketW_f()(af, type, protocol, lpProtocolInfo, g, dwFlags);
     }
 
     static int WINAPI hook_connect(
@@ -795,6 +875,11 @@ namespace co {
         BOOL ok = TRUE;
 
         ok &= XHookAttach((PVOID*)&Sleep_f(), &hook_Sleep) == NO_ERROR;
+
+        // create socket / winsock
+        ok &= XHookAttach((PVOID*)&socket_f(), &hook_socket) == NO_ERROR;
+        ok &= XHookAttach((PVOID*)&WSASocketA_f(), &hook_WSASocketA) == NO_ERROR;
+        ok &= XHookAttach((PVOID*)&WSASocketW_f(), &hook_WSASocketW) == NO_ERROR;
 
         // ioctlsocket and select functions.
 		ok &= XHookAttach((PVOID*)&ioctlsocket_f(), &hook_ioctlsocket) == NO_ERROR;

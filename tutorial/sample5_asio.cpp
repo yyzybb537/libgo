@@ -25,11 +25,28 @@ void echo_server()
     tcp::acceptor acc(ios, addr, true);
     for (int i = 0; i < 2; ++i) {
         std::shared_ptr<tcp::socket> s(new tcp::socket(ios));
-        acc.accept(*s);
+        error_code ec;
+        acc.accept(*s, ec);
+        if (ec) {
+            printf("line:%d accept error:%s\n", __LINE__, ec.message().c_str());
+            return;
+        }
+
         go [s]{
             char buf[1024];
-            auto n = s->read_some(buffer(buf));
-            n = s->write_some(buffer(buf, n));
+            error_code ec;
+            auto n = s->read_some(buffer(buf), ec);
+            if (ec) {
+                printf("line:%d read_some error:%s\n", __LINE__, ec.message().c_str());
+                return;
+            }
+
+            n = s->write_some(buffer(buf, n), ec);
+            if (ec) {
+                printf("line:%d write_some error:%s\n", __LINE__, ec.message().c_str());
+                return;
+            }
+
             error_code ignore_ec;
             n = s->read_some(buffer(buf, 1), ignore_ec);
         };
@@ -39,9 +56,23 @@ void echo_server()
 void client()
 {
     tcp::socket s(ios);
-    s.connect(addr);
+    printf("start connect\n");
+    error_code ec;
+    s.connect(addr, ec);
+    if (ec) {
+        printf("line:%d connect error:%s\n", __LINE__, ec.message().c_str());
+        return;
+    }
+
+    printf("connected success\n");
+
     std::string msg = "1234";
-    int n = s.write_some(buffer(msg));
+    int n = s.write_some(buffer(msg), ec);
+    if (ec) {
+        printf("line:%d write_some error:%s\n", __LINE__, ec.message().c_str());
+        return;
+    }
+
     printf("client send msg [%d] %s\n", (int)msg.size(), msg.c_str());
     char buf[12];
     n = s.receive(buffer(buf, n));
@@ -52,10 +83,10 @@ int main()
 {
     go echo_server;
     go client;
-    go client;
+    //go client;
 
     // 200ms后安全退出
-    std::thread([]{ co_sleep(200); co_sched.Stop(); }).detach();
+    //std::thread([]{ co_sleep(200); co_sched.Stop(); }).detach();
 
     // 单线程执行
     co_sched.Start();

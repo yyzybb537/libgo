@@ -1,3 +1,4 @@
+#define FD_SETSIZE 1024
 #include "reactor.h"
 
 namespace co {
@@ -12,6 +13,7 @@ Reactor& Reactor::getInstance()
 
 Reactor::Reactor()
 {
+
     iocp_ = CreateIoCompletionPort(INVALID_HANDLE_VALUE, NULL, 0, 0);
     SYSTEM_INFO si;
     ::GetSystemInfo(&si);
@@ -25,6 +27,8 @@ Reactor::eWatchResult Reactor::Watch(SOCKET sock, short int pollEvent, Processer
 {
     HANDLE hRet = CreateIoCompletionPort((HANDLE)sock, iocp_, (ULONG_PTR)this, 0);
     int err = WSAGetLastError();
+    if (err == ERROR_INVALID_PARAMETER)
+        return eError;
 
     OverlappedEntry* olEntry = new OverlappedEntry;
     olEntry->entry = entry;
