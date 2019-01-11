@@ -75,6 +75,11 @@
 #include <sys/types.h>
 #endif
 
+#if defined(LIBGO_SYS_Windows)
+#include <Winsock2.h>
+#include <Windows.h>
+#endif
+
 namespace co
 {
 
@@ -187,17 +192,26 @@ std::string P();
 
 class ErrnoStore {
 public:
-    ErrnoStore() : errno_(errno), restored_(false) {}
+    ErrnoStore() : restored_(false) {
+#if defined(LIBGO_SYS_Windows)
+		wsaErr_ = WSAGetLastError();
+#endif
+		errno_ = errno;
+	}
     ~ErrnoStore() {
         Restore();
     }
     void Restore() {
         if (restored_) return ;
         restored_ = true;
+#if defined(LIBGO_SYS_Windows)
+		WSASetLastError(wsaErr_);
+#endif
         errno = errno_;
     }
 private:
     int errno_;
+	int wsaErr_;
     bool restored_;
 };
 

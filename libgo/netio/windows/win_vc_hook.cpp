@@ -1,5 +1,4 @@
-#include <WinSock2.h>
-#include <Windows.h>
+#include "win_vc_hook.h"
 #include <mswsock.h>
 #include <Ws2ipdef.h>
 #include "xhook/xhook.h"
@@ -56,14 +55,7 @@ namespace co {
         _Inout_ u_long *argp
         )
     {
-        int ret = ioctlsocket_f()(s, cmd, argp);
-        int err = WSAGetLastError();
-        if (ret == 0 && cmd == FIONBIO) {
-            int v = *argp;
-            setsockopt(s, SOL_SOCKET, SO_GROUP_PRIORITY, (const char*)&v, sizeof(v));
-        }
-        WSASetLastError(err);
-        return ret;
+        return ioctlsocket_f()(s, cmd, argp);
     }
 
     typedef int ( WINAPI *WSAIoctl_t)(
@@ -94,34 +86,29 @@ namespace co {
         _In_  LPWSAOVERLAPPED_COMPLETION_ROUTINE lpCompletionRoutine
         )
     {
-        int ret = WSAIoctl_f()(s, dwIoControlCode, lpvInBuffer, cbInBuffer, lpvOutBuffer, cbOutBuffer, lpcbBytesReturned, lpOverlapped, lpCompletionRoutine);
-        int err = WSAGetLastError();
-        if (ret == 0 && dwIoControlCode == FIONBIO) {
-            setsockopt(s, SOL_SOCKET, SO_GROUP_PRIORITY, (const char*)lpvInBuffer, cbInBuffer);
-        }
-        WSASetLastError(err);
-        return ret;
+        return WSAIoctl_f()(s, dwIoControlCode, lpvInBuffer, cbInBuffer, lpvOutBuffer, cbOutBuffer, 
+			lpcbBytesReturned, lpOverlapped, lpCompletionRoutine);
     }
 
     bool IsNonblocking(SOCKET s)
     {
         int v = 0;
         int vlen = sizeof(v);
-        if (0 != getsockopt(s, SOL_SOCKET, SO_GROUP_PRIORITY, (char*)&v, &vlen)) {
+        if (0 != getsockopt(s, SOL_SOCKET, FIONBIO, (char*)&v, &vlen)) {
             if (WSAENOTSOCK == WSAGetLastError())
                 return true;
         }
         return !!v;
     }
 
-    typedef int ( WINAPI *select_t)(
-        _In_    int                  nfds,
-        _Inout_ fd_set               *readfds,
-        _Inout_ fd_set               *writefds,
-        _Inout_ fd_set               *exceptfds,
-        _In_    const struct timeval *timeout
-        );
-    static select_t& select_f() {
+	bool setNonblocking(SOCKET s, bool isNonblocking) {
+		int v = isNonblocking ? 1 : 0;
+		int vlen = sizeof(v);
+		int res = setsockopt(s, SOL_SOCKET, FIONBIO, (char*)&v, vlen);
+		return (res == 0);
+	}
+
+    select_t& select_f() {
         static select_t fn = (select_t)GetProcAddress(GetModuleHandleA("Ws2_32.dll"), "select");
         return fn;
     }
@@ -236,20 +223,21 @@ namespace co {
         if (!tk || is_nonblocking)
             return fn(s, name, namelen, std::forward<Args>(args)...);
 
-        if (name->sa_family == AF_INET) {
-            struct sockaddr_in addr = {};
-            addr.sin_family = AF_INET;
-            ::bind(s, (const sockaddr*)&addr, sizeof(addr));
-        } else if (name->sa_family == AF_INET6) {
-            struct sockaddr_in6 addr = {};
-            addr.sin6_family = AF_INET6;
-            ::bind(s, (const sockaddr*)&addr, sizeof(addr));
-        } else {
-            return fn(s, name, namelen, std::forward<Args>(args)...);
-        }
+		setNonblocking(s, true);
+		int res = fn(s, name, namelen, std::forward<Args>(args)...);
+		if (res == 0) {
+			setNonblocking(s, false);
+			return 0;
+		}
+
+		if (res < 0 && WSAGetLastError() != WSAEINPROGRESS) {
+			ErrnoStore es;
+			setNonblocking(s, false);
+			return res;
+		}
 
         Processer::SuspendEntry entry = Processer::Suspend();
-        auto result = Reactor::getInstance().Watch(s, 0, entry);
+        auto result = Reactor::getInstance().Watch(s, POLLOUT, entry);
         if (result == Reactor::eError) {
             Processer::Wakeup(entry);
             Processer::StaticCoYield();
@@ -257,21 +245,12 @@ namespace co {
             return -1;
         }
 
-        LPFN_CONNECTEX ConnectEx = getConnectExPtr(s);
-        DWORD ignore = 0;
-        OverlappedEntry *ol = new OverlappedEntry;
-        std::unique_ptr<OverlappedEntry> autoDelete(ol);
-        memset(ol, 0, sizeof(OVERLAPPED));
-        ol->entry = entry;
-        BOOL bRet = ConnectEx(s, name, namelen, nullptr, 0, &ignore, ol);
-        int err = WSAGetLastError();
-        if (!bRet && err != ERROR_IO_PENDING) {
-            // error
-            Processer::Wakeup(entry);
-            Processer::StaticCoYield();
-            WSASetLastError(err);
-            return -1;
-        }
+		if (result == Reactor::eReady) {
+			Processer::Wakeup(entry);
+			Processer::StaticCoYield();
+			WSASetLastError(0);
+			return 0;
+		}
 
         // io pending, waiting for
         Processer::StaticCoYield();
@@ -284,6 +263,7 @@ namespace co {
             return -1;
         }
 
+		WSASetLastError(0);
         return 0;
     }
 
@@ -299,24 +279,8 @@ namespace co {
         if (!tk || is_nonblocking)
             return fn(s, addr, addrlen, std::forward<Args>(args)...);
 
-        sockaddr_storage localAddr;
-        int localAddrLen = sizeof(localAddr);
-        int res = getsockname(s, (sockaddr*)&localAddr, &localAddrLen);
-        if (res != 0) {
-            WSASetLastError(WSAEBADF);
-            return -1;
-        }
-
-        int sockType = SOCK_STREAM;
-        int sockTypeLen = sizeof(sockType);
-        res = getsockopt(s, SOL_SOCKET, SO_TYPE, (char*)&sockType, &sockTypeLen);
-        if (res != 0) {
-            WSASetLastError(WSAEBADF);
-            return -1;
-        }
-
         Processer::SuspendEntry entry = Processer::Suspend();
-        auto result = Reactor::getInstance().Watch(s, 0, entry);
+        auto result = Reactor::getInstance().Watch(s, POLLIN, entry);
         if (result == Reactor::eError) {
             Processer::Wakeup(entry);
             Processer::StaticCoYield();
@@ -324,43 +288,15 @@ namespace co {
             return -1;
         }
 
-        LPFN_ACCEPTEX AcceptEx = getAcceptExPtr(s);
-        DWORD ignore = 0;
-        OverlappedEntry *ol = new OverlappedEntry;
-        std::unique_ptr<OverlappedEntry> autoDelete(ol);
-        memset(ol, 0, sizeof(OVERLAPPED));
-        ol->entry = entry;
-        SOCKET acceptSocket = WSASocket(reinterpret_cast<sockaddr_in*>(&localAddr)->sin_family,
-            sockType, 0, NULL, 0, WSA_FLAG_OVERLAPPED);
-
-        //BOOL bRet = AcceptEx(s, acceptSocket, addr, 0, 0, addrlen ? *addrlen : 0, &ignore, ol);
-
-        sockaddr_storage remoteAddr;
-        int remoteAddrLen = sizeof(remoteAddr);
-        BOOL bRet = AcceptEx(s, acceptSocket, &remoteAddr, 0, 0, remoteAddrLen, &ignore, ol);
-        int err = WSAGetLastError();
-        if (!bRet && err != ERROR_IO_PENDING) {
-            // error
-            Processer::Wakeup(entry);
-            Processer::StaticCoYield();
-            closesocket(acceptSocket);
-            WSASetLastError(err);
-            return -1;
-        }
+		if (result == Reactor::eReady) {
+			Processer::Wakeup(entry);
+			Processer::StaticCoYield();
+			return fn(s, addr, addrlen, std::forward<Args>(args)...);
+		}
 
         // io pending, waiting for
         Processer::StaticCoYield();
-
-        err = 0;
-        int errlen = sizeof(err);
-        getsockopt(acceptSocket, SOL_SOCKET, SO_ERROR, (char*)&err, &errlen);
-        if (err) {
-            closesocket(acceptSocket);
-            WSASetLastError(err);
-            return -1;
-        }
-
-        return acceptSocket;
+		return fn(s, addr, addrlen, std::forward<Args>(args)...);
     }
 
     enum e_mode_hook_flags
@@ -391,23 +327,22 @@ namespace co {
             Processer::Suspend(std::chrono::milliseconds(timeout));
 
         auto result = Reactor::getInstance().Watch(s, POLLIN, entry);
-        if (result == Reactor::eError || result == Reactor::eReady) {
-            Processer::Wakeup(entry);
-        }
+		if (result == Reactor::eError) {
+			Processer::Wakeup(entry);
+			Processer::StaticCoYield();
+			WSASetLastError(WSAEBADF);
+			return -1;
+		}
+
+		if (result == Reactor::eReady) {
+			Processer::Wakeup(entry);
+			Processer::StaticCoYield();
+			return fn(s, addr, addrlen, std::forward<Args>(args)...);
+		}
 
         Processer::StaticCoYield();
 
-        fd_set readfds, exceptfds;
-        FD_ZERO(&readfds);
-        FD_SET(s, &readfds);
-        FD_ZERO(&exceptfds);
-        FD_SET(s, &exceptfds);
-        int ret = safe_select(0, &readfds, nullptr, &exceptfds);
-        if (ret <= 0) {
-            WSASetLastError(WSAEWOULDBLOCK);
-            return -1;
-        }
-
+		//TODO: ³¬Ê±±»»½ÐÑ
         return fn(s, std::forward<Args>(args)...);
     }
 
@@ -452,12 +387,7 @@ namespace co {
         return fn(s, std::forward<Args>(args)...);
     }
 
-    typedef int ( WINAPI *connect_t)(
-        _In_ SOCKET                s,
-        _In_ const struct sockaddr *name,
-        _In_ int                   namelen
-        );
-    static connect_t& connect_f() {
+	connect_t& connect_f() {
         static connect_t fn = (connect_t)GetProcAddress(GetModuleHandleA("Ws2_32.dll"), "connect");
         return fn;
     }
@@ -565,7 +495,7 @@ namespace co {
         _Out_   struct sockaddr *addr,
         _Inout_ int             *addrlen
         );
-    static accept_t& accept_f() {
+    accept_t& accept_f() {
         static accept_t fn = (accept_t)GetProcAddress(GetModuleHandleA("Ws2_32.dll"), "accept");
         return fn;
     }
@@ -877,9 +807,9 @@ namespace co {
         ok &= XHookAttach((PVOID*)&Sleep_f(), &hook_Sleep) == NO_ERROR;
 
         // create socket / winsock
-        ok &= XHookAttach((PVOID*)&socket_f(), &hook_socket) == NO_ERROR;
-        ok &= XHookAttach((PVOID*)&WSASocketA_f(), &hook_WSASocketA) == NO_ERROR;
-        ok &= XHookAttach((PVOID*)&WSASocketW_f(), &hook_WSASocketW) == NO_ERROR;
+        //ok &= XHookAttach((PVOID*)&socket_f(), &hook_socket) == NO_ERROR;
+        //ok &= XHookAttach((PVOID*)&WSASocketA_f(), &hook_WSASocketA) == NO_ERROR;
+        //ok &= XHookAttach((PVOID*)&WSASocketW_f(), &hook_WSASocketW) == NO_ERROR;
 
         // ioctlsocket and select functions.
 		ok &= XHookAttach((PVOID*)&ioctlsocket_f(), &hook_ioctlsocket) == NO_ERROR;
