@@ -287,6 +287,10 @@ public:
         return lhs.impl_ == rhs.impl_ && lhs.ptr_ == rhs.ptr_;
     }
 
+    friend bool operator<(WeakPtr<T> const& lhs, WeakPtr<T> const& rhs) {
+        return lhs.impl_ < rhs.impl_;
+    }
+
     long use_count() {
         return impl_ ? (long)impl_->reference_ : 0;
     }

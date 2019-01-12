@@ -7,6 +7,75 @@
 
 namespace co {
 
+    static bool & native_call() {
+        static thread_local bool native = false;
+        return native;
+    }
+
+    struct NativeGuard {
+        NativeGuard() {
+            native_call() = true;
+        }
+        ~NativeGuard() {
+            native_call() = false;
+        }
+    };
+
+    typedef int (WINAPI *select_t)(
+        _In_    int                  nfds,
+        _Inout_ fd_set               *readfds,
+        _Inout_ fd_set               *writefds,
+        _Inout_ fd_set               *exceptfds,
+        _In_    const struct timeval *timeout
+        );
+    select_t& select_f();
+
+    typedef int (WINAPI *connect_t)(
+        _In_ SOCKET                s,
+        _In_ const struct sockaddr *name,
+        _In_ int                   namelen
+        );
+    connect_t& connect_f();
+
+    typedef SOCKET(WINAPI *accept_t)(
+        _In_    SOCKET          s,
+        _Out_   struct sockaddr *addr,
+        _Inout_ int             *addrlen
+        );
+    accept_t& accept_f();
+
+    int native_select(
+        _In_    int                  nfds,
+        _Inout_ fd_set               *readfds,
+        _Inout_ fd_set               *writefds,
+        _Inout_ fd_set               *exceptfds,
+        _In_    const struct timeval *timeout
+    )
+    {
+        NativeGuard guard;
+        return select_f()(nfds, readfds, writefds, exceptfds, timeout);
+    }
+
+    int native_connect(
+        _In_ SOCKET                s,
+        _In_ const struct sockaddr *name,
+        _In_ int                   namelen
+    )
+    {
+        NativeGuard guard;
+        return connect_f()(s, name, namelen);
+    }
+
+    SOCKET native_accept(
+        _In_    SOCKET          s,
+        _Out_   struct sockaddr *addr,
+        _Inout_ int             *addrlen
+    )
+    {
+        NativeGuard guard;
+        return accept_f()(s, addr, addrlen);
+    }
+
     typedef VOID (WINAPI *Sleep_t)(_In_ DWORD dwMilliseconds);
     static Sleep_t& Sleep_f() {
         static Sleep_t fn = (Sleep_t)GetProcAddress(GetModuleHandleA("Kernel32.dll"), "Sleep");
@@ -55,7 +124,15 @@ namespace co {
         _Inout_ u_long *argp
         )
     {
-        return ioctlsocket_f()(s, cmd, argp);
+        int res = ioctlsocket_f()(s, cmd, argp);
+        if (res == 0) {
+            if (cmd == FIONBIO) {
+                int val = *(int*)argp;
+                int valLen = sizeof(val);
+                setsockopt(s, SOL_SOCKET, SO_GROUP_PRIORITY, (const char*)&val, valLen);
+            }
+        }
+        return res;
     }
 
     typedef int ( WINAPI *WSAIoctl_t)(
@@ -94,7 +171,7 @@ namespace co {
     {
         int v = 0;
         int vlen = sizeof(v);
-        if (0 != getsockopt(s, SOL_SOCKET, FIONBIO, (char*)&v, &vlen)) {
+        if (0 != getsockopt(s, SOL_SOCKET, SO_GROUP_PRIORITY, (char*)&v, &vlen)) {
             if (WSAENOTSOCK == WSAGetLastError())
                 return true;
         }
@@ -103,9 +180,10 @@ namespace co {
 
 	bool setNonblocking(SOCKET s, bool isNonblocking) {
 		int v = isNonblocking ? 1 : 0;
-		int vlen = sizeof(v);
-		int res = setsockopt(s, SOL_SOCKET, FIONBIO, (char*)&v, vlen);
-		return (res == 0);
+        int res = ioctlsocket(s, FIONBIO, (u_long FAR *)&v);
+        int err = WSAGetLastError();
+        (void)err;
+		return (res == NO_ERROR);
 	}
 
     select_t& select_f() {
@@ -150,6 +228,10 @@ namespace co {
         _In_    const struct timeval *timeout
         )
     {
+        if (native_call()) {
+            return select_f()(nfds, readfds, writefds, exceptfds, timeout);
+        }
+
         static const struct timeval zero_tmv{0, 0};
         long timeout_us = timeout ? (timeout->tv_sec * 1000000 + timeout->tv_usec) : -1;
         int timeout_ms = timeout ? (timeout->tv_sec * 1000 + timeout->tv_usec / 1000) : -1;
@@ -171,22 +253,54 @@ namespace co {
         bool isReady = false;
         fd_set* fd_sets[3] = { readfds, writefds, exceptfds };
         short fd_event[3] = { POLLIN, POLLOUT, POLLERR };
+
+        int n = 0;
         for (int idx = 0; idx < 3; ++idx) {
             fd_set* fds = fd_sets[idx];
             if (!fds) continue;
 
-            for (u_int i = 0; i < fds->fd_count; ++i) {
-                auto result = Reactor::getInstance().Watch((SOCKET)fds->fd_array[i], fd_event[idx], entry);
-                if (result == Reactor::eReady && !isReady) {
-                    isReady = true;
-                    Processer::Wakeup(entry);
-                }
+            n += fds->fd_count;
+        }
+
+        short int *arrRevents = new short int[n];
+        memset(arrRevents, 0, sizeof(short int) * n);
+        std::shared_ptr<short int> revents(arrRevents, [](short int* p) { delete[] p; });
+
+        int i = 0;
+        for (int idx = 0; idx < 3; ++idx) {
+            fd_set* fds = fd_sets[idx];
+            if (!fds) continue;
+
+            for (u_int j = 0; j < fds->fd_count; ++j) {
+                Reactor::getInstance().Watch((SOCKET)fds->fd_array[j], fd_event[idx], Reactor::Entry(entry, revents, i++));
             }
         }
 
         Processer::StaticCoYield();
 
-        return safe_select(nfds, readfds, writefds, exceptfds);
+        fd_set ret_sets[3];
+
+        i = 0;
+        ret = 0;
+        for (int idx = 0; idx < 3; ++idx) {
+            fd_set* fds = fd_sets[idx];
+            if (!fds) continue;
+
+            FD_ZERO(&ret_sets[idx]);
+            for (int j = 0; j < fds->fd_count; ++j) {
+                int k = i + j;
+                short int revent = revents.get()[k];
+                if (revent & fd_event[idx]) {
+                    FD_SET(fds->fd_array[j], &ret_sets[idx]);
+                    ++ret;
+                }
+            }
+            
+            i += fds->fd_count;
+            *fds = ret_sets[idx];
+        }
+
+        return ret;
     }
 
     LPFN_CONNECTEX getConnectExPtr(SOCKET sock)
@@ -237,25 +351,15 @@ namespace co {
 		}
 
         Processer::SuspendEntry entry = Processer::Suspend();
-        auto result = Reactor::getInstance().Watch(s, POLLOUT, entry);
-        if (result == Reactor::eError) {
-            Processer::Wakeup(entry);
-            Processer::StaticCoYield();
-            WSASetLastError(WSAEBADF);
-            return -1;
-        }
+        short int *arrRevents = new short int[1];
+        memset(arrRevents, 0, sizeof(short int) * 1);
+        std::shared_ptr<short int> revents(arrRevents, [](short int* p) { delete[] p; });
 
-		if (result == Reactor::eReady) {
-			Processer::Wakeup(entry);
-			Processer::StaticCoYield();
-			WSASetLastError(0);
-			return 0;
-		}
-
-        // io pending, waiting for
+        Reactor::getInstance().Watch(s, POLLOUT, Reactor::Entry(entry, revents, 0));
+        
         Processer::StaticCoYield();
 
-        err = 0;
+        int err = 0;
         int errlen = sizeof(err);
         getsockopt(s, SOL_SOCKET, SO_ERROR, (char*)&err, &errlen);
         if (err) {
@@ -322,27 +426,20 @@ namespace co {
             getsockopt(s, SOL_SOCKET, SO_RCVTIMEO, (char*)&timeout, &timeoutlen);
         }
 
-        Processer::SuspendEntry entry = timeout == 0 ?
-            Processer::Suspend() :
-            Processer::Suspend(std::chrono::milliseconds(timeout));
+        timeval tv = {timeout / 1000, (timeout % 1000) * 1000};
+        timeval *ptv = (timeout == 0) ? nullptr : &tv;
 
-        auto result = Reactor::getInstance().Watch(s, POLLIN, entry);
-		if (result == Reactor::eError) {
-			Processer::Wakeup(entry);
-			Processer::StaticCoYield();
-			WSASetLastError(WSAEBADF);
-			return -1;
-		}
+        fd_set readfds, exceptfds;
+        FD_ZERO(&readfds);
+        FD_SET(s, &readfds);
+        FD_ZERO(&exceptfds);
+        FD_SET(s, &exceptfds);
+        int n = select(0, &readfds, nullptr, &exceptfds, ptv);
+        if (n <= 0) {
+            WSASetLastError(WSAEWOULDBLOCK);
+            return -1;
+        }
 
-		if (result == Reactor::eReady) {
-			Processer::Wakeup(entry);
-			Processer::StaticCoYield();
-			return fn(s, addr, addrlen, std::forward<Args>(args)...);
-		}
-
-        Processer::StaticCoYield();
-
-		//TODO: ³¬Ê±±»»½ÐÑ
         return fn(s, std::forward<Args>(args)...);
     }
 
@@ -362,24 +459,16 @@ namespace co {
             getsockopt(s, SOL_SOCKET, SO_SNDTIMEO, (char*)&timeout, &timeoutlen);
         }
 
-        Processer::SuspendEntry entry = timeout == 0 ?
-            Processer::Suspend() :
-            Processer::Suspend(std::chrono::milliseconds(timeout));
-
-        auto result = Reactor::getInstance().Watch(s, POLLOUT, entry);
-        if (result == Reactor::eError || result == Reactor::eReady) {
-            Processer::Wakeup(entry);
-        }
-
-        Processer::StaticCoYield();
+        timeval tv = { timeout / 1000, (timeout % 1000) * 1000 };
+        timeval *ptv = (timeout == 0) ? nullptr : &tv;
 
         fd_set writefds, exceptfds;
         FD_ZERO(&writefds);
         FD_SET(s, &writefds);
         FD_ZERO(&exceptfds);
         FD_SET(s, &exceptfds);
-        int ret = safe_select(1, nullptr, &writefds, &exceptfds);
-        if (ret <= 0) {
+        int n = select(0, nullptr, &writefds, &exceptfds, ptv);
+        if (n <= 0) {
             WSASetLastError(WSAEWOULDBLOCK);
             return -1;
         }
@@ -487,6 +576,10 @@ namespace co {
         _In_  LPQOS                 lpGQOS
         )
     {
+        if (native_call()) {
+            return WSAConnect_f()(s, name, namelen, lpCallerData, lpCalleeData, lpSQOS, lpGQOS);
+        }
+
         return connect_mode_hook(WSAConnect_f(), "WSAConnect", s, name, namelen, lpCallerData, lpCalleeData, lpSQOS, lpGQOS);
     }
 
@@ -506,7 +599,7 @@ namespace co {
         _Inout_ int             *addrlen
         )
     {
-        return accept_mode_hook(accept_f(), "accept", s, addr, addrlen);
+        return read_mode_hook<SOCKET>(accept_f(), "accept", 0, s, addr, addrlen);
     }
 
     typedef SOCKET (WINAPI *WSAAccept_t)(
@@ -529,7 +622,11 @@ namespace co {
         _In_    DWORD_PTR       dwCallbackData
         )
     {
-        return accept_mode_hook(WSAAccept_f(), "WSAAccept", s, addr, addrlen, lpfnCondition, dwCallbackData);
+        if (native_call()) {
+            return WSAAccept_f()(s, addr, addrlen, lpfnCondition, dwCallbackData);
+        }
+
+        return read_mode_hook<SOCKET>(WSAAccept_f(), "WSAAccept", 0, s, addr, addrlen, lpfnCondition, dwCallbackData);
     }
 
     typedef int ( WINAPI *WSARecv_t)(

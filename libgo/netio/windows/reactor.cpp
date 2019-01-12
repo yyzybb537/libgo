@@ -15,7 +15,7 @@ Reactor::Reactor()
 }
 
 
-Reactor::eWatchResult Reactor::Watch(SOCKET sock, short int pollEvent, Processer::SuspendEntry const& entry)
+void Reactor::Watch(SOCKET sock, short int pollEvent, Entry const& entry)
 {
 	SelectorPtr selector;
 
@@ -29,14 +29,22 @@ Reactor::eWatchResult Reactor::Watch(SOCKET sock, short int pollEvent, Processer
 		selector = selectors_[idx];
 	}
 	
-	return selector->Watch(sock, pollEvent, entry);
+	selector->Watch(sock, pollEvent, entry);
 }
 
-Reactor::Selector::Selector() 
+Reactor::Selector::Selector()
+    : exit_(false)
 {
-	std::thread([this] { this->ThreadRun(); }).detach();
+    std::thread([this] { this->ThreadRun(); }).swap(thread_);
 }
 
+Reactor::Selector::~Selector()
+{
+    exit_ = true;
+    interrupter_.interrupter();
+    if (thread_.joinable())
+        thread_.join();
+}
 
 void Reactor::Selector::ThreadRun()
 {
@@ -49,37 +57,67 @@ void Reactor::Selector::ThreadRun()
 
 		{
 			std::unique_lock<std::mutex> lock(mtx_);
-			for (auto & kv : readers_) {
-				FD_SET(kv.first, &readfds);
-			}
-			for (auto & kv : writers_) {
-				FD_SET(kv.first, &writefds);
-			}
-			for (auto & kv : excepters_) {
-				FD_SET(kv.first, &exceptfds);
-			}
+            FdSet(readfds, readers_);
+            FdSet(writefds, writers_);
+            FdSet(exceptfds, excepters_);
 		}
 		
 		int ignored = 0;
 		timeval* blocking = nullptr;
-		int n = select_f()(ignored, &readfds, &writefds, &exceptfds, blocking);
+		int n = native_select(ignored, &readfds, &writefds, &exceptfds, blocking);
 		if (n > 0 && FD_ISSET(interrupter_.socket(), &readfds)) {
 			interrupter_.reset();
 			FD_CLR(interrupter_.socket(), &readfds);
 			--n;
+
+            if (exit_) return;
 		}
 
 		if (!n)
 			continue;
 
-		std::unique_lock<std::mutex> lock(mtx_);
-		Perform(readfds, readers_);
-		Perform(writefds, writers_);
-		Perform(exceptfds, excepters_);
+        std::set<Processer::SuspendEntry> wakeups;
+
+        {
+            std::unique_lock<std::mutex> lock(mtx_);
+            Perform(readfds, POLLIN, readers_, wakeups);
+            Perform(writefds, POLLOUT, writers_, wakeups);
+            Perform(exceptfds, POLLERR, excepters_, wakeups);
+        }
+
+        for (auto & suspendEntry : wakeups) {
+            Processer::Wakeup(suspendEntry);
+        }
 	}
 }
 
-void Reactor::Selector::Perform(fd_set& set, Sockets & sockets)
+void Reactor::Selector::FdSet(fd_set& set, Sockets & sockets)
+{
+    auto iter = sockets.begin();
+    while (iter != sockets.end()) {
+        auto & list = iter->second;
+        while (!list.empty()) {
+            if (!list.front().suspendEntry_.IsExpire()) {
+                if (list.size() > 1) {
+                    auto entry = list.front();
+                    list.pop_front();
+                    list.push_back(entry);
+                }
+                break;
+            }
+
+            list.pop_front();
+        }
+        if (list.empty()) {
+            iter = sockets.erase(iter);
+            continue;
+        }
+        FD_SET(iter->first, &set);
+        ++iter;
+    }
+}
+
+void Reactor::Selector::Perform(fd_set& set, short int pollEvent, Sockets & sockets, std::set<Processer::SuspendEntry> & suspendEntries)
 {
 	for (u_int i = 0; i < set.fd_count; ++i) {
 		SOCKET sock = set.fd_array[i];
@@ -88,34 +126,20 @@ void Reactor::Selector::Perform(fd_set& set, Sockets & sockets)
 			continue;
 
 		for (auto & entry : it->second) {
-			Processer::Wakeup(entry);
+            entry.revents_.get()[entry.idx_] |= pollEvent;
+            suspendEntries.insert(entry.suspendEntry_);
 		}
 		sockets.erase(it);
+
+        if (&sockets == &excepters_) {
+            readers_.erase(it->first);
+            writers_.erase(it->first);
+        }
 	}
 }
 
-Reactor::eWatchResult Reactor::Selector::Watch(SOCKET sock, short int pollEvent, Processer::SuspendEntry const& entry)
+void Reactor::Selector::Watch(SOCKET sock, short int pollEvent, Entry const& entry)
 {
-	fd_set readfds, writefds, exceptfds;
-	FD_ZERO(&readfds);
-	FD_ZERO(&writefds);
-	FD_ZERO(&exceptfds);
-	if (pollEvent & POLLIN) {
-		FD_SET(sock, &readfds);
-	}
-	if (pollEvent & POLLOUT) {
-		FD_SET(sock, &writefds);
-	}
-	FD_SET(sock, &exceptfds);
-	timeval nonblocking = { 0, 0 };
-	int n = select_f()(0, &readfds, &writefds, &exceptfds, &nonblocking);
-	if (n < 0) {
-		return Reactor::eError;
-	}
-	if (n > 0) {
-		return Reactor::eReady;
-	}
-
 	std::unique_lock<std::mutex> lock(mtx_);
 	if (pollEvent & POLLIN) {
 		readers_[sock].push_back(entry);
@@ -154,15 +178,15 @@ Reactor::Interrupter::Interrupter()
 	reader_ = ::socket(AF_INET, SOCK_STREAM, 0);
 	assert(reader_ != INVALID_SOCKET);
 
-	res = connect_f()(reader_, (const sockaddr*)&addr, addrLen);
+	res = native_connect(reader_, (const sockaddr*)&addr, addrLen);
 	assert(res == 0);
 
-	writer_ = accept_f()(accepter_, (sockaddr*)&addr, &addrLen);
+	writer_ = native_accept(accepter_, (sockaddr*)&addr, &addrLen);
 	assert(writer_ != INVALID_SOCKET);
 
 	bool bRet = setNonblocking(writer_, true);
 	assert(bRet);
-	bool bRet = setNonblocking(reader_, true);
+	bRet = setNonblocking(reader_, true);
 	assert(bRet);
 
 	::closesocket(accepter_);
@@ -188,7 +212,7 @@ void Reactor::Interrupter::reset()
 
 SOCKET Reactor::Interrupter::socket()
 {
-	return writer_;
+	return reader_;
 }
 
 } //namespace co

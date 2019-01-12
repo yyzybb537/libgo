@@ -83,10 +83,10 @@ int main()
 {
     go echo_server;
     go client;
-    //go client;
+    go client;
 
     // 200ms后安全退出
-    //std::thread([]{ co_sleep(200); co_sched.Stop(); }).detach();
+    std::thread([]{ co_sleep(200); co_sched.Stop(); }).detach();
 
     // 单线程执行
     co_sched.Start();

@@ -16,14 +16,27 @@ public:
 
 public:
 	Reactor();
+    
+    struct Entry {
+        Processer::SuspendEntry suspendEntry_;
+        std::shared_ptr<short int> revents_;
+        int idx_;
 
-    enum eWatchResult {
-        eError,
-        ePending,
-        eReady,
+        Entry() {}
+        Entry(Processer::SuspendEntry const& suspendEntry,
+            std::shared_ptr<short int> const& revents,
+            int idx)
+            : suspendEntry_(suspendEntry), revents_(revents), idx_(idx)
+        {}
+
+        friend bool operator==(Entry const& lhs, Entry const& rhs) {
+            return lhs.idx_ == rhs.idx_ &&
+                lhs.revents_ == rhs.revents_ &&
+                lhs.suspendEntry_ == rhs.suspendEntry_;
+        }
     };
 
-    eWatchResult Watch(SOCKET sock, short int pollEvent, Processer::SuspendEntry const& entry);
+    void Watch(SOCKET sock, short int pollEvent, Entry const& entry);
 	
 private:
 	class Interrupter
@@ -45,26 +58,31 @@ private:
 
 	class Selector
 	{
-		typedef std::unordered_map<SOCKET, std::vector<Processer::SuspendEntry>> Sockets;
+		typedef std::unordered_map<SOCKET, std::list<Entry>> Sockets;
 		Sockets readers_;
 		Sockets writers_;
 		Sockets excepters_;
 		std::mutex mtx_;
 		Interrupter interrupter_;
+        std::thread thread_;
+        volatile bool exit_;
 
 	public:
-		Selector();
+        Selector();
+        ~Selector();
 
-		eWatchResult Watch(SOCKET sock, short int pollEvent, Processer::SuspendEntry const& entry);
+		void Watch(SOCKET sock, short int pollEvent, Entry const& entry);
 
-		void Perform(fd_set& set, Sockets & sockets);
+        void FdSet(fd_set& set, Sockets & sockets);
+
+		void Perform(fd_set& set, short int pollEvent, Sockets & sockets, std::set<Processer::SuspendEntry> & suspendEntries);
 
 		void ThreadRun();
 	};
 
 	typedef std::shared_ptr<Selector> SelectorPtr;
 	std::vector<SelectorPtr> selectors_;
-	std::mutex mtx_;
+	std::mutex mtx_;    
 };
 
 } // namespace co

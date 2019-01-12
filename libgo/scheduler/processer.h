@@ -91,6 +91,12 @@ public:
             return lhs.tk_ == rhs.tk_ && lhs.id_ == rhs.id_;
         }
 
+        friend bool operator<(SuspendEntry const& lhs, SuspendEntry const& rhs) {
+            if (lhs.id_ == rhs.id_)
+                return lhs.tk_ < rhs.tk_;
+            return lhs.id_ < rhs.id_;
+        }
+
         bool IsExpire() const {
             return Processer::IsExpire(*this);
         }
