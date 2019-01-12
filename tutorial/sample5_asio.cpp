@@ -18,9 +18,7 @@ using boost::system::error_code;
 
 io_service ios;
 
-tcp::endpoint addr(address::from_string("127.0.0.1"), port);
-
-void echo_server()
+void echo_server(tcp::endpoint const& addr)
 {
     tcp::acceptor acc(ios, addr, true);
     for (int i = 0; i < 2; ++i) {
@@ -53,7 +51,7 @@ void echo_server()
     }
 }
 
-void client()
+void client(tcp::endpoint const& addr)
 {
     tcp::socket s(ios);
     printf("start connect\n");
@@ -81,9 +79,11 @@ void client()
 
 int main()
 {
-    go echo_server;
-    go client;
-    go client;
+    for (int i = 0; i < 5; ++i) {
+        tcp::endpoint addr(address::from_string("127.0.0.1"), port + i);
+        go [addr]{ echo_server(addr); };
+        go [addr]{ client(addr); };
+    }
 
     // 200ms后安全退出
     std::thread([]{ co_sleep(200); co_sched.Stop(); }).detach();
