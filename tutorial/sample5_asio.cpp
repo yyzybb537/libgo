@@ -11,6 +11,11 @@
 #include "coroutine.h"
 #include "win_exit.h"
 
+// 设置网络线程数 (仅支持linux & mac)
+#if defined(LIBGO_SYS_Unix)
+#include "netio/unix/reactor.h"
+#endif
+
 static const uint16_t port = 43332;
 using namespace boost::asio;
 using namespace boost::asio::ip;
@@ -79,6 +84,11 @@ void client(tcp::endpoint const& addr)
 
 int main()
 {
+    // 设置网络线程数 (仅支持linux & mac)
+#if defined(LIBGO_SYS_Unix)
+    co::Reactor::InitializeReactorCount(2);
+#endif
+
     for (int i = 0; i < 5; ++i) {
         tcp::endpoint addr(address::from_string("127.0.0.1"), port + i);
         go [addr]{ echo_server(addr); };
