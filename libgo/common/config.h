@@ -211,7 +211,9 @@ public:
     }
 private:
     int errno_;
+#if defined(LIBGO_SYS_Windows)
 	int wsaErr_;
+#endif
     bool restored_;
 };
 
