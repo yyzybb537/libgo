@@ -68,29 +68,22 @@ libgo有以下特点：
 
             g++ -std=c++11 test.cpp -llibgo -Wl,--whole-archive -lstatic_hook -lc -lpthread -Wl,--no-whole-archive [-lother_libs] -static
 
- *    Windows: (目前windows只支持2.x版本，3.0的windows支持还要等一段时间) 
-
-        0.切换到windows分支
-
-        1.使用git submodule update --init --recursive下载Hook子模块
-        
-        2.使用CMake构建工程文件. 
+ *    Windows: (3.0已兼容windows, 直接使用master分支即可!)
+ 
+ 	0.windows上使用github下载代码一定要注意换行符的问题, 请正确安装git(使用默认选项), 使用git clone下载源码.(不可以下载压缩包)
+ 
+ 	1.使用CMake构建工程文件. 
 			
 			比如vs2015(x64)：
 			$ cmake .. -G"Visual Studio 14 2015 Win64"
 
 			比如vs2015(x86)：
 			$ cmake .. -G"Visual Studio 14 2015"
-			
-			比如vs2013(x64)：
-			$ cmake .. -G"Visual Studio 12 2013 Win64"
         
-        3.使用时需要include目录：libgo
-        
-        4.如果想要执行测试代码, 需要依赖boost库. 且在cmake参数中设置BOOST_ROOT:
+        2.如果想要执行测试代码, 需要依赖boost库. 且在cmake参数中设置BOOST_ROOT:
         
         		例如：
-        		$ cmake .. -G"Visual Studio 14 2015 Win64" -DBOOST_ROOT="e:\\boost_1_61_0"
+        		$ cmake .. -G"Visual Studio 14 2015 Win64" -DBOOST_ROOT="e:\\boost_1_69_0"
 
 ### 性能
 
