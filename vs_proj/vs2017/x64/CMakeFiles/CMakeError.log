@@ -1,0 +1,40 @@
+Checking whether the ASM compiler is GNU using "--version" did not match "(GNU assembler)|(GCC)|(Free Software Foundation)":
+用于 x64 的 Microsoft (R) C/C++ 优化编译器 19.16.27025.1 版
+版权所有(C) Microsoft Corporation。保留所有权利。
+
+cl: 命令行 warning D9002 :忽略未知选项“--version”
+cl: 命令行 error D8003 :缺少源文件名
+Checking whether the ASM compiler is Clang using "--version" did not match "(clang version)":
+用于 x64 的 Microsoft (R) C/C++ 优化编译器 19.16.27025.1 版
+版权所有(C) Microsoft Corporation。保留所有权利。
+
+cl: 命令行 warning D9002 :忽略未知选项“--version”
+cl: 命令行 error D8003 :缺少源文件名
+Checking whether the ASM compiler is AppleClang using "--version" did not match "(Apple LLVM version)":
+用于 x64 的 Microsoft (R) C/C++ 优化编译器 19.16.27025.1 版
+版权所有(C) Microsoft Corporation。保留所有权利。
+
+cl: 命令行 warning D9002 :忽略未知选项“--version”
+cl: 命令行 error D8003 :缺少源文件名
+Checking whether the ASM compiler is HP using "-V" did not match "HP C":
+用于 x64 的 Microsoft (R) C/C++ 优化编译器 19.16.27025.1 版
+版权所有(C) Microsoft Corporation。保留所有权利。
+
+cl: 命令行 error D8004 :“/V”需要参数
+Checking whether the ASM compiler is Intel using "--version" did not match "(ICC)":
+用于 x64 的 Microsoft (R) C/C++ 优化编译器 19.16.27025.1 版
+版权所有(C) Microsoft Corporation。保留所有权利。
+
+cl: 命令行 warning D9002 :忽略未知选项“--version”
+cl: 命令行 error D8003 :缺少源文件名
+Checking whether the ASM compiler is SunPro using "-V" did not match "Sun C":
+用于 x64 的 Microsoft (R) C/C++ 优化编译器 19.16.27025.1 版
+版权所有(C) Microsoft Corporation。保留所有权利。
+
+cl: 命令行 error D8004 :“/V”需要参数
+Checking whether the ASM compiler is XL using "-qversion" did not match "XL C":
+用于 x64 的 Microsoft (R) C/C++ 优化编译器 19.16.27025.1 版
+版权所有(C) Microsoft Corporation。保留所有权利。
+
+cl: 命令行 warning D9002 :忽略未知选项“-qversion”
+cl: 命令行 error D8003 :缺少源文件名
