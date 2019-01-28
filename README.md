@@ -70,9 +70,9 @@ libgo有以下特点：
 
  *    Windows: (3.0已兼容windows, 直接使用master分支即可!)
  
- 	0.windows上使用github下载代码一定要注意换行符的问题, 请正确安装git(使用默认选项), 使用git clone下载源码.(不可以下载压缩包)
+        0.windows上使用github下载代码一定要注意换行符的问题, 请正确安装git(使用默认选项), 使用git clone下载源码.(不可以下载压缩包)
  
- 	1.使用CMake构建工程文件. 
+        1.使用CMake构建工程文件. 
 			
 			比如vs2015(x64)：
 			$ cmake .. -G"Visual Studio 14 2015 Win64"
