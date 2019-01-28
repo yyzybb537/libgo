@@ -1,3 +1,0 @@
-E:/git/libgo/vs_proj/vs2017/x64/CMakeFiles/libgo_static.dir
-E:/git/libgo/vs_proj/vs2017/x64/CMakeFiles/ALL_BUILD.dir
-E:/git/libgo/vs_proj/vs2017/x64/CMakeFiles/ZERO_CHECK.dir
