@@ -34,7 +34,8 @@ void CoTimer::CoTimerImpl::RunInCoroutine()
         if (nextDuration.count() > 0) {
             trigger_.TimedPop(nullptr, nextDuration);
         } else {
-            trigger_.TryPop(nullptr);
+			if (!trigger_.TryPop(nullptr))
+				co_yield;
         }
     }
 
