@@ -31,7 +31,7 @@
 #elif defined(__linux__)
 # define LIBGO_SYS_Linux 1
 # define LIBGO_SYS_Unix 1
-#elif defined(WIN32)
+#elif defined(_WIN32)
 # define LIBGO_SYS_Windows 1
 #endif
 
