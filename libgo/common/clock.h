@@ -8,7 +8,7 @@
 namespace co
 {
 
-#if defined(LIBGO_SYS_Unix)
+#if defined(LIBGO_SYS_Unix) && __x86_64__ == 1
 class FastSteadyClock
 {
 public:
