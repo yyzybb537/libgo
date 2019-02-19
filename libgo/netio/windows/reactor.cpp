@@ -129,11 +129,12 @@ void Reactor::Selector::Perform(fd_set& set, short int pollEvent, Sockets & sock
             entry.revents_.get()[entry.idx_] |= pollEvent;
             suspendEntries.insert(entry.suspendEntry_);
 		}
+
 		sockets.erase(it);
 
         if (&sockets == &excepters_) {
-            readers_.erase(it->first);
-            writers_.erase(it->first);
+            readers_.erase(sock);
+            writers_.erase(sock);
         }
 	}
 }
