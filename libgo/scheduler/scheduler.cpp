@@ -150,6 +150,10 @@ void Scheduler::Start(int minThreadNumber, int maxThreadNumber)
     DebugPrint(dbg_scheduler, "Scheduler::Start minThreadNumber_=%d, maxThreadNumber_=%d", minThreadNumber_, maxThreadNumber_);
     mainProc->Process();
 }
+void Scheduler::goStart(int minThreadNumber, int maxThreadNumber)
+{
+    std::thread([=]{ this->Start(minThreadNumber, maxThreadNumber); }).detach();
+}
 void Scheduler::Stop()
 {
     if (*stop_) return;

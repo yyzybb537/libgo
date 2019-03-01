@@ -45,6 +45,7 @@ public:
     //          如果maxThreadNumber大于minThreadNumber, 则当协程产生长时间阻塞时,
     //          可以自动扩展调度线程数.
     void Start(int minThreadNumber = 1, int maxThreadNumber = 0);
+    void goStart(int minThreadNumber = 1, int maxThreadNumber = 0);
     static const int s_ulimitedMaxThreadNumber = 40960;
 
     // 停止调度 
