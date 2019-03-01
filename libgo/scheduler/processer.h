@@ -54,8 +54,7 @@ private:
     TaskQueue newQueue_;
 
     // 等待的条件变量
-    std::mutex cvMutex_;
-    std::condition_variable cv_;
+    std::condition_variable_any cv_;
     std::atomic_bool waiting_{false};
 
     std::shared_ptr<bool> stop_;
@@ -134,8 +133,6 @@ private:
 
     // 偷来的协程add进来
     void AddTask(SList<Task> && slist);
-
-    void OnAddTask();
 
     void NotifyCondition();
 

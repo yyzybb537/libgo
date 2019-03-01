@@ -35,7 +35,7 @@ foreach(var ${SRC_LIST})
     string(REGEX REPLACE ".cpp" "" tgt ${var})
 
     add_executable(${tgt}.t ${var})
-    set(LINK_ARGS libgo pthread dl)
+    set(LINK_ARGS libgo tcmalloc_minimal pthread dl)
     target_link_libraries(${tgt}.t ${LINK_ARGS})
 endforeach(var)
 

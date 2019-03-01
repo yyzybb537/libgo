@@ -29,24 +29,25 @@ Scheduler* Processer::GetCurrentScheduler()
 void Processer::AddTask(Task *tk)
 {
     DebugPrint(dbg_task | dbg_scheduler, "task(%s) add into proc(%u)(%p)", tk->DebugInfo(), id_, (void*)this);
-    newQueue_.push(tk);
+    std::unique_lock<TaskQueue::lock_t> lock(newQueue_.LockRef());
+    newQueue_.pushWithoutLock(tk);
     newQueue_.AssertLink();
-
-    OnAddTask();
+    cv_.notify_all();
 }
 
 void Processer::AddTask(SList<Task> && slist)
 {
     DebugPrint(dbg_scheduler, "task(num=%d) add into proc(%u)", (int)slist.size(), id_);
-    newQueue_.push(std::move(slist));
+    std::unique_lock<TaskQueue::lock_t> lock(newQueue_.LockRef());
+    newQueue_.pushWithoutLock(std::move(slist));
     newQueue_.AssertLink();
-
-    OnAddTask();
+    cv_.notify_all();
 }
 
-void Processer::OnAddTask()
+void Processer::NotifyCondition()
 {
-    NotifyCondition();
+    std::unique_lock<TaskQueue::lock_t> lock(newQueue_.LockRef());
+    cv_.notify_all();
 }
 
 void Processer::Process()
@@ -179,18 +180,15 @@ std::size_t Processer::RunnableSize()
     return runnableQueue_.size() + newQueue_.size();
 }
 
-void Processer::NotifyCondition()
-{
-    std::unique_lock<std::mutex> lock(cvMutex_);
-    cv_.notify_all();
-}
-
 void Processer::WaitCondition()
 {
     GC();
-    std::unique_lock<std::mutex> lock(cvMutex_);
+    std::unique_lock<TaskQueue::lock_t> lock(newQueue_.LockRef());
+    if (!runnableQueue_.empty() || !newQueue_.emptyUnsafe())
+        return ;
+
     waiting_ = true;
-    cv_.wait_for(lock, std::chrono::milliseconds(100));
+    cv_.wait_for(lock, std::chrono::milliseconds(105));
     waiting_ = false;
 }
 
@@ -205,8 +203,6 @@ void Processer::GC()
 
 bool Processer::AddNewTasks()
 {
-//    if (newQueue_.emptyUnsafe()) return false;
-
     runnableQueue_.push(newQueue_.pop_all());
     newQueue_.AssertLink();
     return true;
@@ -368,7 +364,7 @@ bool Processer::WakeupBySelf(IncursivePtr<Task> const& tkPtr, uint64_t id)
     }
 
     runnableQueue_.push(tk);
-    OnAddTask();
+    NotifyCondition();
     return true;
 }
 

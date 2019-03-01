@@ -302,6 +302,12 @@ public:
     {
         if (elements.empty()) return ;
         LockGuard lock(lock_);
+        pushWithoutLock(std::move(elements));
+    }
+
+    ALWAYS_INLINE void pushWithoutLock(SList<T> && elements)
+    {
+        if (elements.empty()) return ;
         assert(elements.head_->prev == nullptr);
         assert(elements.tail_->next == nullptr);
         TSQueueHook* listHead = elements.head_;
