@@ -46,10 +46,7 @@ void Processer::AddTask(SList<Task> && slist)
 
 void Processer::OnAddTask()
 {
-    if (IsWaiting()) {
-        waiting_ = false;
-        NotifyCondition();
-    }
+    NotifyCondition();
 }
 
 void Processer::Process()
@@ -184,6 +181,7 @@ std::size_t Processer::RunnableSize()
 
 void Processer::NotifyCondition()
 {
+    std::unique_lock<std::mutex> lock(cvMutex_);
     cv_.notify_all();
 }
 
@@ -207,7 +205,7 @@ void Processer::GC()
 
 bool Processer::AddNewTasks()
 {
-    if (newQueue_.emptyUnsafe()) return false;
+//    if (newQueue_.emptyUnsafe()) return false;
 
     runnableQueue_.push(newQueue_.pop_all());
     newQueue_.AssertLink();
