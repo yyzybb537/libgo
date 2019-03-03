@@ -28,7 +28,7 @@ enum class eSendType {
 static const eSendType c_send_type = eSendType::coroutine;
 io_context poster;
 
-static const int concurrency = 1;
+static const int concurrency = 100;
 static std::chrono::system_clock::time_point sendTicks[concurrency] = {};
 static std::chrono::nanoseconds maxLatency[concurrency] = {};
 

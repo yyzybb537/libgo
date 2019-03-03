@@ -25,7 +25,7 @@ endif()
 
 include_directories(${PROJECT_SOURCE_DIR}/../..)
 include_directories(${PROJECT_SOURCE_DIR}/../../libgo)
-include_directories(/root/gits/fast_asio)
+include_directories(${PROJECT_SOURCE_DIR}/../../third_party/fast_asio)
 link_directories(${PROJECT_SOURCE_DIR}/../../build)
 
 aux_source_directory(${PROJECT_SOURCE_DIR} SRC_LIST)
@@ -35,7 +35,7 @@ foreach(var ${SRC_LIST})
     string(REGEX REPLACE ".cpp" "" tgt ${var})
 
     add_executable(${tgt}.t ${var})
-    set(LINK_ARGS libgo tcmalloc_minimal pthread dl)
+    set(LINK_ARGS libgo boost_system pthread dl)
     target_link_libraries(${tgt}.t ${LINK_ARGS})
 endforeach(var)
 
