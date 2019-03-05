@@ -11,7 +11,7 @@ namespace co
 class CoMutex
 {
     LFLock lock_;
-    bool isLocked_;
+    std::atomic_long sem_;
     ConditionVariableAny cv_;
 
 public:

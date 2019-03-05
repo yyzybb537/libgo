@@ -4,53 +4,47 @@
 namespace co
 {
 
-CoMutex::CoMutex() : isLocked_(false)
+CoMutex::CoMutex() : sem_(1)
 {
 }
 
 CoMutex::~CoMutex()
 {
     assert(lock_.try_lock());
-    assert(!isLocked_);
+    assert(sem_ == 1);
 }
 
 void CoMutex::lock()
 {
-    std::unique_lock<LFLock> lock(lock_);
-
-retry:
-    if (!isLocked_) {
-        isLocked_ = true;
+    if (--sem_ == 0)
         return ;
-    }
 
+    std::unique_lock<LFLock> lock(lock_);
     cv_.wait(lock);
-    goto retry;
 }
 
 bool CoMutex::try_lock()
 {
-    std::unique_lock<LFLock> lock(lock_);
-    if (!isLocked_) {
-        isLocked_ = true;
+    if (--sem_ == 0)
         return true;
-    }
+
+    ++sem_;
     return false;
 }
 
 bool CoMutex::is_lock()
 {
-    std::unique_lock<LFLock> lock(lock_);
-    return isLocked_;
+    return sem_ != 1;
 }
 
 void CoMutex::unlock()
 {
-    std::unique_lock<LFLock> lock(lock_);
-    assert(isLocked_);
-    isLocked_ = false;
-    cv_.notify_one();
-    return ;
+    long val = ++sem_;
+    assert(val <= 1);
+    if (val < 1) {
+        std::unique_lock<LFLock> lock(lock_);
+        cv_.notify_one();
+    }
 }
 
 } //namespace co

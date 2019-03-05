@@ -54,7 +54,7 @@ public:
             AddWaiter(entry);
             lock.unlock();
             Processer::StaticCoYield();
-            lock.lock();
+//            lock.lock();
         } else {
             // 原生线程
             AddWaiter(entry);
