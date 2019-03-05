@@ -11,8 +11,6 @@ ConditionVariableAny::ConditionVariableAny()
 
 ConditionVariableAny::~ConditionVariableAny()
 {
-    std::unique_lock<LFLock> lock(lock_);
-
     while (!queue_.empty()) {
         if (checkIter_ == queue_.begin())
             ++checkIter_;
@@ -35,8 +33,6 @@ ConditionVariableAny::~ConditionVariableAny()
 
 bool ConditionVariableAny::notify_one()
 {
-    std::unique_lock<LFLock> lock(lock_);
-
     while (!queue_.empty()) {
         if (checkIter_ == queue_.begin())
             ++checkIter_;
@@ -70,8 +66,6 @@ bool ConditionVariableAny::notify_one()
 
 size_t ConditionVariableAny::notify_all()
 {
-    std::unique_lock<LFLock> lock(lock_);
-
     size_t n = 0;
     while (!queue_.empty()) {
         if (checkIter_ == queue_.begin())
@@ -107,12 +101,10 @@ size_t ConditionVariableAny::notify_all()
 
 bool ConditionVariableAny::empty()
 {
-    std::unique_lock<LFLock> lock(lock_);
     return queue_.empty();
 }
 
 void ConditionVariableAny::AddWaiter(Entry const& entry) {
-    std::unique_lock<LFLock> lock(lock_);
     queue_.push_back(entry);
 
     if (queue_.size() < 8) {

@@ -92,6 +92,7 @@ void CoRWMutex::WUnlock()
 void CoRWMutex::TryWakeUp()
 {
     // 优先唤醒写等待
+    std::unique_lock<LFLock> lock(lock_);
     if (wCv_.notify_one())
         return ;
 

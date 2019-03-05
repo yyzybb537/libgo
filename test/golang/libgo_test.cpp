@@ -9,6 +9,7 @@
 #define TEST_MAX_THREAD 1
 #endif
 #include "../gtest_unit/gtest_exit.h"
+#include "../profiler.h"
 using namespace std;
 
 static const int N = 10000000;
@@ -63,9 +64,34 @@ void test_channel(int capa, int n)
     dump("BenchmarkChannel_" + std::to_string(capa), n, start, end);
 }
 
+void test_mutex(int n)
+{
+    GProfiler* prof = new GProfiler;
+    prof->Start();
+    co_mutex mtx;
+    long val = 0;
+    auto start = chrono::steady_clock::now();
+    for (int i = 0; i < TEST_MIN_THREAD; ++i)
+        go [&]{
+            for (int j = 0; j < n; ++j) {
+                std::unique_lock<co_mutex> lock(mtx);
+                ++val;
+            }
+
+            if (val == TEST_MIN_THREAD * n) {
+                auto end = chrono::steady_clock::now();
+                prof->Stop();
+                dump("BenchmarkMutex_" + std::to_string(val), n, start, end);
+            }
+        };
+}
+
 int main()
 {
     test_atomic();
+
+    go []{ test_mutex(100000); };
+    WaitUntilNoTask();
 
     go []{ test_switch(1); };
     WaitUntilNoTask();

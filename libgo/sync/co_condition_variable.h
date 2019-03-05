@@ -28,7 +28,6 @@ class ConditionVariableAny
         Entry() : noTimeoutLock(std::make_shared<LFLock>()) {}
     };
 
-    LFLock lock_;
     std::list<Entry> queue_;
     std::list<Entry>::iterator checkIter_;
 
