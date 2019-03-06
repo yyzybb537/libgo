@@ -3,122 +3,360 @@
 #include "../scheduler/processer.h"
 #include <list>
 #include <condition_variable>
+#include "wait_queue.h"
 
 namespace co
 {
 
 /// 协程条件变量
 // 1.与std::condition_variable_any的区别在于析构时不能有正在等待的协程, 否则抛异常
-// 2.notify_one触发原生线程的等待时, 可能误触发两个: 第一个正常触发, 第二个被判定为超时;
-//   所以使用的时候要自己加pred, 让超时的重新进入等待状态, 才能完全兼容原生线程. (协程不存在这个问题)
-class ConditionVariableAny
+
+template <typename T>
+class ConditionVariableAnyT
 {
-    typedef std::function<void()> Func;
+public:
+    typedef std::function<void(T &)> Functor;
 
-    struct Entry
+    enum class cv_status { no_timeout, timeout, no_queued };
+
+private:
+    // 兼容原生线程
+    struct NativeThreadEntry
     {
-        Processer::SuspendEntry suspendEntry;
+        std::mutex mtx;
 
-        // 控制是否超时的标志位
-        std::shared_ptr<LFLock> noTimeoutLock;
+        std::condition_variable_any cv;
 
-        // 唤醒成功后, 在唤醒线程做的事情
-        Func onWakeup;
-
-        Entry() : noTimeoutLock(std::make_shared<LFLock>()) {}
+        LFLock2 notified;
     };
 
-    LFLock lock_;
-    std::list<Entry> queue_;
-    std::list<Entry>::iterator checkIter_;
+    enum eSuspendFlag
+    {
+        suspend_begin = 0x1,
+        suspend_end = 0x2,
+        wakeup_begin = 0x4,
+        wakeup_end = 0x8,
+    };
 
-    // 兼容原生线程
-    std::condition_variable_any cv_;
+    struct Entry : public WaitQueueHook, public RefObject
+    {
+        // 控制是否超时的标志位
+        LFLock noTimeoutLock;
+
+        atomic_t<int> suspendFlags {0};
+
+        Processer::SuspendEntry coroEntry;
+
+        T value;
+
+        NativeThreadEntry* nativeThreadEntry;
+
+        bool isWaiting;
+
+        Entry() : value(), nativeThreadEntry(nullptr), isWaiting(true) {}
+        ~Entry() {
+            if (nativeThreadEntry) {
+                delete nativeThreadEntry;
+                nativeThreadEntry = nullptr;
+            }
+        }
+
+        bool notify(Functor const func) {
+            DebugPrint(dbg_channel, "cv::notify ->");
+            for (;;) {
+                int flag = suspendFlags.load(std::memory_order_relaxed);
+
+                if (flag & eSuspendFlag::suspend_begin) {
+                    DebugPrint(dbg_channel, "cv::notify -> flag = suspend_begin");
+                    // 已在挂起中
+                    while ((suspendFlags.load(std::memory_order_acquire) & eSuspendFlag::suspend_end) == 0);
+                    break;
+                }
+
+                // 还未挂起, 可以直接唤醒
+                if (suspendFlags.compare_exchange_weak(flag,
+                            flag | eSuspendFlag::wakeup_begin,
+                            std::memory_order_acq_rel, std::memory_order_relaxed))
+                {
+                    DebugPrint(dbg_channel, "cv::notify -> wakeup complete");
+
+                    flag |= eSuspendFlag::wakeup_begin | eSuspendFlag::wakeup_end;
+
+                    if (!noTimeoutLock.try_lock()) {
+                        assert(false);
+                        suspendFlags.store(flag, std::memory_order_release);
+                        DebugPrint(dbg_channel, "cv::notify -> wakeup_end");
+                        return false;;
+                    }
+
+                    if (func)
+                        func(value);
+
+                    suspendFlags.store(flag, std::memory_order_release);
+                    DebugPrint(dbg_channel, "cv::notify -> wakeup_end");
+                    return true;
+                }
+            }
+
+            DebugPrint(dbg_channel, "cv::notify -> wakeup");
+
+            // coroutine
+            if (!nativeThreadEntry) {
+                if (!noTimeoutLock.try_lock())
+                    return false;;
+
+                if (Processer::Wakeup(coroEntry, [&]{ if (func) func(value); })) {
+//                    DebugPrint(dbg_channel, "notify %d.", value.id);
+                    return true;
+                }
+
+                return false;;
+            }
+
+            // native thread
+            std::unique_lock<std::mutex> threadLock(nativeThreadEntry->mtx);
+            if (!noTimeoutLock.try_lock())
+                return false;;
+
+            if (func)
+                func(value);
+            nativeThreadEntry->cv.notify_one();
+            return true;
+        }
+    };
+
+    WaitQueue<Entry> queue_;
+
+    bool relockAfterWait_ = true;
 
 public:
-    ConditionVariableAny();
-    ~ConditionVariableAny();
+    typedef typename WaitQueue<Entry>::CondRet CondRet;
 
-    bool notify_one();
-    size_t notify_all();
+public:
+    explicit ConditionVariableAnyT(size_t nonblockingCapacity = 0,
+            Functor convertToNonblockingFunctor = NULL)
+        : queue_(&isValid, nonblockingCapacity,
+                [=](Entry *entry)
+                {
+                    if (entry->notify(convertToNonblockingFunctor)) {
+                        entry->isWaiting = false;
+                        return true;
+                    }
+                    return false;
+                })
+    {
+    }
+    ~ConditionVariableAnyT() {}
 
-    bool empty();
+    void setRelockAfterWait(bool b) { relockAfterWait_ = b; }
 
     template <typename LockType>
-    std::cv_status wait(LockType & lock, Func onWakeup = Func()) {
-        Entry entry;
-        entry.onWakeup = onWakeup;
+    cv_status wait(LockType & lock,
+            T value = T(),
+            std::function<CondRet(size_t)> const& cond = NULL)
+    {
+        std::chrono::seconds* time = nullptr;
+        return do_wait(lock, time, value, cond);
+    }
 
-        if (Processer::IsCoroutine()) {
-            // 协程
-            entry.suspendEntry = Processer::Suspend();
-            AddWaiter(entry);
-            lock.unlock();
-            Processer::StaticCoYield();
-            lock.lock();
-        } else {
-            // 原生线程
-            AddWaiter(entry);
-            cv_.wait(lock);
+    template <typename LockType, typename TimeDuration>
+    cv_status wait_for(LockType & lock,
+            TimeDuration duration,
+            T value = T(),
+            std::function<CondRet(size_t)> const& cond = NULL)
+    {
+        return do_wait(lock, &duration, value, cond);
+    }
+
+    template <typename LockType, typename TimePoint>
+    cv_status wait_util(LockType & lock,
+            TimePoint timepoint,
+            T value = T(),
+            std::function<CondRet(size_t)> const& cond = NULL)
+    {
+        return do_wait(lock, &timepoint, value, cond);
+    }
+
+    bool notify_one(Functor const& func = NULL)
+    {
+        Entry* entry = nullptr;
+        while (queue_.pop(entry)) {
+            AutoRelease<Entry> pEntry(entry);
+
+            if (!entry->isWaiting) {
+                if (func)
+                    func(entry->value);
+                return true;
+            }
+
+            if (entry->notify(func))
+                return true;
         }
 
-        return entry.noTimeoutLock->try_lock() ? std::cv_status::timeout : std::cv_status::no_timeout;
+        return false;
     }
 
-    template <typename LockType, typename Rep, typename Period>
-    std::cv_status wait_for(LockType & lock, std::chrono::duration<Rep, Period> const& duration, Func onWakeup = Func()) {
-        Entry entry;
-        entry.onWakeup = onWakeup;
-
-        if (Processer::IsCoroutine()) {
-            // 协程
-            entry.suspendEntry = Processer::Suspend(duration);
-            AddWaiter(entry);
-            lock.unlock();
-            Processer::StaticCoYield();
-            lock.lock();
-        } else {
-            // 原生线程
-            AddWaiter(entry);
-            cv_.wait_for(lock, duration);
-        }
-
-        return entry.noTimeoutLock->try_lock() ? std::cv_status::timeout : std::cv_status::no_timeout;
+    size_t notify_all(Functor const& func = NULL)
+    {
+        size_t n = 0;
+        while (notify_one(func))
+            ++n;
+        return n;
     }
 
-    template <typename LockType, typename Clock, typename Duration>
-    std::cv_status wait_until(LockType & lock, std::chrono::time_point<Clock, Duration> const& timepoint, Func onWakeup = Func()) {
-        Entry entry;
-        entry.onWakeup = onWakeup;
-
-        if (Processer::IsCoroutine()) {
-            // 协程
-            entry.suspendEntry = Processer::Suspend(timepoint);
-            AddWaiter(entry);
-            lock.unlock();
-            Processer::StaticCoYield();
-            lock.lock();
-        } else {
-            // 原生线程
-            AddWaiter(entry);
-            cv_.wait_until(lock, timepoint);
-        }
-
-        return entry.noTimeoutLock->try_lock() ? std::cv_status::timeout : std::cv_status::no_timeout;
+    bool empty() {
+        return queue_.empty();
     }
 
-    template <typename LockType, typename Rep, typename Period>
-    std::cv_status timedWait(LockType & lock, std::chrono::duration<Rep, Period> const& duration) {
-        return wait_for(lock, duration);
-    }
-
-    template <typename LockType, typename Clock, typename Duration>
-    std::cv_status timedWait(LockType & lock, std::chrono::time_point<Clock, Duration> const& timepoint) {
-        return wait_util(lock, timepoint);
+    bool size() {
+        return queue_.size();
     }
 
 private:
-    void AddWaiter(Entry const& entry);
+    template <typename TimeType>
+    inline void coroSuspend(Processer::SuspendEntry & coroEntry, TimeType * time)
+    {
+        if (time)
+            coroEntry = Processer::Suspend(*time);
+        else
+            coroEntry = Processer::Suspend();
+    }
+
+    template <typename LockType, typename Rep, typename Period>
+    inline void threadSuspend(std::condition_variable_any & cv,
+            LockType & lock, std::chrono::duration<Rep, Period> * dur)
+    {
+        if (dur)
+            cv.wait_for(lock, *dur);
+        else
+            cv.wait(lock);
+    }
+
+    template <typename LockType, typename Clock, typename Duration>
+    inline void threadSuspend(std::condition_variable_any & cv,
+            LockType & lock, std::chrono::time_point<Clock, Duration> * tp)
+    {
+        if (tp)
+            cv.wait_until(lock, *tp);
+        else
+            cv.wait(lock);
+    }
+
+    template <typename LockType, typename TimeType>
+    cv_status do_wait(LockType & lock,
+            TimeType* time, T value = T(),
+            std::function<CondRet(size_t)> const& cond = NULL)
+    {
+        Entry *entry = new Entry;
+        AutoRelease<Entry> pEntry(entry);
+        entry->value = value;
+        size_t qSize = 0;
+        auto ret = queue_.push(entry, [&](size_t queueSize){
+                CondRet ret{true, true};
+                if (cond) {
+                    ret = cond(queueSize);
+                    if (!ret.canQueue)
+                        return ret;
+                }
+
+                entry->IncrementRef();
+
+                if (!ret.needWait) {
+                    entry->isWaiting = false;
+                    return ret;
+                }
+
+                qSize = queueSize;
+                return ret;
+                });
+
+        lock.unlock();
+
+        if (!ret.canQueue) {
+            return cv_status::no_queued;
+        }
+
+        if (!ret.needWait) {
+            return cv_status::no_timeout;
+        }
+
+        DebugPrint(dbg_channel, "cv::wait ->");
+
+        int spinA = 0;
+        int spinB = 0;
+        int flag = 0;
+        for (;;) {
+            flag = entry->suspendFlags.load(std::memory_order_relaxed);
+
+            if (flag & eSuspendFlag::wakeup_begin) {
+                DebugPrint(dbg_channel, "cv::wait -> flag = wakeup_begin");
+                // 已在被唤醒
+                while ((entry->suspendFlags.load(std::memory_order_acquire) & eSuspendFlag::wakeup_end) == 0);
+                return cv_status::no_timeout;
+            } else {
+                // 无人唤醒, 先自旋等一等再真正挂起
+                if (++spinA <= 0) {
+                    continue;
+                }
+
+                if (Processer::IsCoroutine()) {
+//                    if (++spinB <= 1 << (4 - std::min((size_t)4, qSize))) {
+                    if (++spinB <= 1) {
+                        Processer::StaticCoYield();
+                        continue;
+                    }
+                } else {
+                    if (++spinB <= 8) {
+                        std::this_thread::yield();
+                        continue;
+                    }
+                }
+            }
+
+            if (entry->suspendFlags.compare_exchange_weak(flag,
+                        flag | eSuspendFlag::suspend_begin,
+                        std::memory_order_acq_rel, std::memory_order_relaxed))
+                break;
+        }
+
+        flag |= eSuspendFlag::suspend_begin | eSuspendFlag::suspend_end;
+
+        DebugPrint(dbg_channel, "cv::wait -> suspend_begin");
+        if (Processer::IsCoroutine()) {
+            // 协程
+            coroSuspend(entry->coroEntry, time);
+            entry->suspendFlags.store(flag, std::memory_order_release);   // release
+            DebugPrint(dbg_channel, "cv::wait -> suspend_end");
+            Processer::StaticCoYield();
+            if (relockAfterWait_)
+                lock.lock();
+            return entry->noTimeoutLock.try_lock() ?
+                cv_status::timeout :
+                cv_status::no_timeout;
+        } else {
+            // 原生线程
+            entry->nativeThreadEntry = new NativeThreadEntry;
+            std::unique_lock<std::mutex> threadLock(entry->nativeThreadEntry->mtx);
+            entry->suspendFlags.store(flag, std::memory_order_release);   // release
+            DebugPrint(dbg_channel, "cv::wait -> suspend_end");
+            threadSuspend(entry->nativeThreadEntry->cv, threadLock, time);
+            if (relockAfterWait_)
+                lock.lock();
+            return entry->noTimeoutLock.try_lock() ?
+                cv_status::timeout :
+                cv_status::no_timeout;
+        }
+    }
+
+    static bool isValid(Entry* entry) {
+        if (!entry->isWaiting) return true;
+        if ((entry->suspendFlags & eSuspendFlag::suspend_begin) == 0) return true;
+        if (!entry->nativeThreadEntry)
+            return !entry->coroEntry.IsExpire();
+        return entry->nativeThreadEntry->notified.is_lock();
+    }
 };
+
+typedef ConditionVariableAnyT<bool> ConditionVariableAny;
 
 } //namespace co

@@ -54,10 +54,15 @@ Scheduler* Scheduler::Create()
     return sched;
 }
 
+bool* Scheduler::getStop()
+{
+    static bool* stop = new bool(false);
+    return stop;
+}
+
 Scheduler::Scheduler()
 {
     LibgoInitialize();
-    stop_.reset(new bool(false));
     processers_.push_back(new Processer(this, 0));
 }
 
@@ -156,9 +161,11 @@ void Scheduler::goStart(int minThreadNumber, int maxThreadNumber)
 }
 void Scheduler::Stop()
 {
-    if (*stop_) return;
+    std::unique_lock<std::mutex> lock(stopMtx_);
 
-    *stop_ = true;
+    if (*getStop()) return;
+
+    *getStop() = true;
     size_t n = processers_.size();
     for (size_t i = 0; i < n; ++i) {
         auto p = processers_[i];
@@ -230,7 +237,7 @@ void Scheduler::DispatcherThread()
 {
     DebugPrint(dbg_scheduler, "---> Start DispatcherThread");
     typedef std::size_t idx_t;
-    while (!*stop_) {
+    while (!*getStop()) {
         // TODO: 用condition_variable降低cpu使用率
         std::this_thread::sleep_for(std::chrono::microseconds(CoroutineOptions::getInstance().dispatcher_thread_cycle_us));
 

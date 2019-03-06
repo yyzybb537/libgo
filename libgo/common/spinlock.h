@@ -50,16 +50,6 @@ struct LFLock
         while (flag.test_and_set(std::memory_order_acquire)) ;
     }
 
-//    ALWAYS_INLINE bool is_lock()
-//    {
-//        if (try_lock()) {
-//            unlock();
-//            return false;
-//        }
-//
-//        return true;
-//    }
-
     ALWAYS_INLINE bool try_lock()
     {
         return !flag.test_and_set(std::memory_order_acquire);

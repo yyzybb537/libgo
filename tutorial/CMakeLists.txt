@@ -5,8 +5,8 @@ project(tutorial)
 
 if (CMAKE_BUILD_TYPE)
 else()
-    set(CMAKE_BUILD_TYPE RELEASE)
-    #set(CMAKE_BUILD_TYPE DEBUG)
+    #set(CMAKE_BUILD_TYPE RELEASE)
+    set(CMAKE_BUILD_TYPE DEBUG)
 endif()
 
 message("------------ Options -------------")
@@ -65,6 +65,7 @@ foreach(var ${SRC_LIST})
         set(LINK_ARGS libgo ${Boost_LIBRARIES} ws2_32)
     elseif (UNIX)
         set(LINK_ARGS libgo curl ${Boost_LIBRARIES} pthread dl)
+        #set(LINK_ARGS libgo ${Boost_LIBRARIES} pthread dl)
     endif()
     target_link_libraries(${tgt}.t ${LINK_ARGS})
 

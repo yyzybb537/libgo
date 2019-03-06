@@ -203,7 +203,8 @@ public:
     typedef typename std::conditional<ThreadSafe,
             std::lock_guard<LFLock>,
             fake_lock_guard>::type LockGuard;
-    lock_t lock_;
+    lock_t ownerLock_;
+    lock_t *lock_;
     TSQueueHook* head_;
     TSQueueHook* tail_;
     volatile std::size_t count_;
@@ -215,11 +216,12 @@ public:
         head_ = tail_ = new TSQueueHook;
         count_ = 0;
         check_ = this;
+        lock_ = &ownerLock_;
     }
 
     ~TSQueue()
     {
-        LockGuard lock(lock_);
+        LockGuard lock(*lock_);
         while (head_ != tail_) {
             TSQueueHook *prev = tail_->prev;
             DecrementRef((T*)tail_);
@@ -229,27 +231,36 @@ public:
         head_ = tail_ = 0;
     }
 
+    void setLock(lock_t *lock) {
+        lock_ = lock;
+    }
+
     ALWAYS_INLINE lock_t& LockRef() {
-        return lock_;
+        return *lock_;
     }
 
     ALWAYS_INLINE void front(T*& out)
     {
-        LockGuard lock(lock_);
+        LockGuard lock(*lock_);
         out = (T*)head_->next;
         if (out) out->check_ = check_;
     }
 
     ALWAYS_INLINE void next(T* ptr, T*& out)
     {
-        LockGuard lock(lock_);
+        LockGuard lock(*lock_);
+        nextWithoutLock(ptr, out);
+    }
+
+    ALWAYS_INLINE void nextWithoutLock(T* ptr, T*& out)
+    {
         out = (T*)ptr->next;
         if (out) out->check_ = check_;
     }
 
     ALWAYS_INLINE bool empty()
     {
-        LockGuard lock(lock_);
+        LockGuard lock(*lock_);
         return !count_;
     }
 
@@ -260,32 +271,14 @@ public:
 
     ALWAYS_INLINE std::size_t size()
     {
-        LockGuard lock(lock_);
+        LockGuard lock(*lock_);
         return count_;
-    }
-
-    ALWAYS_INLINE void push(T* element)
-    {
-        LockGuard lock(lock_);
-        pushWithoutLock(element);
-    }
-    ALWAYS_INLINE void pushWithoutLock(T* element)
-    {
-        TSQueueHook *hook = static_cast<TSQueueHook*>(element);
-        assert(hook->next == nullptr);
-        assert(hook->prev == nullptr);
-        tail_->link(hook);
-        tail_ = hook;
-        hook->next = nullptr;
-        hook->check_ = check_;
-        ++ count_;
-        IncrementRef(element);
     }
 
     ALWAYS_INLINE T* pop()
     {
         if (head_ == tail_) return nullptr;
-        LockGuard lock(lock_);
+        LockGuard lock(*lock_);
         if (head_ == tail_) return nullptr;
         TSQueueHook* ptr = head_->next;
         if (ptr == tail_) tail_ = head_;
@@ -301,7 +294,7 @@ public:
     ALWAYS_INLINE void push(SList<T> && elements)
     {
         if (elements.empty()) return ;
-        LockGuard lock(lock_);
+        LockGuard lock(*lock_);
         pushWithoutLock(std::move(elements));
     }
 
@@ -325,7 +318,7 @@ public:
     ALWAYS_INLINE SList<T> pop_front(uint32_t n)
     {
         if (head_ == tail_) return SList<T>();
-        LockGuard lock(lock_);
+        LockGuard lock(*lock_);
         if (head_ == tail_) return SList<T>();
         TSQueueHook* first = head_->next;
         TSQueueHook* last = first;
@@ -351,7 +344,7 @@ public:
     ALWAYS_INLINE SList<T> pop_back(uint32_t n)
     {
         if (head_ == tail_) return SList<T>();
-        LockGuard lock(lock_);
+        LockGuard lock(*lock_);
         return pop_backWithoutLock(n);
     }
     ALWAYS_INLINE SList<T> pop_backWithoutLock(uint32_t n)
@@ -379,7 +372,7 @@ public:
     ALWAYS_INLINE SList<T> pop_all()
     {
         if (head_ == tail_) return SList<T>();
-        LockGuard lock(lock_);
+        LockGuard lock(*lock_);
         return pop_allWithoutLock();
     }
 
@@ -398,11 +391,11 @@ public:
 
     ALWAYS_INLINE bool erase(T* hook, bool check = false)
     {
-        LockGuard lock(lock_);
+        LockGuard lock(*lock_);
         return eraseWithoutLock(hook, check);
     }
 
-    ALWAYS_INLINE bool eraseWithoutLock(T* hook, bool check = false)
+    ALWAYS_INLINE bool eraseWithoutLock(T* hook, bool check = false, bool refCount = true)
     {
         if (check && hook->check_ != check_) return false;
 #if LIBGO_DEBUG
@@ -415,15 +408,39 @@ public:
         else if (hook == tail_) tail_ = tail_->prev;
         hook->prev = hook->next = nullptr;
         hook->check_ = nullptr;
+        assert(count_ > 0);
         -- count_;
-        DecrementRef((T*)hook);
+        if (refCount)
+            DecrementRef((T*)hook);
         return true;
+    }
+
+    ALWAYS_INLINE size_t pushWithoutLock(T* element, bool refCount = true)
+    {
+        TSQueueHook *hook = static_cast<TSQueueHook*>(element);
+        assert(hook->next == nullptr);
+        assert(hook->prev == nullptr);
+        tail_->link(hook);
+        tail_ = hook;
+        hook->next = nullptr;
+        hook->check_ = check_;
+        DebugPrint(dbg_suspend, "pushWithoutLock before this=0x%p size=%lu", (void*)this, count_);
+        ++ count_;
+        if (refCount)
+            IncrementRef(element);
+        return count_;
+    }
+
+    ALWAYS_INLINE size_t push(T* element)
+    {
+        LockGuard lock(*lock_);
+        return pushWithoutLock(element);
     }
 
     ALWAYS_INLINE void AssertLink()
     {
 #if LIBGO_DEBUG
-        LockGuard lock(lock_);
+        LockGuard lock(*lock_);
         if (head_ == tail_) return ;
         assert(!!head_);
         assert(!!tail_);

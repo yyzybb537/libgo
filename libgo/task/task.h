@@ -37,6 +37,8 @@ struct Task
 
     uint64_t yieldCount_ = 0;
 
+    atomic_t<uint64_t> suspendId_ {0};
+
     Task(TaskF const& fn, std::size_t stack_size);
     ~Task();
 

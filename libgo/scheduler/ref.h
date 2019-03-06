@@ -9,7 +9,9 @@ namespace co
 TaskRefDefine(bool, Affinity)
 TaskRefDefine(SourceLocation, Location)
 TaskRefDefine(std::string, DebugInfo)
-TaskRefDefine(atomic_t<uint64_t>, SuspendId)
+//TaskRefDefine(atomic_t<uint64_t>, SuspendId)
+
+#define TaskRefSuspendId(tk) tk->suspendId_
 
 inline const char* TaskDebugInfo(Task *tk)
 {

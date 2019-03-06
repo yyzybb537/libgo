@@ -28,7 +28,7 @@ static int staticInitialize()
     TaskRefInit(Affinity);
     TaskRefInit(Location);
     TaskRefInit(DebugInfo);
-    TaskRefInit(SuspendId);
+//    TaskRefInit(SuspendId);
 
     // cls
     TaskRefInit(ClsMap);
@@ -82,6 +82,12 @@ int GetCurrentThreadID()
 {
     auto proc = Processer::GetCurrentProcesser();
     return proc ? proc->Id() : -1;
+}
+
+int GetCurrentCoroID()
+{
+    Task* tk = Processer::GetCurrentTask();
+    return tk ? tk->id_ : 0;
 }
 
 std::string GetCurrentTimeStr()

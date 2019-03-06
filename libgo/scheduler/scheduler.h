@@ -73,6 +73,8 @@ public:
 public:
     inline TimerType & GetTimer() { return timer_ ? *timer_ : StaticGetTimer(); }
 
+    inline static bool IsStop() { return *getStop(); }
+
 private:
     Scheduler();
     ~Scheduler();
@@ -96,6 +98,8 @@ private:
 
     TimerType & StaticGetTimer();
 
+    static bool* getStop();
+
     // deque of Processer, write by start or dispatch thread
     Deque<Processer*> processers_;
 
@@ -110,11 +114,11 @@ private:
     int minThreadNumber_ = 1;
     int maxThreadNumber_ = 1;
 
-    std::shared_ptr<bool> stop_;
-
     std::thread dispatchThread_;
 
     std::thread timerThread_;
+
+    std::mutex stopMtx_;
 };
 
 } //namespace co

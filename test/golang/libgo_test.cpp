@@ -9,6 +9,7 @@
 #define TEST_MAX_THREAD 1
 #endif
 #include "../gtest_unit/gtest_exit.h"
+//#include "../profiler.h"
 using namespace std;
 
 static const int N = 10000000;
@@ -50,21 +51,71 @@ void test_switch(int coro)
 
 void test_channel(int capa, int n)
 {
-    co_chan<bool> c(capa);
+    char buf[1024] = {};
+    co_chan<bool> ch(capa);
+    std::atomic_int c {0};
+//    GProfilerScope prof;
     auto start = chrono::steady_clock::now();
-    go [=]{
-        for (int i = 0; i < n; ++i) {
-            c << true;
-        }
-    };
-    for (int i = 0; i < n; ++i)
-        c >> nullptr;
+    const int loop = std::max(TEST_MIN_THREAD / 2, 1);
+    for (int i = 0; i < loop; ++i) {
+        c += 2;
+        go [&]{
+            for (int i = 0; i < n; ++i) {
+                ch << true;
+            }
+            --c;
+        };
+
+        go [&]{
+            for (int i = 0; i < n; ++i) {
+                ch >> nullptr;
+            }
+            --c;
+        };
+    }
+
+    while (c) {
+        usleep(1000);
+    }
     auto end = chrono::steady_clock::now();
-    dump("BenchmarkChannel_" + std::to_string(capa), n, start, end);
+    dump("BenchmarkChannel_" + std::to_string(capa), n * loop, start, end);
+}
+
+void test_mutex(int n)
+{
+//    typedef co::LFLock mutex_t;
+//    typedef std::mutex mutex_t;
+    typedef co_mutex mutex_t;
+    mutex_t mtx;
+    std::atomic_int c {0};
+    long val = 0;
+    auto start = chrono::steady_clock::now();
+    for (int i = 0; i < TEST_MIN_THREAD; ++i) {
+        ++c;
+        go [&]{
+            for (int i = 0; i < n; ++i) {
+                std::unique_lock<mutex_t> lock(mtx);
+                free(malloc(400));
+                ++val;
+            }
+            --c;
+        };
+    }
+
+    while (c) {
+        usleep(1000);
+    }
+    auto end = chrono::steady_clock::now();
+    dump("BenchmarkMutex_" + std::to_string(val), val, start, end);
+    if (val != n * TEST_MIN_THREAD)
+        printf("ERROR, val=%ld\n", val);
 }
 
 int main()
 {
+//    co_opt.debug = co::dbg_channel;
+//    co_opt.debug_output = fopen("log", "w");
+
     test_atomic();
 
     go []{ test_switch(1); };
@@ -73,12 +124,25 @@ int main()
     go []{ test_switch(1000); };
     WaitUntilNoTask();
 
-    go []{ test_channel(0, N); };
+//    go []{ test_mutex(1000000); };
+//    WaitUntilNoTask();
+
+    go []{ test_channel(0, 1000000); };
     WaitUntilNoTask();
 
-    go []{ test_channel(1, N); };
+    go []{ test_channel(1, 1000000); };
     WaitUntilNoTask();
 
-    go []{ test_channel(10000, 10000); };
+//    go []{ test_channel(63, 1000000); };
+//    WaitUntilNoTask();
+//
+//    go []{ test_channel(64, 1000000); };
+//    WaitUntilNoTask();
+
+//    go []{ test_channel(9999, 10000000); };
+//    WaitUntilNoTask();
+
+//    go []{ test_channel(5, 10); };
+    go []{ test_channel(10000, 10000000); };
     WaitUntilNoTask();
 }

@@ -48,7 +48,7 @@ configure_file(${PROJECT_SOURCE_DIR}/libgo/common/cmake_config.h.in ${PROJECT_SO
 message("----------------------------------")
 
 if (UNIX)
-    set(CMAKE_CXX_FLAGS "-std=c++11 -fPIC -Wall ${CMAKE_CXX_FLAGS}")
+    set(CMAKE_CXX_FLAGS "-std=c++11 -fPIC -fno-strict-aliasing -Wall ${CMAKE_CXX_FLAGS}")
     set(CMAKE_CXX_FLAGS_DEBUG "-g")
     set(CMAKE_CXX_FLAGS_RELEASE "-g -O3 -DNDEBUG")
 

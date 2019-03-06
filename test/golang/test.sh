@@ -23,11 +23,16 @@ then
     #g++ libgo_test.cpp -DTEST_MIN_THREAD=$threads -DNDEBUG -std=c++11 -g -o libgo_test -I../../third_party/gtest/include -L../../build -llibgo -pthread || exit
 else
     g++ libgo_test.cpp -DTEST_MIN_THREAD=$threads -DNDEBUG -std=c++11 -O3 -o libgo_test -I../../third_party/gtest/include -L../../build -llibgo -static \
-        -Wl,--whole-archive -lstatic_hook -lc -lpthread -Wl,--no-whole-archive -ldl 2>/dev/null || exit
+        /usr/local/lib/libtcmalloc_minimal.a /usr/local/lib/libunwind.a \
+        -Wl,--whole-archive -lstatic_hook -lc -lpthread -Wl,--no-whole-archive -ldl || exit
+
+    #g++ -g libgo_test.cpp -DTEST_MIN_THREAD=$threads -std=c++11 -O3 -o libgo_test -I../../third_party/gtest/include -L../../build -llibgo \
+    #    /usr/local/lib/libtcmalloc_minimal.a /usr/local/lib/libprofiler.a /usr/local/lib/libunwind.a  -pthread -ldl || exit
 fi
 echo "------------- libgo ---------------"
 ./libgo_test
 echo "-----------------------------------"
+#exit
 
 echo "------------- golang --------------"
 go version

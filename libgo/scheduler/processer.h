@@ -56,8 +56,7 @@ private:
     // 等待的条件变量
     std::condition_variable_any cv_;
     std::atomic_bool waiting_{false};
-
-    std::shared_ptr<bool> stop_;
+    bool notified_ = false;
 
     static int s_check_;
 
@@ -109,7 +108,7 @@ public:
     static SuspendEntry Suspend(FastSteadyClock::time_point timepoint);
 
     // 唤醒协程
-    static bool Wakeup(SuspendEntry const& entry);
+    static bool Wakeup(SuspendEntry const& entry, std::function<void()> const& functor = NULL);
 
     // 测试一个SuspendEntry是否还可能有效
     static bool IsExpire(SuspendEntry const& entry);
@@ -162,7 +161,7 @@ private:
 
     SuspendEntry SuspendBySelf(Task* tk);
 
-    bool WakeupBySelf(IncursivePtr<Task> const& tkPtr, uint64_t id);
+    bool WakeupBySelf(IncursivePtr<Task> const& tkPtr, uint64_t id, std::function<void()> const& functor);
 };
 
 ALWAYS_INLINE void Processer::StaticCoYield()

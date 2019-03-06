@@ -44,7 +44,7 @@ void CoTimer::CoTimerImpl::RunInCoroutine()
 
 void CoTimer::CoTimerImpl::Stop()
 {
-    if (terminate_) return;
+    if (terminate_ || Scheduler::IsStop()) return;
 
     terminate_ = true;
     quit_ >> nullptr;

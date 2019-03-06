@@ -6,6 +6,7 @@
 #include "spinlock.h"
 #include "util.h"
 #include "dbg_timer.h"
+#include <condition_variable>
 
 namespace co
 {
@@ -121,6 +122,8 @@ private:
 //private:
 public:
     volatile bool stop_ = false;
+    std::mutex quitMtx_;
+    std::condition_variable_any quit_;
 
     int maxPoolSize_ = 0;
     Pool pool_;
@@ -219,12 +222,18 @@ void Timer<F>::ThreadRun()
 //        DebugPrint(dbg_timer, "[id=%ld]Thread sleep %ld us", this->getId(),
 //                std::chrono::duration_cast<std::chrono::microseconds>(e - s).count());
     }
+
+    std::unique_lock<std::mutex> lock(quitMtx_);
+    quit_.notify_one();
 }
 
 template <typename F>
 void Timer<F>::Stop()
 {
     stop_ = true;
+
+    std::unique_lock<std::mutex> lock(quitMtx_);
+    quit_.wait(lock);
 }
 
 template <typename F>

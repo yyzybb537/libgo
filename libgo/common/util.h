@@ -212,6 +212,24 @@ private:
     T* ptr_;
 };
 
+// 侵入式引用计数智能指针
+template <typename T>
+class AutoRelease
+{
+    T* ptr_;
+
+public:
+    explicit AutoRelease(T* ptr) : ptr_(ptr) {}
+
+    void release() {
+        ptr_ = nullptr;
+    }
+
+    ~AutoRelease() {
+        if (ptr_) ptr_->DecrementRef();
+    }
+};
+
 // 弱指针
 // 注意：弱指针和对象池不可一起使用, 弱指针无法区分已经归还到池的对象.
 template <typename T>
@@ -231,6 +249,10 @@ public:
     }
     WeakPtr(WeakPtr && other) : impl_(nullptr), ptr_(nullptr) {
         swap(other);
+    }
+    WeakPtr& operator=(WeakPtr && other) {
+        swap(other);
+        return *this;
     }
     WeakPtr& operator=(WeakPtr const& other) {
         if (this == &other) return *this;

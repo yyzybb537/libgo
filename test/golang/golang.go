@@ -7,7 +7,10 @@ import(
 	"os"
 	"strconv"
 	"sync/atomic"
+	"sync"
 )
+
+var nThreads int = 1
 
 func Switch_1(n int) {
 	c := make(chan bool)
@@ -43,54 +46,61 @@ func Switch_1000(n int) {
 	<-c
 }
 
-func Channel_0(n int) {
-	c := make(chan bool)
-	go func(){
-		for i := 0; i < n; i++ {
-			c <- true
-        }
-    }()
+func Channel(capacity int, n int) {
+	q := make(chan bool, nThreads)
+	c := make(chan bool, capacity)
+	for i := 0; i < nThreads; i++ {
+		go func(){
+			for i := 0; i < n; i++ {
+				c <- true
+			}
+			q <- true
+		}()
 
-	for i := 0; i < n; i++ {
-		<-c
+		go func(){
+			for i := 0; i < n; i++ {
+				<-c
+			}
+			q <- true
+		}()
+	}
+
+	for i := 0; i < 2 * nThreads; i++ {
+		<-q
 	}
 }
 
-func Channel_1(n int) {
-	c := make(chan bool, 1)
-	go func(){
-		for i := 0; i < n; i++ {
-			c <- true
-        }
-    }()
+func Mutex(n int) {
+	var mtx sync.Mutex
+	var val int64 = 0
 
-	for i := 0; i < n; i++ {
-		<-c
+	c := make(chan bool, nThreads)
+	for i := 0; i < nThreads; i++ {
+		go func(){
+			for i := 0; i < n; i++ {
+				mtx.Lock()
+				val++
+				mtx.Unlock()
+			}
+			 
+			c <- true
+		}()
 	}
-}
 
-func Channel_N(n int) {
-	c := make(chan bool, n)
-	go func(){
-		for i := 0; i < n; i++ {
-			c <- true
-        }
-    }()
-
-	for i := 0; i < n; i++ {
+	for i := 0; i < nThreads; i++ {
 		<-c
 	}
 }
 
 func main() {
-	var n int64 = 10000000
+	var n int64 = 1000000
 	var N int = int(n)
 
 	if len(os.Args) > 1 {
-		nThreads, _ := strconv.Atoi(os.Args[1])
-		runtime.GOMAXPROCS(nThreads)
+		nThreads, _ = strconv.Atoi(os.Args[1])
 	}
 
+	runtime.GOMAXPROCS(nThreads)
 	fmt.Printf("Thread: %d\n", runtime.GOMAXPROCS(0));
 
 	t := time.Now()
@@ -103,18 +113,25 @@ func main() {
 	nanos = time.Since(t).Nanoseconds()
 	fmt.Printf("%s    %d    %d ns/op    %d w/s\n", "Switch_1000", n, nanos/n, 100000 * n / nanos);
 
+	n *= int64(nThreads)
+
+//	t = time.Now()
+//	Mutex(N)
+//	nanos = time.Since(t).Nanoseconds()
+//	fmt.Printf("%s    %d    %d ns/op    %d w/s\n", "Mutex", n, nanos/n, 100000 * n / nanos);
+
 	t = time.Now()
-	Channel_0(N)
+	Channel(0, N)
 	nanos = time.Since(t).Nanoseconds()
 	fmt.Printf("%s    %d    %d ns/op    %d w/s\n", "Channel_0", n, nanos/n, 100000 * n / nanos);
 
 	t = time.Now()
-	Channel_1(N)
+	Channel(1, N)
 	nanos = time.Since(t).Nanoseconds()
 	fmt.Printf("%s    %d    %d ns/op    %d w/s\n", "Channel_1", n, nanos/n, 100000 * n / nanos);
 
 	t = time.Now()
-	Channel_N(N)
+	Channel(10000, N)
 	nanos = time.Since(t).Nanoseconds()
-	fmt.Printf("%s    %d    %d ns/op    %d w/s\n", "Channel_N", n, nanos/n, 100000 * n / nanos);
+	fmt.Printf("%s    %d    %d ns/op    %d w/s\n", "Channel_10000", n, nanos/n, 100000 * n / nanos);
 }
