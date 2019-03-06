@@ -19,21 +19,21 @@ Using libgo to write multi-threaded programs, it can be developed as fast and lo
 
 Libgo has the following characteristics:
 
-* 1. Provide golang's General powerful protocol, write code based on corontine, can write simple code in a synchronous manner, while achieving asynchronous performance.
+*   1.Provide golang's General powerful protocol, write code based on corontine, can write simple code in a synchronous manner, while achieving asynchronous performance.
 
-* 2. Supporting massive coroutines, creating 1 million coroutines requires only 4.5 GB of physical memory. (data from real test, in no deliberately compressed stack situation.)
+*   2.Supporting massive coroutines, creating 1 million coroutines requires only 4.5 GB of physical memory. (data from real test, in no deliberately compressed stack situation.)
 
-* 3. Supporting multi-threaded scheduling protocols, providing efficient load balancing strategy and synchronization mechanism, it is easy to write efficient multi-threaded programs.
+*   3.Supporting multi-threaded scheduling protocols, providing efficient load balancing strategy and synchronization mechanism, it is easy to write efficient multi-threaded programs.
 
-* 4. The number of scheduled threads supports dynamic scaling, and there is no head blocking caused by slow scheduling.
+*   4.The number of scheduled threads supports dynamic scaling, and there is no head blocking caused by slow scheduling.
 
-* 5. Use hook technology to make synchronous third-party libraries of linking processes become asynchronous calls, which greatly improves their performance. There's no need to worry that some DB authorities don't provide asynchronous drivers, such as hiredis and mysqlclient, which are client drivers that can be used directly and can achieve performance comparable to that of asynchronous drivers.
+*   5.Use hook technology to make synchronous third-party libraries of linking processes become asynchronous calls, which greatly improves their performance. There's no need to worry that some DB authorities don't provide asynchronous drivers, such as hiredis and mysqlclient, which are client drivers that can be used directly and can achieve performance comparable to that of asynchronous drivers.
 
-* 6. Both dynamic links and full static links are supported, which makes it easy to generate executable files using C++ 11 static links and deploy them to low-level Linux systems.
+*   6.Both dynamic links and full static links are supported, which makes it easy to generate executable files using C++ 11 static links and deploy them to low-level Linux systems.
 
-* 7. Provide Channel, Co_mutex, Co_rwmutex, timer and other features to help users write programs more easily.
+*   7.Provide Channel, Co_mutex, Co_rwmutex, timer and other features to help users write programs more easily.
 
-* 8. Supports local variables (CLS) of the process, and completely covers all scenarios of TLS (read the tutorial code sample13_cls.cpp for details).
+*   8.Supports local variables (CLS) of the process, and completely covers all scenarios of TLS (read the tutorial code sample13_cls.cpp for details).
 
 * From user feedback in the past two years, many developers have a project with an asynchronous non-blocking model (probably based on epoll, libuv or ASIO network libraries) and then need access to DBs such as MySQL that do not provide asynchronous driver. Conventional connection pool and thread pool schemes are intensive in high concurrency scenarios (each connection have to correspond to a thread for Best performance. Thousands of instruction cycles of thread context switching  are intensive and too many active threads will lead to a sharp decline performance in OS scheduling capacity, which is unacceptable to many develops.
 
@@ -77,7 +77,7 @@ If you have installed vcpkg, you can install it directly using vcpkg:
 
  *    Windows: (3.0 is compatible with windows, just use master branch directly!)
  
-        0. When using GitHub to download code on windows, we must pay attention to the problem of newline characters. Please install git correctly (using default options) and use git clone to download source code. (Do not download compressed packages)
+        0.When using GitHub to download code on windows, we must pay attention to the problem of newline characters. Please install git correctly (using default options) and use git clone to download source code. (Do not download compressed packages)
  
         1.Use CMake to build project. 
 			
@@ -96,12 +96,16 @@ If you have installed vcpkg, you can install it directly using vcpkg:
 
 Like golang, libgo implements a complete scheduler (users only need to create a coroutine without concern for the execution, suspension and resource recovery of the coroutine). Therefore, libgo is qualified to compare the performance of single-threaded with golang (It is not qualified to do performance comparison in different ability).
 
+<img width="400" src="imgs/switch_cost.png"/>
+
 Test environment: 
 2018 13-inch MAC notebook (CPU minimum)
 Operating System: Mac OSX
 CPU: 2.3 GHz Intel Core i5 (4 Core 8 Threads)
 Test script: $test/golang/test.sh thread_number
 
+
+<img width="600" src="imgs/switch_speed.png"/>
 
 ### Matters needing attention(WARNING)：
  
