@@ -48,6 +48,15 @@ namespace co
         }
 
     public: // modifiers
+        template<class ValueType, class... Args>
+        typename std::remove_cv<typename std::decay<const ValueType>::type>::type&
+        emplace(Args&&... args ) {
+            clear();
+            auto placeholder = new holder<typename std::remove_cv<typename std::decay<const ValueType>::type>::type>(std::forward<Args>(args)...);
+            this->content = placeholder;
+            return placeholder->held;
+        }
+
         any & swap(any & rhs) noexcept
         {
             std::swap(content, rhs.content);
@@ -135,6 +144,12 @@ namespace co
 
             holder(ValueType&& value)
               : held(static_cast< ValueType&& >(value))
+            {
+            }
+
+            template <typename ... Args>
+            holder(Args&& ... args)
+              : held(std::forward<Args>(args)...)
             {
             }
 

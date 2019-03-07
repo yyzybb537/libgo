@@ -35,8 +35,8 @@ T& GetSpecific(CLSLocation loc, Args && ... args) {
     if (val.empty()) {
 //        std::cout << "Set<T> val:" << (void*)&val << ", m:" << (void*)m << std::endl;
 //        std::cout << "sizeof:" << sizeof...(args) << std::endl;
-        any newVal(T(std::forward<Args>(args)...));
-        val.swap(newVal);
+          
+          return val.emplace<T>(std::forward<Args>(args)...);
     }
 
     return any_cast<T&>(val);
