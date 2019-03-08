@@ -2,121 +2,128 @@
 
 [![Build Status](https://travis-ci.org/yyzybb537/libgo.svg?branch=master)](https://travis-ci.org/yyzybb537/libgo)
 
-### libgo  - 协程库、并行编程库
+### libgo -- a coroutine library and a parallel Programming Library
 
-libgo是一个使用C++11编写的协作式调度的stackful协程库, 同时也是一个强大易用的并行编程库
+Libgo is a stackful coroutine library for collaborative scheduling written in C++ 11, and it is also a powerful and easy-to-use parallel programming library.
 
-目前支持三个平台:
+Three platforms are currently supported:
 
     Linux
 
     MacOSX
     
-    Windows (Win7及以上 x86 or x64 使用VS2015/2017编译)
+    Windows (Win7 or above,x86 or x64,complie with VS2015/2017)
 
-使用libgo编写多线程程序，即可以像golang、erlang这些并发语言一样开发迅速且逻辑简洁，又有C++原生的性能优势，鱼和熊掌从此可以兼得。
 
-libgo有以下特点：
+Using libgo to write multi-threaded programs, it can be developed as fast and logical as golang and Erlang concurrent languages, and has the performance advantages of C++ native.It make it happen that one can serve God and Mammon.
 
- *   1.提供golang一般功能强大协程，基于corontine编写代码，可以以同步的方式编写简单的代码，同时获得异步的性能，
- *   2.支持海量协程, 创建100万个协程只需使用4.5GB物理内存.(真实值, 而不是刻意压缩stack得到的测试值)
- *   3.支持多线程调度协程, 提供高效的负载均衡策略和协程同步机制, 很容易编写高效的多线程程序.
- *   4.调度线程数支持动态伸缩, 不再有调度慢协程导致头部阻塞效应的问题.
- *   5.使用hook技术让链接进程序的同步的第三方库变为异步调用，大大提升其性能。再也不用担心某些DB官方不提供异步driver了，比如hiredis、mysqlclient这种客户端驱动可以直接使用，并且可以得到不输于异步driver的性能。
- *   6.动态链接和全静态链接均支持，便于使用C++11的用户静态链接生成可执行文件并部署至低版本的linux系统上。
- *   7.提供Channel, 协程锁(co_mutex), 协程读写锁(co_rwmutex), 定时器等特性, 帮助用户更加容易地编写程序. 
- *   8.支持协程局部变量(CLS), 并且完全覆盖TLS的所有使用场景(详见教程代码sample13_cls.cpp).
+Libgo has the following characteristics:
 
- *   从近两年的用户反馈情况看，有很多用户都是已经有了一个异步非阻塞模型的项目(可能是基于epoll、libuv或asio等网络库)，然后需要访问MySQL这类没有提供异步Driver的DB. 常规的连接池+线程池的方案在高并发场景下的开销十分昂贵(每个连接对应一个线程才能达到最佳性能, 几千个指令周期的线程上下文切换消耗+过多的活跃线程会导致OS的调度能力急剧下降), 让许多用户难以接受.
+*   1.Provide golang's General powerful protocol, write code based on corontine, can write simple code in a synchronous manner, while achieving asynchronous performance.
 
- *   鉴于此种情况, 想要使用libgo解决非阻塞模型中阻塞操作的问题，也是完全不必重构现有代码的, 全新的libgo3.0为此场景量身打造了三大利器, 可以无侵入地解决这个问题：运行环境隔离又可以便捷交互的多调度器(详见教程代码sample1_go.cpp)，替代传统线程池方案的libgo协程池(详见教程代码sample10_co_pool.cpp)，连接池(详见教程代码sample11_connection_pool.cpp)
+*   2.Supporting massive coroutines, creating 1 million coroutines requires only 4.5 GB of physical memory. (data from real test, in no deliberately compressed stack situation.)
+
+*   3.Supporting multi-threaded scheduling protocols, providing efficient load balancing strategy and synchronization mechanism, it is easy to write efficient multi-threaded programs.
+
+*   4.The number of scheduled threads supports dynamic scaling, and there is no head blocking caused by slow scheduling.
+
+*   5.Use hook technology to make synchronous third-party libraries of linking processes become asynchronous calls, which greatly improves their performance. There's no need to worry that some DB authorities don't provide asynchronous drivers, such as hiredis and mysqlclient, which are client drivers that can be used directly and can achieve performance comparable to that of asynchronous drivers.
+
+*   6.Both dynamic links and full static links are supported, which makes it easy to generate executable files using C++ 11 static links and deploy them to low-level Linux systems.
+
+*   7.Provide Channel, Co_mutex, Co_rwmutex, timer and other features to help users write programs more easily.
+
+*   8.Supports local variables (CLS) of the process, and completely covers all scenarios of TLS (read the tutorial code sample13_cls.cpp for details).
+
+* From user feedback in the past two years, many developers have a project with an asynchronous non-blocking model (probably based on epoll, libuv or ASIO network libraries) and then need access to DBs such as MySQL that do not provide asynchronous driver. Conventional connection pool and thread pool schemes are intensive in high concurrency scenarios (each connection have to correspond to a thread for Best performance. Thousands of instruction cycles of thread context switching  are intensive and too many active threads will lead to a sharp decline performance in OS scheduling capacity, which is unacceptable to many develops.
+
+* In this situation, there is no need to reconstruct the existing code if we want to use libgo to solve the problem of blocking operation in non-blocking model. The new libgo 3.0 has created three special tools for this scenario, which can solve this problem without intrusion: multi-scheduler with isolated running environment and easy interaction (read the tutorial code sample1_go.cpp for details), libggo can instead of the traditional thread pool scheme. (read tutorial code sample10_co_pool.cpp and sample11_connection_pool.cpp for details)
+
+
+* ** tutorial directory contains many tutorial codes, including detailed instructions, so that develop can learn libgo library step by step. **
+
+
+* If you find any bugs, good suggestions, or use ambiguities, you can submit a issue or contact the author directly:
+Email: 289633152@qq.com
+
  
- *   **tutorial目录下有很多教程代码，内含详细的使用说明，让用户可以循序渐进的学习libgo库的使用方法。**
-
- *   如果你发现了任何bug、有好的建议、或使用上有不明之处，可以提交到issue，也可以直接联系作者:
-      email: 289633152@qq.com
-
- 
-### libgo的编译与使用:
+### compile and use libgo :
 
  *    Vcpkg:
 
-        如果你已经安装了vcpkg，可以直接使用vcpkg安装：
-
-            $ vcpkg install libgo
+        
+If you have installed vcpkg, you can install it directly using vcpkg:
+      $ vcpkg install libgo
 
  *    Linux: 
 
-        1.使用CMake进行编译安装：
+        1.Use cmake to compile and install：
 
             $ mkdir build
             $ cd build
             $ cmake ..
+	    $ make debug     #Skip it if you don`t want a debuggable versions.
             $ sudo make uninstall
             $ sudo make install
 
-          如果希望编译可调试的版本, "cmake .." 命令执行完毕后执行:
-
-            $ make debug
-			$ sudo make install
-
-        2.动态链接glibc: (libgo放到最前面链接)
+ 
+        2.Dynamic link to glibc: (put libgo at the front of link list)
         
             g++ -std=c++11 test.cpp -llibgo -ldl [-lother_libs]
             
-        3.全静态链接: (libgo放到最前面链接)
+        3.Full static link: (put libgo at the front of link list)
 
             g++ -std=c++11 test.cpp -llibgo -Wl,--whole-archive -lstatic_hook -lc -lpthread -Wl,--no-whole-archive [-lother_libs] -static
 
- *    Windows: (3.0已兼容windows, 直接使用master分支即可!)
+ *    Windows: (3.0 is compatible with windows, just use master branch directly!)
  
-        0.windows上使用github下载代码一定要注意换行符的问题, 请正确安装git(使用默认选项), 使用git clone下载源码.(不可以下载压缩包)
+        0.When using GitHub to download code on windows, we must pay attention to the problem of newline characters. Please install git correctly (using default options) and use git clone to download source code. (Do not download compressed packages)
  
-        1.使用CMake构建工程文件. 
+        1.Use CMake to build project. 
 			
-			比如vs2015(x64)：
+			#For example vs2015(x64)：
 			$ cmake .. -G"Visual Studio 14 2015 Win64"
 
-			比如vs2015(x86)：
+			#For example vs2015(x86)：
 			$ cmake .. -G"Visual Studio 14 2015"
         
-        2.如果想要执行测试代码, 需要依赖boost库. 且在cmake参数中设置BOOST_ROOT:
+        2.If you want to execute the test code, please link the boost library. And set BOOST_ROOT in the cmake parameter:
         
-        		例如：
+        		For example：
         		$ cmake .. -G"Visual Studio 14 2015 Win64" -DBOOST_ROOT="e:\\boost_1_69_0"
 
-### 性能
+### performance
 
-libgo和golang一样实现了一个完整的调度器（用户只需创建协程，无需关心协程的执行、挂起、资源回收），因此有了和golang对比单线程协程调度性能的资格（功能不对等的情况下没资格做性能对比）。
-
-libgo的调度器还实现了worksteal算法的多线程负载均衡调度，因此有了和golang对比多线程协程调度性能的资格。
-
-	测试环境：2018款13寸mac笔记本（cpu最低配）
-	操作系统：Mac OSX
-	CPU: 2.3 GHz Intel Core i5（4核心 8线程）
-	测试脚本：$ test/golang/test.sh thread_number
+Like golang, libgo implements a complete scheduler (users only need to create a coroutine without concern for the execution, suspension and resource recovery of the coroutine). Therefore, libgo is qualified to compare the performance of single-threaded with golang (It is not qualified to do performance comparison in different ability).
 
 <img width="400" src="imgs/switch_cost.png"/>
 
+Test environment: 
+2018 13-inch MAC notebook (CPU minimum)
+Operating System: Mac OSX
+CPU: 2.3 GHz Intel Core i5 (4 Core 8 Threads)
+Test script: $test/golang/test.sh thread_number
+
+
 <img width="600" src="imgs/switch_speed.png"/>
 
-### 注意事项(WARNING)：
-
-	协程中尽量不要使用TLS, 或依赖于TLS实现的不可重入的库函数。
-	如果不可避免地使用, 要注意在协程切换后要停止访问切换前产生的TLS数据。
-
-### 可能产生协程切换的行为有以下几种：
-
-* 用户调用co_yield主动让出cpu.
-* 竞争协程锁、channel读写
-* sleep系列的系统调用
-* poll, select, epoll_wait这类等待事件触发的系统调用
-* DNS相关系统调用(gethostbyname系列)
-* 在阻塞式socket上的connect、accept、数据读写操作
-* 在pipe上的数据读写操作
+### Matters needing attention(WARNING)：
+ 
+TLS or non-reentrant library functions that depend on TLS implementation should be avoided as far as possible.
+If it is unavoidable to use, we should pay attention to stop accessing the TLS data generated before handover after the process handover.
 
 
-### Linux系统上Hook的系统调用列表：
+### There are several kinds of behaviors that may cause the process switching:
+
+* The user calls co_yield to actively give up the cpu span.
+* Competitive Cooperative Lock, Channel Reading and Writing.
+* System Call of Sleep Series.
+* System calls waiting for events to trigger, such as poll, select, epoll_wait.
+* DNS-related system calls (gethostbyname series).
+* Connect, accept, data read-write operations on blocking sockets.
+* Data Read-Write Operation on Pipe.
+
+### System Call List of Hook on Linux System:
 
 		connect   
 		read      
@@ -143,8 +150,7 @@ libgo的调度器还实现了worksteal算法的多线程负载均衡调度，因
 		gethostbyaddr                                                               
 		gethostbyaddr_r
 
-	以上系统调用都是可能阻塞的系统调用, 在协程中使用均不再阻塞整个线程, 阻塞等待期间CPU可以切换到其他协程执行.
-    在原生线程中执行的被HOOK的系统调用, 与原系统调用的行为保持100%一致, 不会有任何改变.
+	The above system calls are all possible blocking system calls. The whole thread is no longer blocked in the process. During the blocking waiting period, the CPU can switch to other processes to execute.System calls executed in native threads by HOOK are 100% consistent with the behavior of the original system calls without any change.
   
 		socket
 		socketpair
@@ -160,9 +166,9 @@ libgo的调度器还实现了worksteal算法的多线程负载均衡调度，因
 		dup2      
 		dup3      
 
-    以上系统调用不会造成阻塞, 虽然也被Hook, 但并不会完全改变其行为, 仅用于跟踪socket的选项和状态. 
+    The above system calls will not cause blocking, although they are also Hook, but will not completely change their behavior, only for tracking socket options and status.
 
-### Windows系统上Hook的系统调用列表：
+### System Call List of Hook on Linux System:
 
 		ioctlsocket                                                                        
 		WSAIoctl                                                                           
