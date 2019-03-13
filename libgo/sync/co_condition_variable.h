@@ -129,6 +129,16 @@ private:
 
     bool relockAfterWait_ = true;
 
+    template <typename LockType>
+    struct AutoLock
+    {
+        LockType* lock_;
+        bool bLock_;
+
+        AutoLock(LockType & lock, bool bLock) : lock_(&lock), bLock_(bLock) {}
+        ~AutoLock() { if (bLock_) lock_->lock(); }
+    };
+
 public:
     typedef typename WaitQueue<Entry>::CondRet CondRet;
 
@@ -270,8 +280,6 @@ private:
                 return ret;
                 });
 
-        lock.unlock();
-
         if (!ret.canQueue) {
             return cv_status::no_queued;
         }
@@ -279,6 +287,10 @@ private:
         if (!ret.needWait) {
             return cv_status::no_timeout;
         }
+
+        lock.unlock();
+
+        AutoLock<LockType> autoLock(lock, relockAfterWait_);
 
         DebugPrint(dbg_channel, "cv::wait ->");
 
@@ -328,8 +340,6 @@ private:
             entry->suspendFlags.store(flag, std::memory_order_release);   // release
             DebugPrint(dbg_channel, "cv::wait -> suspend_end");
             Processer::StaticCoYield();
-            if (relockAfterWait_)
-                lock.lock();
             return entry->noTimeoutLock.try_lock() ?
                 cv_status::timeout :
                 cv_status::no_timeout;
@@ -340,8 +350,6 @@ private:
             entry->suspendFlags.store(flag, std::memory_order_release);   // release
             DebugPrint(dbg_channel, "cv::wait -> suspend_end");
             threadSuspend(entry->nativeThreadEntry->cv, threadLock, time);
-            if (relockAfterWait_)
-                lock.lock();
             return entry->noTimeoutLock.try_lock() ?
                 cv_status::timeout :
                 cv_status::no_timeout;
