@@ -72,7 +72,7 @@ void Processer::Process()
     FiberScopedGuard sg;
 #endif
 
-    while (!Scheduler::IsStop())
+    while (!scheduler_->IsStop())
     {
         runnableQueue_.front(runningTask_);
 
@@ -92,7 +92,7 @@ void Processer::Process()
 #endif
 
         addNewQuota_ = 1;
-        while (runningTask_ && !Scheduler::IsStop()) {
+        while (runningTask_ && !scheduler_->IsStop()) {
             runningTask_->state_ = TaskState::runnable;
             runningTask_->proc_ = this;
 

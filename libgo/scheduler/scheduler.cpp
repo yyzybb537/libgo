@@ -42,6 +42,11 @@ static int InitOnExit() {
     return 0;
 }
 
+bool& Scheduler::IsExiting() {
+    static bool exiting = false;
+    return exiting;
+}
+
 Scheduler* Scheduler::Create()
 {
     static int ignore = InitOnExit();
@@ -54,12 +59,6 @@ Scheduler* Scheduler::Create()
     return sched;
 }
 
-bool* Scheduler::getStop()
-{
-    static bool* stop = new bool(false);
-    return stop;
-}
-
 Scheduler::Scheduler()
 {
     LibgoInitialize();
@@ -68,6 +67,7 @@ Scheduler::Scheduler()
 
 Scheduler::~Scheduler()
 {
+    IsExiting() = true;
     Stop();
 }
 
@@ -163,9 +163,9 @@ void Scheduler::Stop()
 {
     std::unique_lock<std::mutex> lock(stopMtx_);
 
-    if (*getStop()) return;
+    if (stop_) return;
 
-    *getStop() = true;
+    stop_ = true;
     size_t n = processers_.size();
     for (size_t i = 0; i < n; ++i) {
         auto p = processers_[i];
@@ -237,7 +237,7 @@ void Scheduler::DispatcherThread()
 {
     DebugPrint(dbg_scheduler, "---> Start DispatcherThread");
     typedef std::size_t idx_t;
-    while (!*getStop()) {
+    while (!stop_) {
         // TODO: 用condition_variable降低cpu使用率
         std::this_thread::sleep_for(std::chrono::microseconds(CoroutineOptions::getInstance().dispatcher_thread_cycle_us));
 

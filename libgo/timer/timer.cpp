@@ -17,6 +17,11 @@ CoTimer::CoTimerImpl::~CoTimerImpl()
 
 }
 
+void CoTimer::CoTimerImpl::BindScheduler(Scheduler* scheduler)
+{
+    scheduler_ = scheduler;
+}
+
 void CoTimer::CoTimerImpl::RunInCoroutine()
 {
     while (!terminate_) {
@@ -44,7 +49,7 @@ void CoTimer::CoTimerImpl::RunInCoroutine()
 
 void CoTimer::CoTimerImpl::Stop()
 {
-    if (terminate_ || Scheduler::IsStop()) return;
+    if (terminate_ || Scheduler::IsExiting() || (scheduler_ && scheduler_->IsStop())) return;
 
     terminate_ = true;
     quit_ >> nullptr;
@@ -70,6 +75,7 @@ CoTimer::CoTimerImpl::ExpireAt(FastSteadyClock::duration dur, func_t const& cb)
 
 void CoTimer::Initialize(Scheduler * scheduler)
 {
+    impl_->BindScheduler(scheduler);
     auto ptr = impl_;
     go co_scheduler(scheduler) [ptr] {
         ptr->RunInCoroutine();
