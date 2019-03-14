@@ -11,7 +11,7 @@ using namespace std;
 #define OUT(x) cout << #x << " = " << x << endl
 #define O(x) cout << x << endl
 
-static const bool use_coroutine = false;
+static const bool use_coroutine = true;
 
 using namespace boost::asio;
 using namespace boost::asio::ip;

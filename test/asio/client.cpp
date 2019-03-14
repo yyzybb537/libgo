@@ -25,7 +25,7 @@ enum class eSendType {
     post,
 };
 
-static const eSendType c_send_type = eSendType::coroutine;
+static const eSendType c_send_type = eSendType::null;
 io_context poster;
 
 static const int concurrency = 100;
