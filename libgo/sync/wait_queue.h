@@ -91,7 +91,7 @@ public:
         if (!check_ || !check_->next)
             check_ = pos_;
 
-        for (int i = 0; check_->next && i < 2; ++i) {
+        for (int i = 0; check_ && check_->next && i < 2; ++i) {
             if (!checkFunctor_(static_cast<T*>(check_->next))) {
                 if (pos_ == check_->next)
                     pos_ = pos_->next;
