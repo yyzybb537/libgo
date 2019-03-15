@@ -3,10 +3,7 @@
 #include "../common/clock.h"
 #include "../task/task.h"
 #include "../common/ts_queue.h"
-
-#if ENABLE_DEBUGGER
 #include "../debug/listener.h"
-#endif
 #include <condition_variable>
 #include <mutex>
 #include <atomic>
@@ -179,9 +176,9 @@ ALWAYS_INLINE void Processer::CoYield()
 
 #if ENABLE_DEBUGGER
     DebugPrint(dbg_yield, "yield task(%s) state = %s", tk->DebugInfo(), GetTaskStateName(tk->state_));
-    if (Listener::GetTaskListener())
-        Listener::GetTaskListener()->onSwapOut(tk->id_);
 #endif
+
+    SAFE_CALL_LISTENER(Listener::GetTaskListener(), onSwapOut, tk->id_);
 
     tk->SwapOut();
 }
