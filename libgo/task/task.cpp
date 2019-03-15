@@ -95,7 +95,8 @@ Task::~Task()
 
 const char* Task::DebugInfo()
 {
-    if (reinterpret_cast<void*>(this) == nullptr) return "nil";
+    char& thiz = *reinterpret_cast<char*>(this);
+    if (std::addressof(thiz) == nullptr) return "nil";
 
     return TaskDebugInfo(this);
 }
