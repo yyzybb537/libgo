@@ -19,7 +19,7 @@ Using libgo to write multi-threaded programs, it can be developed as fast and lo
 
 Libgo has the following characteristics:
 
-*   1.Provide golang's General powerful protocol, write code based on corontine, can write simple code in a synchronous manner, while achieving asynchronous performance.
+*   1.Provide golang's General powerful protocol, write code based on coroutine, can write simple code in a synchronous manner, while achieving asynchronous performance.
 
 *   2.Supporting massive coroutines, creating 1 million coroutines requires only 4.5 GB of physical memory. (data from real test, in no deliberately compressed stack situation.)
 
@@ -168,7 +168,7 @@ If it is unavoidable to use, we should pay attention to stop accessing the TLS d
 
     The above system calls will not cause blocking, although they are also Hook, but will not completely change their behavior, only for tracking socket options and status.
 
-### System Call List of Hook on Linux System:
+### System Call List of Hook on Windows System:
 
 		ioctlsocket                                                                        
 		WSAIoctl                                                                           
