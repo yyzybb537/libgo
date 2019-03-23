@@ -89,13 +89,15 @@ void test_mutex(int n)
     mutex_t mtx;
     std::atomic_int c {0};
     long val = 0;
+    const int threads = TEST_MIN_THREAD;
+//    const int threads = 16;
     auto start = chrono::steady_clock::now();
-    for (int i = 0; i < TEST_MIN_THREAD; ++i) {
+    for (int i = 0; i < threads; ++i) {
         ++c;
         go [&]{
             for (int i = 0; i < n; ++i) {
                 std::unique_lock<mutex_t> lock(mtx);
-                free(malloc(400));
+//                free(malloc(400));
                 ++val;
             }
             --c;
@@ -107,7 +109,7 @@ void test_mutex(int n)
     }
     auto end = chrono::steady_clock::now();
     dump("BenchmarkMutex_" + std::to_string(val), val, start, end);
-    if (val != n * TEST_MIN_THREAD)
+    if (val != n * threads)
         printf("ERROR, val=%ld\n", val);
 }
 
@@ -118,14 +120,18 @@ int main()
 
     test_atomic();
 
-    go []{ test_switch(1); };
-    WaitUntilNoTask();
-
-    go []{ test_switch(1000); };
-    WaitUntilNoTask();
-
-//    go []{ test_mutex(1000000); };
+//    go []{ test_switch(1); };
 //    WaitUntilNoTask();
+//
+//    go []{ test_switch(1000); };
+//    WaitUntilNoTask();
+
+    go []{ 
+//        GProfilerScope prof;
+        test_mutex(1000000); 
+    };
+    WaitUntilNoTask();
+    return 0;
 
     go []{ test_channel(0, 1000000); };
     WaitUntilNoTask();

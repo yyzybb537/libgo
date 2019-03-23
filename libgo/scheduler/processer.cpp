@@ -33,10 +33,10 @@ void Processer::AddTask(Task *tk)
     std::unique_lock<TaskQueue::lock_t> lock(newQueue_.LockRef());
     newQueue_.pushWithoutLock(tk);
     newQueue_.AssertLink();
-    if (waiting_)
-        cv_.notify_all();
-    else
-        notified_ = true;
+//    if (waiting_)
+//        cv_.notify_all();
+//    else
+//        notified_ = true;
 }
 
 void Processer::AddTask(SList<Task> && slist)
@@ -45,10 +45,10 @@ void Processer::AddTask(SList<Task> && slist)
     std::unique_lock<TaskQueue::lock_t> lock(newQueue_.LockRef());
     newQueue_.pushWithoutLock(std::move(slist));
     newQueue_.AssertLink();
-    if (waiting_)
-        cv_.notify_all();
-    else
-        notified_ = true;
+//    if (waiting_)
+//        cv_.notify_all();
+//    else
+//        notified_ = true;
 }
 
 void Processer::NotifyCondition()
@@ -56,7 +56,7 @@ void Processer::NotifyCondition()
     std::unique_lock<TaskQueue::lock_t> lock(newQueue_.LockRef());
     if (waiting_) {
         DebugPrint(dbg_scheduler, "NotifyCondition for condition. [Proc(%d)] --------------------------", id_);
-        cv_.notify_all();
+//        cv_.notify_all();
     }
     else {
         DebugPrint(dbg_scheduler, "NotifyCondition for flag. [Proc(%d)] --------------------------", id_);
@@ -204,7 +204,7 @@ void Processer::WaitCondition()
 
     waiting_ = true;
     DebugPrint(dbg_scheduler, "WaitCondition. [Proc(%d)] --------------------------", id_);
-    cv_.wait(lock);
+//    cv_.wait(lock);
     waiting_ = false;
 }
 

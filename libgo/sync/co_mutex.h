@@ -3,6 +3,7 @@
 #include "../scheduler/processer.h"
 #include <queue>
 #include "co_condition_variable.h"
+#include "condition_variable_v2.h"
 
 namespace co
 {
@@ -10,10 +11,12 @@ namespace co
 /// 协程锁
 class CoMutex
 {
-    typedef std::mutex lock_t;
+//    typedef std::mutex lock_t;
+    typedef LFLock lock_t;
     lock_t lock_;
     bool notified_ = false;
-    ConditionVariableAny cv_;
+//    ConditionVariableAny cv_;
+    condition_variable_v2 cv_;
 
     std::atomic_long sem_;
 
