@@ -85,7 +85,7 @@ public:
         }
 
         // check
-        if (count_ < std::max(posDistance_, posDistance_ + 16)) return ret;
+        if (count_ < (std::max)(posDistance_, posDistance_ + 16)) return ret;
         if (!checkFunctor_) return ret;
 
         if (!check_ || !check_->next)

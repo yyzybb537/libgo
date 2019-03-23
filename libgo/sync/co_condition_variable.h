@@ -312,7 +312,7 @@ private:
                 }
 
                 if (Processer::IsCoroutine()) {
-//                    if (++spinB <= 1 << (4 - std::min((size_t)4, qSize))) {
+//                    if (++spinB <= 1 << (4 - (std::min)((size_t)4, qSize))) {
                     if (++spinB <= 1) {
                         Processer::StaticCoYield();
                         continue;
