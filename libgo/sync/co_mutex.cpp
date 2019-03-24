@@ -29,11 +29,8 @@ void CoMutex::lock()
 
 bool CoMutex::try_lock()
 {
-    if (--sem_ == 0)
-        return true;
-
-    ++sem_;
-    return false;
+    long val = 1;
+    return sem_.compare_exchange_strong(val, 0);
 }
 
 bool CoMutex::is_lock()

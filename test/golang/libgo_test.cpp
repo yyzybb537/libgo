@@ -9,7 +9,7 @@
 #define TEST_MAX_THREAD 1
 #endif
 #include "../gtest_unit/gtest_exit.h"
-//#include "../profiler.h"
+#include "../profiler.h"
 using namespace std;
 
 static const int N = 10000000;
@@ -115,7 +115,7 @@ void test_mutex(int n)
 
 int main()
 {
-//    co_opt.debug = co::dbg_channel;
+//    co_opt.debug = co::dbg_scheduler;
 //    co_opt.debug_output = fopen("log", "w");
 
     test_atomic();

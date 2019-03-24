@@ -13,7 +13,7 @@ class condition_variable_v2
     {
         Processer::SuspendEntry entry;
         
-        atomic_t<bool> notified{false};
+        LFLock notified;
     };
 
     TSQueue<Entry> queue_;
@@ -27,7 +27,7 @@ public:
         queue_.push(entry);
         lock.unlock();
         Processer::StaticCoYield();
-        lock.lock();
+//        lock.lock();
         return std::cv_status::no_timeout;
     }
 
@@ -38,7 +38,7 @@ public:
             if (!entry) return false;
 
             std::unique_ptr<Entry> ep(entry);
-            if (entry->notified.exchange(true, std::memory_order_acq_rel))
+            if (!entry->notified.try_lock())
                 continue;
 
             if (Processer::Wakeup(entry->entry))
