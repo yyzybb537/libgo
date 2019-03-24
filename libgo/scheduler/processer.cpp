@@ -30,6 +30,10 @@ Scheduler* Processer::GetCurrentScheduler()
 void Processer::AddTask(Task *tk)
 {
     DebugPrint(dbg_task | dbg_scheduler, "task(%s) add into proc(%u)(%p)", tk->DebugInfo(), id_, (void*)this);
+#if MPSC_COND
+    newQueue_.push(tk);
+    NotifyCondition();
+#else
     std::unique_lock<TaskQueue::lock_t> lock(newQueue_.LockRef());
     newQueue_.pushWithoutLock(tk);
     newQueue_.AssertLink();
@@ -37,11 +41,16 @@ void Processer::AddTask(Task *tk)
         cv_.notify_all();
     else
         notified_ = true;
+#endif
 }
 
 void Processer::AddTask(SList<Task> && slist)
 {
     DebugPrint(dbg_scheduler, "task(num=%d) add into proc(%u)", (int)slist.size(), id_);
+#if MPSC_COND
+    newQueue_.push(std::move(slist));
+    NotifyCondition();
+#else
     std::unique_lock<TaskQueue::lock_t> lock(newQueue_.LockRef());
     newQueue_.pushWithoutLock(std::move(slist));
     newQueue_.AssertLink();
@@ -49,10 +58,14 @@ void Processer::AddTask(SList<Task> && slist)
         cv_.notify_all();
     else
         notified_ = true;
+#endif
 }
 
 void Processer::NotifyCondition()
 {
+#if MPSC_COND
+    cond_.notify();
+#else
     std::unique_lock<TaskQueue::lock_t> lock(newQueue_.LockRef());
     if (waiting_) {
         DebugPrint(dbg_scheduler, "NotifyCondition for condition. [Proc(%d)] --------------------------", id_);
@@ -62,6 +75,7 @@ void Processer::NotifyCondition()
         DebugPrint(dbg_scheduler, "NotifyCondition for flag. [Proc(%d)] --------------------------", id_);
         notified_ = true;
     }
+#endif
 }
 
 void Processer::Process()
@@ -195,6 +209,10 @@ std::size_t Processer::RunnableSize()
 void Processer::WaitCondition()
 {
     GC();
+
+#if MPSC_COND
+    cond_.wait();
+#else
     std::unique_lock<TaskQueue::lock_t> lock(newQueue_.LockRef());
     if (notified_) {
         DebugPrint(dbg_scheduler, "WaitCondition by Notified. [Proc(%d)] --------------------------", id_);
@@ -206,6 +224,7 @@ void Processer::WaitCondition()
     DebugPrint(dbg_scheduler, "WaitCondition. [Proc(%d)] --------------------------", id_);
     cv_.wait(lock);
     waiting_ = false;
+#endif
 }
 
 void Processer::GC()

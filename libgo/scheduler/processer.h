@@ -11,6 +11,8 @@
 #include <mutex>
 #include <atomic>
 
+#include "../common/mpsc_cond.h"
+
 namespace co {
 
 class Scheduler;
@@ -54,9 +56,14 @@ private:
     TaskQueue newQueue_;
 
     // 等待的条件变量
+#define MPSC_COND 1
+#if MPSC_COND
+    mpsc_spin_condition_variable cond_;
+#else
     std::condition_variable_any cv_;
     std::atomic_bool waiting_{false};
     bool notified_ = false;
+#endif
 
     static int s_check_;
 
@@ -137,7 +144,13 @@ private:
 
     // 是否处于等待状态(无runnable协程)
     // 调度线程会尽量分配协程过来
-    ALWAYS_INLINE bool IsWaiting() { return waiting_; }
+    ALWAYS_INLINE bool IsWaiting() { 
+#if MPSC_COND
+        return cond_.is_waiting(); 
+#else
+        return waiting_;
+#endif
+    }
 
     // 单个协程执行时长超过预设值, 则判定为阻塞状态
     // 阻塞状态不再加入新的协程, 并由调度线程steal走所有协程(正在执行的除外)

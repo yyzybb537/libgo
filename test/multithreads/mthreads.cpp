@@ -8,11 +8,29 @@
 #define TEST_MIN_THREAD 1
 #define TEST_MAX_THREAD 1
 #endif
-#include "../gtest_unit/gtest_exit.h"
 #include "../profiler.h"
 using namespace std;
 
 static const int N = 10000000;
+
+vector<co::Scheduler*> g_scheds;
+
+inline void __WaitUntilNoTask(co::Scheduler & scheduler, int line, std::size_t val = 0) {
+    int i = 0;
+    while (scheduler.TaskCount() > val) {
+        usleep(1000);
+        if (++i == 9000) {
+            printf("LINE: %d, TaskCount: %d\n", line, (int)g_Scheduler.TaskCount());
+        }
+    }
+}
+
+#define WaitUntilNoTaskS(scheduler) __WaitUntilNoTask(scheduler, __LINE__)
+#define WaitUntilNoTask() do { \
+        for (auto sched : g_scheds) { \
+            WaitUntilNoTaskS(*sched); \
+        } \
+    } while (0);
 
 template <typename T>
 void dump(string name, int n, T start, T end)
@@ -90,20 +108,19 @@ void test_mutex(int n)
     std::atomic_int c {0};
     long val = 0;
     const int threads = TEST_MIN_THREAD;
-//    const int threads = 16;
     auto start = chrono::steady_clock::now();
     for (int i = 0; i < threads; ++i) {
         ++c;
-        go [&]{
+        auto f = [&]{
             for (int i = 0; i < n; ++i) {
-//                std::unique_lock<mutex_t> lock(mtx);
-//                free(malloc(400));
                 mtx.lock();
                 ++val;
                 mtx.unlock();
             }
             --c;
         };
+        go co_scheduler(g_scheds[i % g_scheds.size()]) f;
+//        std::thread(f).detach();
     }
 
     while (c) {
@@ -115,31 +132,37 @@ void test_mutex(int n)
         printf("ERROR, val=%ld\n", val);
 }
 
-int main()
+int main(int argc, char** argv)
 {
+    int n = 1000000;
+    if (argc > 1) {
+        n = atoi(argv[1]);
+    }
+    printf("n = %d\n", n);
+
 //    co_opt.debug = co::dbg_scheduler;
 //    co_opt.debug_output = fopen("log", "w");
 
+    for (int i = 0; i < TEST_MIN_THREAD; ++i) {
+        auto sched = co::Scheduler::Create();
+        sched->goStart(1);
+        g_scheds.push_back(sched);
+    }
+
     test_atomic();
 
-//    go []{ test_switch(1); };
-//    WaitUntilNoTask();
-//
-//    go []{ test_switch(1000); };
-//    WaitUntilNoTask();
+    { 
+//        GProfilerScope prof;
+        test_mutex(n); 
+    }
 
-    go []{ 
-        GProfilerScope prof;
-        test_mutex(10000000); 
-    };
-    WaitUntilNoTask();
     return 0;
 
-    go []{ test_channel(0, 1000000); };
-    WaitUntilNoTask();
-
-    go []{ test_channel(1, 1000000); };
-    WaitUntilNoTask();
+//    go []{ test_channel(0, 1000000); };
+//    WaitUntilNoTask();
+//
+//    go []{ test_channel(1, 1000000); };
+//    WaitUntilNoTask();
 
 //    go []{ test_channel(63, 1000000); };
 //    WaitUntilNoTask();
@@ -151,6 +174,6 @@ int main()
 //    WaitUntilNoTask();
 
 //    go []{ test_channel(5, 10); };
-    go []{ test_channel(10000, 10000000); };
-    WaitUntilNoTask();
+//    go []{ test_channel(10000, 10000000); };
+//    WaitUntilNoTask();
 }
