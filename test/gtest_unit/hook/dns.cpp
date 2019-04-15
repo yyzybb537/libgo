@@ -19,6 +19,7 @@ typedef int (*getXXbyYY_r)(struct hostent *ret, char *buf, size_t buflen,
 getXXbyYY g_getXXbyYY = NULL;
 getXXbyYY_r g_getXXbyYY_r = NULL;
 const char* fname = "fname";
+const char* test_host = "www.huya.com";
 
 struct Cache {
     const void *addr;
@@ -32,11 +33,11 @@ struct Cache {
 Cache g_cache;
 
 struct hostent* getXXbyYY_1() {
-    return gethostbyname("www.baidu.com");
+    return gethostbyname(test_host);
 }
 
 struct hostent* getXXbyYY_2() {
-    return gethostbyname2("www.baidu.com", AF_INET);
+    return gethostbyname2(test_host, AF_INET);
 }
 
 struct hostent* getXXbyYY_3() {
@@ -46,13 +47,13 @@ struct hostent* getXXbyYY_3() {
 int getXXbyYY_r_1(struct hostent *ret, char *buf, size_t buflen,
         struct hostent **result, int *h_errnop)
 {
-    return gethostbyname_r("www.baidu.com", ret, buf, buflen, result, h_errnop);
+    return gethostbyname_r(test_host, ret, buf, buflen, result, h_errnop);
 }
 
 int getXXbyYY_r_2(struct hostent *ret, char *buf, size_t buflen,
         struct hostent **result, int *h_errnop)
 {
-    return gethostbyname2_r("www.baidu.com", AF_INET, ret, buf, buflen, result, h_errnop);
+    return gethostbyname2_r(test_host, AF_INET, ret, buf, buflen, result, h_errnop);
 }
 
 int getXXbyYY_r_3(struct hostent *ret, char *buf, size_t buflen,
@@ -180,7 +181,7 @@ void test_gethostbyname_r4()
     hostent xh;
     hostent *h = &xh;
     int err = 0;
-    int res = gethostbyname_r("www.baidu.com", h, buf, sizeof(buf), &h, &err);
+    int res = gethostbyname_r(test_host, h, buf, sizeof(buf), &h, &err);
     EXPECT_EQ(res, ERANGE);
     EXPECT_FALSE(!!h);
     EXPECT_EQ(err, NETDB_INTERNAL);
