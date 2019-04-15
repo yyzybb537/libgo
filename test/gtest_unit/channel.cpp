@@ -430,7 +430,7 @@ TEST(Channel, capacity0Timed)
                 GTimer t;
                 bool ok = ch.TimedPush(nullptr, milliseconds(500));
                 EXPECT_FALSE(ok);
-                TIMER_CHECK(t, 500, 50);
+                TIMER_CHECK(t, 500, 100);
             };
         WaitUntilNoTask();
     }
@@ -443,7 +443,7 @@ TEST(Channel, capacity0Timed)
                 GTimer t;
                 bool ok = ch.TimedPop(nullptr, milliseconds(500));
                 EXPECT_FALSE(ok);
-                TIMER_CHECK(t, 500, 50);
+                TIMER_CHECK(t, 500, 100);
             };
         WaitUntilNoTask();
     }
