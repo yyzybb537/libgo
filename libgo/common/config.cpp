@@ -32,7 +32,7 @@ static int staticInitialize()
     TaskRefInit(ClsMap);
 
 #if ENABLE_HOOK
-  #if defined(LIBGO_SYS_Linux)
+  #if defined(LIBGO_SYS_Linux) || defined(LIBGO_SYS_Windows)
     initHook();
   #endif
 #endif
