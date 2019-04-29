@@ -39,7 +39,7 @@ public:
     {
         Connection* ptr = nullptr;
         while (channel_.TryPop(ptr)) {
-            deleter_(ptr);
+            Delete(ptr);
         }
     }
 
@@ -51,7 +51,10 @@ public:
         {
             Connection* connection = CreateOne();
             if (!connection) break;
-            if (!channel_.TryPush(connection)) break;
+            if (!channel_.TryPush(connection)) {
+                Delete(connection);
+                break;
+            }
         }
     }
 
@@ -65,7 +68,7 @@ public:
 retry_get:
         if (channel_.TryPop(connection)) {
             if (checkAliveOnGet && !checkAliveOnGet(connection)) {
-                deleter_(connection);
+                Delete(connection);
                 connection = nullptr;
                 goto retry_get;
             }
@@ -79,7 +82,7 @@ retry_get:
 
         channel_ >> connection;
         if (checkAliveOnGet && !checkAliveOnGet(connection)) {
-            deleter_(connection);
+            Delete(connection);
             connection = nullptr;
             goto retry_get;
         }
@@ -103,7 +106,7 @@ retry_get:
 retry_get:
         if (channel_.TryPop(connection)) {
             if (checkAliveOnGet && !checkAliveOnGet(connection)) {
-                deleter_(connection);
+                Delete(connection);
                 connection = nullptr;
                 goto retry_get;
             }
@@ -117,7 +120,7 @@ retry_get:
 
         if (channel_.TimedPop(connection, deadline)) {
             if (checkAliveOnGet && !checkAliveOnGet(connection)) {
-                deleter_(connection);
+                Delete(connection);
                 connection = nullptr;
                 goto retry_get;
             }
@@ -136,7 +139,7 @@ retry_get:
 private:
     Connection* CreateOne()
     {
-        if (++count_ >= maxConnection_) {
+        if (++count_ > maxConnection_) {
             --count_;
             return nullptr;
         }
@@ -147,16 +150,21 @@ private:
     void Put(Connection* connection)
     {
         if (!channel_.TryPush(connection)) {
-            --count_;
-            deleter_(connection);
+            Delete(connection);
         }
+    }
+
+    void Delete(Connection* connection)
+    {
+        --count_;
+        deleter_(connection);
     }
 
     ConnectionPtr Out(Connection* connection, CheckAlive checkAliveOnPut)
     {
         return ConnectionPtr(connection, [this, checkAliveOnPut](Connection* ptr){
                     if (checkAliveOnPut && !checkAliveOnPut(ptr)) {
-                        this->deleter_(ptr);
+                        this->Delete(ptr);
                         return ;
                     }
 
