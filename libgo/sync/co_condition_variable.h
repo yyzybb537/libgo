@@ -218,7 +218,7 @@ public:
         return queue_.empty();
     }
 
-    bool size() {
+    size_t size() {
         return queue_.size();
     }
 
