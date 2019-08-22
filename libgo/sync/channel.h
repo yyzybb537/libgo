@@ -21,7 +21,7 @@ public:
     // @choose1: use CASChannelImpl if capacity less than choose1
     // @choose2: if capacity less than choose2, use ringbuffer. else use std::list.
     explicit Channel(std::size_t capacity = 0,
-            std::size_t choose1 = 16,
+            std::size_t choose1 = 0, //16,
             std::size_t choose2 = 100001)
     {
         if (capacity < choose1)
