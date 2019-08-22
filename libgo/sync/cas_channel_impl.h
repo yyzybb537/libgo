@@ -27,11 +27,11 @@ class CASChannelImpl : public ChannelImpl<T>
     cond_t rq_;
 
     // number of read wait << 32 | number of write wait
-    atomic_t<size_t> wait_ {0};
-    static const size_t write1 = 1;
-    static const size_t writeMask = 0xffffffff;
-    static const size_t read1 = ((size_t)1) << 32;
-    static const size_t readMask = 0xffffffff00000000;
+    atomic_t<uint64_t> wait_ {0};
+    static const uint64_t write1 = 1;
+    static const uint64_t writeMask = 0xffffffff;
+    static const uint64_t read1 = ((size_t)1) << 32;
+    static const uint64_t readMask = 0xffffffff00000000;
     static const int kSpinCount = 4000;
 
 public:
@@ -54,7 +54,7 @@ public:
 
         int spin = 0;
 
-        size_t wait;
+        uint64_t wait;
         for (;;) {
             wait = wait_.load(std::memory_order_relaxed);
             if (wait & readMask) {
@@ -171,7 +171,7 @@ public:
 
         int spin = 0;
 
-        size_t wait;
+        uint64_t wait;
         for (;;) {
             wait = wait_.load(std::memory_order_relaxed);
             if (wait & writeMask) {
