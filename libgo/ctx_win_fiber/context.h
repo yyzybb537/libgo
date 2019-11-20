@@ -7,11 +7,11 @@ namespace co
     
     struct ContextScopedGuard
     {
-        ContextScopedGuard::ContextScopedGuard()
+        ContextScopedGuard()
         {
             GetTlsContext() = ConvertThreadToFiber(nullptr);
         }
-        ContextScopedGuard::~ContextScopedGuard()
+        ~ContextScopedGuard()
         {
             ConvertFiberToThread();
             GetTlsContext() = nullptr;
