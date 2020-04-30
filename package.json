@@ -1,12 +1,14 @@
 {
   "name": "libgo",
-  "version": "3.2.1",
+  "version": "3.2.3",
   "description": "[![Build Status](https://travis-ci.org/yyzybb537/libgo.svg?branch=master)](https://travis-ci.org/yyzybb537/libgo)",
   "main": "index.js",
   "directories": {
     "test": "test"
   },
   "scripts": {
+    "build": "mkdir -p build && cd build && cmake .. && make",
+    "install": "mkdir -p build && cd build && cmake .. && make && make uninstall && make install",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "repository": {
