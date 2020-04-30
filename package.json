@@ -1,0 +1,25 @@
+{
+  "name": "libgo",
+  "version": "3.2.1",
+  "description": "[![Build Status](https://travis-ci.org/yyzybb537/libgo.svg?branch=master)](https://travis-ci.org/yyzybb537/libgo)",
+  "main": "index.js",
+  "directories": {
+    "test": "test"
+  },
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/yyzybb537/libgo.git"
+  },
+  "keywords": [
+    "libgo"
+  ],
+  "author": "yyz",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/yyzybb537/libgo/issues"
+  },
+  "homepage": "https://github.com/yyzybb537/libgo#readme"
+}
