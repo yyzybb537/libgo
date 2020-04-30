@@ -1,7 +1,7 @@
 {
   "name": "libgo",
-  "version": "3.2.3",
-  "description": "[![Build Status](https://travis-ci.org/yyzybb537/libgo.svg?branch=master)](https://travis-ci.org/yyzybb537/libgo)",
+  "version": "3.2.4",
+  "description": "C++ coroutine framework.",
   "main": "index.js",
   "directories": {
     "test": "test"
@@ -16,7 +16,9 @@
     "url": "git+https://github.com/yyzybb537/libgo.git"
   },
   "keywords": [
-    "libgo"
+    "libgo",
+    "c++",
+    "coroutine"
   ],
   "author": "yyz",
   "license": "MIT",
