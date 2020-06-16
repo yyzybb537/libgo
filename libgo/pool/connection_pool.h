@@ -144,7 +144,11 @@ private:
             return nullptr;
         }
 
-        return factory_();
+        // return factory_();
+        Connection *ret = factory_();
+        if(!ret)
+            --count_;
+        return ret;
     }
 
     void Put(Connection* connection)
@@ -162,6 +166,8 @@ private:
 
     ConnectionPtr Out(Connection* connection, CheckAlive checkAliveOnPut)
     {
+        if (!connection) 
+            return ConnectionPtr(NULL); // add by huangbt 2020-4-26
         return ConnectionPtr(connection, [this, checkAliveOnPut](Connection* ptr){
                     if (checkAliveOnPut && !checkAliveOnPut(ptr)) {
                         this->Delete(ptr);
