@@ -34,7 +34,7 @@ struct TSQueueHook
 template <typename T>
 class SList
 {
-    static_assert((std::is_base_of<TSQueueHook, T>::value), "T must be baseof TSQueueHook");
+    static_assert((std::is_base_of<TSQueueHook, T>::value), "T must inherit TSQueueHook");
 
 public:
     // !! 支持边遍历边删除 !!
@@ -194,7 +194,7 @@ public:
 template <typename T, bool ThreadSafe = true>
 class TSQueue
 {
-    static_assert((std::is_base_of<TSQueueHook, T>::value), "T must be baseof TSQueueHook");
+    static_assert((std::is_base_of<TSQueueHook, T>::value), "T must inherit TSQueueHook");
 
 //private:
 public:
