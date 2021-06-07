@@ -8,6 +8,7 @@
 #include <boost/any.hpp>
 #include "coroutine.h"
 #include "../gtest_exit.h"
+#include "hook.h"
 using namespace std;
 using namespace co;
 
@@ -22,6 +23,7 @@ using namespace co;
 //X8.occurred ERR events
 // 9.timeout return
 // 10.multi threads
+// 11.trigger read and not trigger write
 
 typedef int(*select_t)(int nfds, fd_set *readfds, fd_set *writefds,
                           fd_set *exceptfds, struct timeval *timeout);
@@ -120,6 +122,7 @@ std::shared_ptr<AutoFreeFdSet> CreateFds(fd_set* fds, int num)
 }
 
 static timeval zero_timeout = {0, 0};
+static timeval sec_timeout = {3, 0};
 
 TEST(Select, TimeoutIs0)
 {
@@ -283,5 +286,36 @@ TEST(Select, MultiThreads)
             EXPECT_GT(c, 999);
             EXPECT_EQ(g_Scheduler.GetCurrentTaskYieldCount(), yield_count + 1);
         };
+    WaitUntilNoTask();
+}
+
+TEST(Select, TriggerReadOnly)
+{
+//    co_opt.debug = dbg_all;
+//    co_opt.debug_output = fopen("log", "w+");
+    go [] {
+        int fds[2];
+        int res = tcpSocketPair(0, SOCK_STREAM, 0, fds);
+        EXPECT_EQ(res, 0);
+
+        fd_set rfs;
+        FD_ZERO(&rfs);
+        FD_SET(fds[0], &rfs);
+        FD_SET(fds[1], &rfs);
+        EXPECT_EQ(FD_SIZE(&rfs), 2);
+
+        go [=] {
+            co_sleep(200);
+            int res = write(fds[0], "a", 1);
+//            std::cout << "fill_send_buffer return " << res << endl;
+        };
+
+        auto yield_count = g_Scheduler.GetCurrentTaskYieldCount();
+        int n = select(FD_NFDS(&rfs), &rfs, NULL, NULL, &sec_timeout);
+        EXPECT_EQ(n, 1);
+        EXPECT_TRUE(!FD_ISSET(fds[0], &rfs));
+        EXPECT_TRUE(FD_ISSET(fds[1], &rfs));
+        EXPECT_EQ(g_Scheduler.GetCurrentTaskYieldCount(), yield_count + 1);
+    };
     WaitUntilNoTask();
 }

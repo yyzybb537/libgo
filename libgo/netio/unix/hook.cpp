@@ -739,21 +739,21 @@ int select(int nfds, fd_set *readfds, fd_set *writefds,
     int ret = 0;
     for (size_t i = 0; i < pfds.size(); ++i) {
         pollfd &pfd = pfds[i];
-        if (pfd.events & POLLIN) {
+        if (pfd.revents & POLLIN) {
             if (readfds) {
                 FD_SET(pfd.fd, readfds);
                 ++ret;
             }
         }
 
-        if (pfd.events & POLLOUT) {
+        if (pfd.revents & POLLOUT) {
             if (writefds) {
                 FD_SET(pfd.fd, writefds);
                 ++ret;
             }
         }
 
-        if (pfd.events & ~(POLLIN | POLLOUT)) {
+        if (pfd.revents & ~(POLLIN | POLLOUT)) {
             if (exceptfds) {
                 FD_SET(pfd.fd, exceptfds);
                 ++ret;
