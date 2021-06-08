@@ -257,6 +257,7 @@ private:
             TimeType* time, T value = T(),
             std::function<CondRet(size_t)> const& cond = NULL)
     {
+        cv_status result;
         Entry *entry = new Entry;
         AutoRelease<Entry> pEntry(entry);
         entry->value = value;
@@ -340,7 +341,7 @@ private:
             entry->suspendFlags.store(flag, std::memory_order_release);   // release
             DebugPrint(dbg_channel, "cv::wait -> suspend_end");
             Processer::StaticCoYield();
-            return entry->noTimeoutLock.try_lock() ?
+            result = entry->noTimeoutLock.try_lock() ?
                 cv_status::timeout :
                 cv_status::no_timeout;
         } else {
@@ -350,10 +351,15 @@ private:
             entry->suspendFlags.store(flag, std::memory_order_release);   // release
             DebugPrint(dbg_channel, "cv::wait -> suspend_end");
             threadSuspend(entry->nativeThreadEntry->cv, threadLock, time);
-            return entry->noTimeoutLock.try_lock() ?
+            result = entry->noTimeoutLock.try_lock() ?
                 cv_status::timeout :
                 cv_status::no_timeout;
         }
+        //如果超时，那么发送notify清除queue中的entry
+        if (result == cv_status::timeout) {
+            notify_one();
+        }
+        return result;
     }
 
     static bool isValid(Entry* entry) {
