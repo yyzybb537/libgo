@@ -4,19 +4,10 @@
 #include "../common/spinlock.h"
 #include "../common/timer.h"
 #include "../task/task.h"
-#include "../debug/listener.h"
 #include "processer.h"
 #include <mutex>
 
 namespace co {
-
-struct TaskOpt
-{
-    bool affinity_ = false;
-    int lineno_ = 0;
-    std::size_t stack_size_ = 0;
-    const char* file_ = nullptr;
-};
 
 // 协程调度器
 // 负责管理1到N个调度线程, 调度从属协程.

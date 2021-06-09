@@ -98,9 +98,8 @@ void Processer::Process()
 
 #if ENABLE_DEBUGGER
             DebugPrint(dbg_switch, "enter task(%s)", runningTask_->DebugInfo());
-            if (Listener::GetTaskListener())
-                Listener::GetTaskListener()->onSwapIn(runningTask_->id_);
 #endif
+            SAFE_CALL_LISTENER(Listener::GetTaskListener(), onSwapIn, runningTask_->id_);
 
             ++switchCount_;
 

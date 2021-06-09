@@ -19,6 +19,14 @@ const char* GetTaskStateName(TaskState state);
 
 typedef std::function<void()> TaskF;
 
+struct TaskOpt
+{
+    bool affinity_ = false;
+    int lineno_ = 0;
+    std::size_t stack_size_ = 0;
+    const char* file_ = nullptr;
+};
+
 struct TaskGroupKey {};
 typedef Anys<TaskGroupKey> TaskAnys;
 
