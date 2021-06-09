@@ -74,12 +74,12 @@ _jump_fcontext:
     /* prepare stack for FPU */
     leaq  0x8(%rsp), %rsp
 
-    popq  %r12  /* restrore R12 */
-    popq  %r13  /* restrore R13 */
-    popq  %r14  /* restrore R14 */
-    popq  %r15  /* restrore R15 */
-    popq  %rbx  /* restrore RBX */
-    popq  %rbp  /* restrore RBP */
+    popq  %r12  /* restore R12 */
+    popq  %r13  /* restore R13 */
+    popq  %r14  /* restore R14 */
+    popq  %r15  /* restore R15 */
+    popq  %rbx  /* restore RBX */
+    popq  %rbp  /* restore RBP */
 
     /* restore return-address */
     popq  %r8
