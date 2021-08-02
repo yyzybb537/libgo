@@ -1,5 +1,5 @@
 CC=g++
-CFLAGS=-std=c++11 -g -Wall
+CFLAGS=-std=c++11 -g -Wall -O3
 TARGET=$(patsubst %.cpp, %.t, $(wildcard *.cpp)) pg_cpu.t
 OBJS=$(patsubst %, %.o, $(TARGET))
 LINK=-L../../src -lboost_coroutine -lboost_thread -lboost_system
@@ -23,7 +23,7 @@ hiredis.t: hiredis.o
 	@echo "LD $@"
 
 %.t: %.o
-	@$(CC) $(CFLAGS) $^ -o $@ ${LINK} -L../../src -llibgo -ldl
+	@$(CC) $(CFLAGS) $^ -o $@ ${LINK} -L../../src -llibgo -pthread -ldl
 	@echo "LD $@"
 
 .cpp.o:
