@@ -1,4 +1,5 @@
 #pragma once
+#define __const__
 #include "common/config.h"
 #include "common/pp.h"
 #include "common/syntax_helper.h"
@@ -13,7 +14,7 @@
 #include "defer/defer.h"
 #include "debug/listener.h"
 #include "debug/debugger.h"
-#include "netio/unix/errno_hook.h"
+//#include "netio/unix/errno_hook.h"
 
 #define LIBGO_VERSION 300
 

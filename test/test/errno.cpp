@@ -1,7 +1,7 @@
+#include <libgo/libgo.h>
 #include <chrono>
 #include <iostream>
 #include <atomic>
-#include <libgo/libgo.h>
 #include <inttypes.h>
 #include <sys/syscall.h>
 #include <errno.h>
