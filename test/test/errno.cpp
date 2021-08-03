@@ -42,15 +42,6 @@ void check(int threadId, volatile void* errnoAddr)
     }
 }
 
-void w2(int work_id)
-{
-    int t2 = syscall(SYS_gettid);
-    errno = 2;
-    (void)::write(10000, "a", 1);
-    fprintf(stdout, "2- work id: [%d]- errno=%d addr: [%p], thread id: [%d]\n", work_id, errno, &errno, t2);
-    check(t2, &errno);
-}
-
 // 大计算量的函数
 int c = 0;
 std::atomic<int> done{0};
@@ -68,11 +59,11 @@ void foo(int work_id)
 
             co_yield;
 
-//            int t2 = syscall(SYS_gettid);
-//            errno = 2;
-//            (void)::write(10000, "a", 1);
-//            fprintf(stdout, "2- work id: [%d]- errno=%d addr: [%p], thread id: [%d]\n", work_id, errno, &errno, t2);
-            w2(work_id);
+            int t2 = syscall(SYS_gettid);
+            errno = 2;
+            (void)::write(10000, "a", 1);
+            fprintf(stdout, "2- work id: [%d]- errno=%d addr: [%p], thread id: [%d]\n", work_id, errno, &errno, t2);
+            check(t2, &errno);
 
         }
         v *= i;
