@@ -103,7 +103,6 @@ private:
 
     void BlockLoadBalance(BlockMap &blockings,ActiveMap &actives);
     
-    void LoadBalance(ActiveMap& actives);
     TimerType & StaticGetTimer();
 
     // deque of Processer, write by start or dispatch thread

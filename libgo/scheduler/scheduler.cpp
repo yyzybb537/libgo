@@ -2,7 +2,6 @@
 #include "../common/error.h"
 #include "../common/clock.h"
 #include <stdio.h>
-#include <Trace.hpp>
 #include <system_error>
 #include <unistd.h>
 #include <time.h>
