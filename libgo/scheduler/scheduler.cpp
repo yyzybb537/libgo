@@ -233,7 +233,7 @@ void Scheduler::NewProcessThread()
     processers_.push_back(p);
 }
 
-void Scheduler::BlockLoadBalance(Scheduler::BlockMap &blockings,Scheduler::ActiveMap &actives)
+void Scheduler::DispatchBlocks(Scheduler::BlockMap &blockings,Scheduler::ActiveMap &actives)
 {
    if(blockings.size() == 0)
       return;
@@ -365,7 +365,7 @@ void Scheduler::DispatcherThread()
         if (actives.empty())
             continue;
         
-        BlockLoadBalance(blockings,actives);
+        DispatchBlocks(blockings,actives);
        
         // 如果还有在等待的线程, 从任务多的线程中拿一些给它
         if (actives.begin()->first == 0) {

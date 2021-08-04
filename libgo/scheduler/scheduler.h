@@ -101,7 +101,7 @@ private:
 
     void NewProcessThread();
 
-    void BlockLoadBalance(BlockMap &blockings,ActiveMap &actives);
+    void DispatchBlocks(BlockMap &blockings,ActiveMap &actives);
     
     TimerType & StaticGetTimer();
 
