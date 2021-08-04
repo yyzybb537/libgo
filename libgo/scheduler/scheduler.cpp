@@ -2,6 +2,7 @@
 #include "../common/error.h"
 #include "../common/clock.h"
 #include <stdio.h>
+#include <Trace.hpp>
 #include <system_error>
 #include <unistd.h>
 #include <time.h>
@@ -233,35 +234,97 @@ void Scheduler::NewProcessThread()
     processers_.push_back(p);
 }
 
+void Scheduler::BlockLoadBalance(Scheduler::BlockMap &blockings,Scheduler::ActiveMap &actives)
+{
+   if(blockings.size() == 0)
+      return;
+   SList<Task> tasks;
+   for (auto &kv : blockings) {
+        auto p = processers_[kv.first];
+        std::size_t num = processers_[kv.first]->RunnableSize();
+        tasks.append(p->Steal(num));
+    }
+    if(tasks.empty())
+       return;
+    //TRACE("偷取的协程数量:",tasks.size());
+    ActiveMap newActives;
+    
+    bool flag = false;
+    do{
+       
+       flag = false;
+
+       int totalTasks = 0;
+       //统计活跃p的总协程数
+       for(auto &it : actives)
+          totalTasks += it.first;   
+       //所有p的平均负载
+       std::size_t avgload = totalTasks / actives.size();
+       //平分的协程数
+       std::size_t avgtasks = tasks.size() / actives.size();
+       
+       for(auto it = actives.begin(); it != actives.end(); ++it)
+       {
+           //去除比平均值大两倍的p
+           if(it->first > avgload * 2 && it->first > avgtasks * 2){
+             newActives.insert({it->first,it->second});
+             it = actives.erase(it);
+             flag = true;
+           }
+       }
+    }
+    while(flag);
+    
+    int avg = tasks.size() / actives.size();
+    if(avg == 0)
+       avg = 1;
+
+    for(auto & kv : actives)
+    {
+         SList<Task> in = tasks.cut(avg);
+         
+         if(in.empty())
+           break;
+         
+         auto p = processers_[kv.second];
+         
+         p->AddTask(std::move(in));
+
+         newActives.insert({p->RunnableSize(),kv.second});
+    }
+    newActives.swap(actives);
+    
+}
+
 void Scheduler::DispatcherThread()
 {
     DebugPrint(dbg_scheduler, "---> Start DispatcherThread");
-    typedef std::size_t idx_t;
     while (!stop_) {
         // TODO: 用condition_variable降低cpu使用率
         std::this_thread::sleep_for(std::chrono::microseconds(CoroutineOptions::getInstance().dispatcher_thread_cycle_us));
-
+ 
         // 1.收集负载值, 收集阻塞状态, 打阻塞标记, 唤醒处于等待状态但是有任务的P
         idx_t pcount = processers_.size();
         std::size_t totalLoadaverage = 0;
-        typedef std::multimap<std::size_t, idx_t> ActiveMap;
         ActiveMap actives;
-        std::map<idx_t, std::size_t> blockings;
+        BlockMap blockings;
 
         int isActiveCount = 0;
         for (std::size_t i = 0; i < pcount; i++) {
             auto p = processers_[i];
-            if (p->IsBlocking()) {
+            //等待中的p不能算阻塞,无法加入新协程导致p饿死
+            if (!p->IsWaiting() && p->IsBlocking()) {
                 blockings[i] = p->RunnableSize();
                 if (p->active_) {
                     p->active_ = false;
                     DebugPrint(dbg_scheduler, "Block processer(%d)", (int)i);
                 }
             }
-
+            
             if (p->active_)
                 isActiveCount++;
         }
+       
 
         // 还可激活几个P
         int activeQuota = isActiveCount < minThreadNumber_ ? (minThreadNumber_ - isActiveCount) : 0;
@@ -272,7 +335,8 @@ void Scheduler::DispatcherThread()
             totalLoadaverage += loadaverage;
 
             if (!p->active_) {
-                if (activeQuota > 0 && !p->IsBlocking()) {
+                //处于等待中的p也应该唤醒
+                if (activeQuota > 0 && (!p->IsBlocking() || p->IsWaiting())) {
                     p->active_ = true;
                     activeQuota--;
                     DebugPrint(dbg_scheduler, "Active processer(%d)", (int)i);
@@ -297,51 +361,13 @@ void Scheduler::DispatcherThread()
             ++pcount;
         }
 
+        
         // 全部阻塞并且不能起新线程, 无需调度, 等待即可
         if (actives.empty())
             continue;
-
-        // 2.负载均衡
-        // 阻塞线程的任务steal出来
-        {
-            SList<Task> tasks;
-            for (auto &kv : blockings) {
-                auto p = processers_[kv.first];
-                tasks.append(p->Steal(0));
-            }
-            if (!tasks.empty()) {
-                // 任务最少的几个线程平均分
-                auto range = actives.equal_range(actives.begin()->first);
-                std::size_t avg = tasks.size() / std::distance(range.first, range.second);
-                if (avg == 0)
-                    avg = 1;
-
-                ActiveMap newActives;
-                for (auto it = range.second; it != actives.end(); ++it) {
-                    newActives.insert(*it);
-                }
-
-
-                for (auto it = range.first; it != range.second; ++it) {
-                    SList<Task> in = tasks.cut(avg);
-                    if (in.empty())
-                        break;
-
-                    auto p = processers_[it->second];
-                    p->AddTask(std::move(in));
-                    newActives.insert(ActiveMap::value_type{p->RunnableSize(), it->second});
-                }
-                if (!tasks.empty())
-                    processers_[range.first->second]->AddTask(std::move(tasks));
-
-                for (auto it = range.first; it != range.second; ++it) {
-                    auto p = processers_[it->second];
-                    newActives.insert(ActiveMap::value_type{p->RunnableSize(), it->second});
-                }
-                newActives.swap(actives);
-            }
-        }
-
+        
+        BlockLoadBalance(blockings,actives);
+       
         // 如果还有在等待的线程, 从任务多的线程中拿一些给它
         if (actives.begin()->first == 0) {
             auto range = actives.equal_range(actives.begin()->first);
@@ -375,6 +401,7 @@ void Scheduler::DispatcherThread()
             if (!tasks.empty())
                 processers_[range.first->second]->AddTask(std::move(tasks));
         }
+   
     }
 }
 
