@@ -154,6 +154,10 @@ struct CoroutineOptions
 
     // 调度线程的触发频率(单位：微秒)
     uint32_t dispatcher_thread_cycle_us = 1000; 
+    //  负载均衡触发的比例,取值范围 0 - 1
+    //  当某个执行器的协程数少于平均值的load_balance_rate就会触发负载均衡
+    //  若执行的协程任务比较重时,此值建议设低一点,协程任务比较轻时,建议设高一点
+    float load_balance_rate = 0.01; 
 
     // 栈顶设置保护内存段的内存页数量(仅linux下有效)(默认为0, 即:不设置)
     // 在栈顶内存对齐后的前几页设置为protect属性.

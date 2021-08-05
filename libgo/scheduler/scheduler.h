@@ -102,6 +102,8 @@ private:
     void NewProcessThread();
 
     void DispatchBlocks(BlockMap &blockings,ActiveMap &actives);
+
+    void LoadBalance(ActiveMap &actives,std::size_t activeTasks);
     
     TimerType & StaticGetTimer();
 
