@@ -78,6 +78,9 @@ public:
     static bool& IsExiting();
 
 private:
+    using idx_t     = std::size_t;
+    using ActiveMap = std::multimap<std::size_t, idx_t>;
+    using BlockMap  = std::map<idx_t, std::size_t>;
     Scheduler();
     ~Scheduler();
 
@@ -98,6 +101,10 @@ private:
 
     void NewProcessThread();
 
+    void DispatchBlocks(BlockMap &blockings,ActiveMap &actives);
+
+    void LoadBalance(ActiveMap &actives,std::size_t activeTasks);
+    
     TimerType & StaticGetTimer();
 
     // deque of Processer, write by start or dispatch thread
