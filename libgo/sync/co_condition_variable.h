@@ -102,15 +102,15 @@ private:
 
             // coroutine
             if (!nativeThreadEntry) {
-                if (!noTimeoutLock.try_lock())
-                    return false;;
-
-                if (Processer::Wakeup(coroEntry, [&]{ if (func) func(value); })) {
-//                    DebugPrint(dbg_channel, "notify %d.", value.id);
-                    return true;
-                }
-
-                return false;;
+                bool success = false;
+                Processer::Wakeup(coroEntry, [&] {
+                    if(noTimeoutLock.try_lock()) {
+                        success = true;
+                        if (func) func(value);
+                    } 
+                });
+                
+                return success;
             }
 
             // native thread
