@@ -10,6 +10,7 @@ CoTimer::CoTimerImpl::CoTimerImpl(FastSteadyClock::duration precision)
     : precision_(precision)
 {
 //    trigger_.SetDbgMask(0);
+    // printf("CoTimerImpl::CoTimerImpl threadid=%d\n", (int)syscall(SYS_gettid));
 }
 
 CoTimer::CoTimerImpl::~CoTimerImpl()
@@ -30,6 +31,8 @@ void CoTimer::CoTimerImpl::RunInCoroutine()
 
         if (terminate_) break;
 
+        BindScheduler(Processer::GetCurrentScheduler());
+
         std::unique_lock<LFLock> lock(lock_);
 
         auto nextTime = NextTrigger(precision_);
@@ -44,15 +47,26 @@ void CoTimer::CoTimerImpl::RunInCoroutine()
         }
     }
 
+    DebugPrint(dbg_timer, "CoTimerImpl::RunInCoroutine will exit");
     quit_ << nullptr;
 }
 
 void CoTimer::CoTimerImpl::Stop()
 {
-    if (terminate_ || Scheduler::IsExiting() || (scheduler_ && scheduler_->IsStop())) return;
+    // printf("CoTimerImpl::Stop threadid=%d terminate_=%d isExiting=%d bindSched=%d isStop=%d\n", 
+    //     (int)syscall(SYS_gettid), terminate_, Scheduler::IsExiting(),
+    //     !!scheduler_, scheduler_ ? scheduler_->IsStop() : 0);
 
-    terminate_ = true;
-    quit_ >> nullptr;
+    if (terminate_)
+        return ; 
+    
+    if (Scheduler::IsExiting())
+        return ;
+        
+    if (scheduler_ && !scheduler_->IsStop()) {
+        terminate_ = true;
+        quit_ >> nullptr;
+    }
 }
 
 CoTimer::CoTimerImpl::TimerId

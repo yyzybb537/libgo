@@ -1,0 +1,109 @@
+{
+  // See https://go.microsoft.com/fwlink/?LinkId=733558
+  // for the documentation about the tasks.json format
+  "version": "2.0.0",
+  "options": {
+    "cwd": "${workspaceRoot}"
+  },
+  "tasks": [
+    {
+      "label": "build libgo",
+      "type": "shell",
+      "command": "mkdir -p build; cd build && cmake .. -DCMAKE_BUILD_TYPE=DEBUG && make -j8",
+      "group": {
+        "kind": "build",
+        "isDefault": true
+      }
+    },
+    {
+      "label": "build gtest",
+      "type": "shell",
+      "command": "mkdir -p test/gtest_unit/build; cd test/gtest_unit/build && cmake .. -DCMAKE_BUILD_TYPE=DEBUG && make -j12",
+      "group": {
+        "kind": "build",
+        "isDefault": true
+      }
+    },
+    {
+      "label": "build gtest channel",
+      "type": "shell",
+      "command": "mkdir -p test/gtest_unit/build; cd test/gtest_unit/build && cmake .. -DCMAKE_BUILD_TYPE=DEBUG && make channel.t -j8",
+      "group": {
+        "kind": "build",
+        "isDefault": true
+      }
+    },
+    {
+      "label": "build gtest mutex",
+      "type": "shell",
+      "command": "mkdir -p test/gtest_unit/build; cd test/gtest_unit/build && cmake .. -DCMAKE_BUILD_TYPE=DEBUG && make mutex.t -j8",
+      "group": {
+        "kind": "build",
+        "isDefault": true
+      }
+    },
+    {
+      "label": "build gtest condition_variable",
+      "type": "shell",
+      "command": "mkdir -p test/gtest_unit/build; cd test/gtest_unit/build && cmake .. -DCMAKE_BUILD_TYPE=DEBUG && make condition_variable.t -j8",
+      "group": {
+        "kind": "build",
+        "isDefault": true
+      }
+    },
+    {
+      "label": "build gtest shared_mutex",
+      "type": "shell",
+      "command": "mkdir -p test/gtest_unit/build; cd test/gtest_unit/build && cmake .. -DCMAKE_BUILD_TYPE=DEBUG && make shared_mutex.t -j8",
+      "group": {
+        "kind": "build",
+        "isDefault": true
+      }
+    },
+    {
+      "label": "build gtest linked_list",
+      "type": "shell",
+      "command": "mkdir -p test/gtest_unit/build; cd test/gtest_unit/build && cmake .. -DCMAKE_BUILD_TYPE=DEBUG && make linked_list.t -j8",
+      "group": {
+        "kind": "build",
+        "isDefault": true
+      }
+    },
+    {
+      "label": "build gtest linked_skiplist",
+      "type": "shell",
+      "command": "mkdir -p test/gtest_unit/build; cd test/gtest_unit/build && cmake .. -DCMAKE_BUILD_TYPE=DEBUG && make linked_skiplist.t -j8",
+      "group": {
+        "kind": "build",
+        "isDefault": true
+      }
+    },
+    {
+      "label": "build gtest routine_sync_timer",
+      "type": "shell",
+      "command": "mkdir -p test/gtest_unit/build; cd test/gtest_unit/build && cmake .. -DCMAKE_BUILD_TYPE=DEBUG && make routine_sync_timer.t -j8",
+      "group": {
+        "kind": "build",
+        "isDefault": true
+      }
+    },
+    {
+      "label": "build gtest timer",
+      "type": "shell",
+      "command": "mkdir -p test/gtest_unit/build; cd test/gtest_unit/build && cmake .. -DCMAKE_BUILD_TYPE=DEBUG && make timer.t -j8",
+      "group": {
+        "kind": "build",
+        "isDefault": true
+      }
+    },
+    {
+      "label": "build gtest dns",
+      "type": "shell",
+      "command": "mkdir -p test/gtest_unit/build; cd test/gtest_unit/build && cmake .. -DCMAKE_BUILD_TYPE=DEBUG && make dns.t -j8",
+      "group": {
+        "kind": "build",
+        "isDefault": true
+      }
+    },
+  ]
+}

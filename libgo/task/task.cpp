@@ -8,6 +8,10 @@
 #include "../scheduler/scheduler.h"
 #include "../scheduler/ref.h"
 
+#if USE_ROUTINE_SYNC
+# include "../routine_sync_libgo/libgo_switcher.h"
+#endif
+
 namespace co
 {
 
@@ -83,6 +87,9 @@ Task::Task(TaskF const& fn, std::size_t stack_size)
     : ctx_(&Task::StaticRun, (intptr_t)this, stack_size), fn_(fn)
 {
 //    DebugPrint(dbg_task, "task(%s) construct. this=%p", DebugInfo(), this);
+#if USE_ROUTINE_SYNC
+    extern_switcher_ = (void*)(new LibgoSwitcher);
+#endif
 }
 
 Task::~Task()
@@ -91,6 +98,10 @@ Task::~Task()
     assert(!this->prev);
     assert(!this->next);
 //    DebugPrint(dbg_task, "task(%s) destruct. this=%p", DebugInfo(), this);
+#if USE_ROUTINE_SYNC
+    delete (LibgoSwitcher*)extern_switcher_;
+    extern_switcher_ = nullptr;
+#endif
 }
 
 const char* Task::DebugInfo()

@@ -3,3 +3,6 @@
 #define ENABLE_DEBUGGER ${ENABLE_DEBUGGER}
 
 #define ENABLE_HOOK ${ENABLE_HOOK}
+
+// 使用旧版本的协程同步套件
+#define USE_ROUTINE_SYNC ${USE_ROUTINE_SYNC}

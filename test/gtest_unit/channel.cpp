@@ -4,6 +4,7 @@
 #include <vector>
 #include <list>
 #include <atomic>
+#define OPEN_ROUTINE_SYNC_DEBUG 1
 #include "coroutine.h"
 #include "gtest_exit.h"
 using namespace std::chrono;
@@ -19,6 +20,9 @@ using namespace co;
 
 TEST(Channel, capacity0)
 {
+    // co_opt.debug = dbg_channel | dbg_rutex | dbg_mutex;
+    co_opt.debug_output = fopen("a.log", "w");
+
     co_chan<int> ch;
     EXPECT_TRUE(ch.empty());
 
@@ -35,9 +39,6 @@ TEST(Channel, capacity0)
         };
         WaitUntilNoTask();
         EXPECT_EQ(i, 1);
-
-//    co_opt.debug = co::dbg_channel;
-//    co_opt.debug_output = fopen("log", "w");
 
         EXPECT_EQ(ch.size(), 0u);
         go [=]{ ch << 2; EXPECT_YIELD(1);};
@@ -73,10 +74,10 @@ TEST(Channel, capacity0)
     // multi thread
     int k = 0;
     std::atomic<int> total{0};
-    int total_check = 0;
+    std::atomic<int> total_check{0};
     for (k = 0; k < 100; ++k) {
-        total_check += k;
-        go [=]{
+        go [&, k]{
+            total_check += k;
             ch << k;
         };
         go [&]{
@@ -147,7 +148,7 @@ TEST(Channel, capacity1)
 
 TEST(Channel, capacityN)
 {
-    int n = 10;
+    int n = 100;
     co_chan<int> ch(n);
     int i = 0;
 
@@ -183,6 +184,175 @@ TEST(Channel, capacityN)
             ch >> x;
             EXPECT_EQ(x, i + 2);
         }
+    }
+}
+
+TEST(Channel, capacity1_void)
+{
+    // nonblock
+    co_chan<void> ch(1);
+    EXPECT_TRUE(ch.empty());
+
+    {
+        EXPECT_EQ(ch.size(), 0u);
+        go [&]{
+            EXPECT_TRUE(ch.TryPush(nullptr));
+            EXPECT_FALSE(ch.TryPush(nullptr));
+            EXPECT_FALSE(ch.empty());
+            EXPECT_EQ(ch.size(), 1u);
+            EXPECT_YIELD(0);
+            go [&]{
+                EXPECT_TRUE(ch.TryPop(nullptr));
+                EXPECT_YIELD(0);
+            };
+        };
+        WaitUntilNoTask();
+        EXPECT_TRUE(ch.empty());
+        EXPECT_EQ(ch.size(), 0u);
+    }
+
+    // block
+    {
+        go [&] {
+            GTimer t;
+            ch >> nullptr;
+            TIMER_CHECK(t, 100, 10);
+            ch >> nullptr;
+        };
+        go [&] {
+            co_sleep(100);
+            ch << nullptr;
+            ch << nullptr;
+        };
+        WaitUntilNoTask();
+        EXPECT_TRUE(ch.empty());
+        EXPECT_EQ(ch.size(), 0u);
+    }
+
+    {
+        go [&] {
+            
+            ch << nullptr;
+            GTimer t;
+            ch << nullptr;
+            TIMER_CHECK(t, 100, 10);
+        };
+        go [&] {
+            co_sleep(100);
+            ch >> nullptr;
+            ch >> nullptr;
+        };
+        WaitUntilNoTask();
+        EXPECT_TRUE(ch.empty());
+        EXPECT_EQ(ch.size(), 0u);
+    }
+
+    {
+        go [&] {
+            for (int i = 0; i < 100; ++i) {
+                ch >> nullptr;
+            }
+        };
+        go [&] {
+            for (int i = 0; i < 100; ++i) {
+                ch << nullptr;
+            }
+        };
+        WaitUntilNoTask();
+        EXPECT_TRUE(ch.empty());
+        EXPECT_EQ(ch.size(), 0u);
+    }
+}
+
+TEST(Channel, capacity100_void)
+{
+    // nonblock
+    co_chan<void> ch(100);
+    EXPECT_TRUE(ch.empty());
+
+    {
+        EXPECT_EQ(ch.size(), 0u);
+        go [&]{
+            EXPECT_TRUE(ch.TryPush(nullptr));
+            EXPECT_TRUE(ch.TryPush(nullptr));
+            EXPECT_FALSE(ch.empty());
+            EXPECT_EQ(ch.size(), 2u);
+            EXPECT_YIELD(0);
+            go [&]{
+                EXPECT_TRUE(ch.TryPop(nullptr));
+                EXPECT_TRUE(ch.TryPop(nullptr));
+                EXPECT_YIELD(0);
+            };
+        };
+        WaitUntilNoTask();
+        EXPECT_TRUE(ch.empty());
+        EXPECT_EQ(ch.size(), 0u);
+    }
+
+    // block
+    {
+        go [&] {
+            for (int i = 0; i < 10000; ++i) {
+                ch >> nullptr;
+            }
+        };
+        go [&] {
+            for (int i = 0; i < 10000; ++i) {
+                ch << nullptr;
+            }
+        };
+        WaitUntilNoTask();
+        EXPECT_TRUE(ch.empty());
+        EXPECT_EQ(ch.size(), 0u);
+    }
+}
+
+TEST(Channel, capacityN_WR)
+{
+    int n = 100;
+    co_chan<int> ch(n);
+
+    // read & write
+    {
+        go [&] {
+            for (int i = 0; i < n * 10; i++) {
+                ch << i;
+            }
+        };
+
+        go [&] {
+            for (int i = 0; i < n * 10; i++) {
+                int v;
+                ch >> v;
+                EXPECT_EQ(i, v);
+            }
+        };
+        WaitUntilNoTask();
+        EXPECT_TRUE(ch.empty());
+    }
+
+    // multi read & multi write
+    std::atomic_long acc {0}, check_acc {0};
+    {
+        for (int j = 0; j < 10; j++)
+            go [&] {
+                for (int i = 0; i < n * 10; i++) {
+                    acc += i;
+                    ch << i;
+                }
+            };
+
+        for (int j = 0; j < 10; j++)
+            go [&] {
+                for (int i = 0; i < n * 10; i++) {
+                    int v;
+                    ch >> v;
+                    check_acc += v;
+                }
+            };
+        WaitUntilNoTask();
+        EXPECT_EQ(acc, check_acc);
+        EXPECT_TRUE(ch.empty());
     }
 }
 
@@ -450,9 +620,10 @@ TEST(Channel, capacity0Timed)
 
     {
         co_chan<int> ch;
-        int *p = new int[1000];
+        const int c = 1000;
+        int *p = new int[c];
 
-        for (int i = 0; i < 1000; ++i)
+        for (int i = 0; i < c; ++i)
             go [=] {
                 int v;
                 GTimer t;
@@ -462,14 +633,14 @@ TEST(Channel, capacity0Timed)
                 TIMER_CHECK(t, 0, 200);
             };
 
-        for (int i = 0; i < 1000; ++i)
+        for (int i = 0; i < c; ++i)
             go [=] {
                 ch << i;
             };
 
         WaitUntilNoTask();
 
-        for (int i = 0; i < 1000; ++i) {
+        for (int i = 0; i < c; ++i) {
             EXPECT_EQ(p[i], 1);
         }
         delete[] p;

@@ -1,23 +1,21 @@
 #include <iostream>
 #include <unistd.h>
 #include <gtest/gtest.h>
+// #define OPEN_ROUTINE_SYNC_DEBUG 1
 #include "coroutine.h"
 #include <boost/thread.hpp>
 #include "gtest_exit.h"
 using namespace std;
 using namespace co;
 
-TEST(Mutex, test_mutex)
+co_mutex m;
+
+TEST(Mutex, simple)
 {
-//    co_sched.GetOptions().debug = dbg_switch;
-
-    go []{
-        std::cout << "start mutex test...\n" << std::endl;
-    };
-    WaitUntilNoTask();
-
-    co_mutex m;
-
+    // co::CoroutineOptions::getInstance().debug = dbg_rutex | dbg_mutex;
+    // co::CoroutineOptions::getInstance().debug_output = fopen("a.log", "w");
+    // co::CoroutineOptions::getInstance().debug = dbg_mutex;
+    
     go [&]()mutable {
         EXPECT_FALSE(m.is_lock());
         m.lock();
@@ -31,17 +29,28 @@ TEST(Mutex, test_mutex)
         EXPECT_FALSE(m.is_lock());
     };
     WaitUntilNoTask();
+}
 
+TEST(Mutex, bench)
+{
     int *pv = new int(0);
     std::vector<int> *vec = new std::vector<int>;
-    vec->reserve(100 * 100);
-    for (int i = 0; i < 100; ++i)
+    const int c = 1000;
+    const int c_coro = 1000;
+    vec->reserve(c * c_coro);
+    std::mutex thread_mutex;
+    std::atomic_int reenter{0};
+    for (int i = 0; i < c_coro; ++i)
         go [&]()mutable {
-            for (int i = 0; i < 100; ++i)
+            for (int i = 0; i < c; ++i)
             {
                 std::unique_lock<co_mutex> lock(m);
+                EXPECT_EQ(++reenter, 1);
                 vec->push_back(++*pv);
+                EXPECT_EQ(--reenter, 0);            
             }
+
+            DebugPrint(dbg_mutex, "done");
         };
     WaitUntilNoTask();
     for (int i = 0; i < (int)vec->size(); ++i)
@@ -50,89 +59,3 @@ TEST(Mutex, test_mutex)
     }
 }
 
-TEST(Mutex, test_rwmutex)
-{
-    co_rwmutex m;
-
-    // reader view
-    go [&]()mutable {
-        EXPECT_FALSE(m.reader().is_lock());
-        m.reader().lock();
-        EXPECT_FALSE(m.reader().is_lock());
-        m.reader().unlock();
-        EXPECT_FALSE(m.reader().is_lock());
-
-        EXPECT_TRUE(m.reader().try_lock());
-        EXPECT_TRUE(m.reader().try_lock());
-        EXPECT_TRUE(m.reader().try_lock());
-        m.reader().unlock();
-        m.reader().unlock();
-        m.reader().unlock();
-    };
-    WaitUntilNoTask();
-
-    // writer view
-    go [&]()mutable {
-        EXPECT_FALSE(m.writer().is_lock());
-        m.writer().lock();
-        EXPECT_TRUE(m.writer().is_lock());
-        m.writer().unlock();
-        EXPECT_FALSE(m.writer().is_lock());
-
-        EXPECT_TRUE(m.writer().try_lock());
-        EXPECT_FALSE(m.writer().try_lock());
-        m.writer().unlock();
-        EXPECT_FALSE(m.writer().is_lock());
-    };
-    WaitUntilNoTask();
-
-    // cross two view
-    go [&]()mutable {
-        {
-            std::unique_lock<co_wmutex> lock(m.writer());
-            EXPECT_FALSE(m.reader().try_lock());
-            EXPECT_FALSE(m.writer().try_lock());
-        }
-
-        {
-            std::unique_lock<co_rmutex> lock(m.reader());
-            EXPECT_TRUE(m.reader().try_lock());
-            m.reader().unlock();
-            EXPECT_FALSE(m.writer().try_lock());
-            EXPECT_FALSE(m.writer().is_lock());
-        }
-
-        EXPECT_TRUE(m.writer().try_lock());
-        EXPECT_TRUE(m.writer().is_lock());
-        m.writer().unlock();
-        EXPECT_FALSE(m.writer().is_lock());
-    };
-    WaitUntilNoTask();
-
-    // multi threads
-    int *v1 = new int(0);
-    int *v2 = new int(0);
-
-    go [&]()mutable {
-        // write
-        for (int i = 0; i < 10000; ++i)
-        {
-            std::unique_lock<co_wmutex> lock(m.writer());
-            ++ *v1;
-            ++ *v2;
-        }
-    };
-
-    for (int i = 0; i < 100; ++i)
-        go [&]()mutable {
-            // read
-            for (int i = 0; i < 10000; ++i)
-            {
-                std::unique_lock<co_rmutex> lock(m.reader());
-                EXPECT_EQ(*v1, *v2);
-            }
-        };
-    WaitUntilNoTask();
-    EXPECT_EQ(*v1, 10000);
-    EXPECT_EQ(*v2, 10000);
-}

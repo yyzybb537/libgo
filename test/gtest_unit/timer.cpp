@@ -1,5 +1,6 @@
 #include "gtest/gtest.h"
 #include <boost/thread.hpp>
+#define OPEN_ROUTINE_SYNC_DEBUG 1
 #include "coroutine.h"
 #include <vector>
 #include <list>
@@ -37,7 +38,9 @@ TEST(Timer, OnTime1)
 
 TEST(Timer, OnTime2)
 {
-//    co_opt.debug = dbg_timer | dbg_channel;
+    co_opt.debug = dbg_timer | dbg_channel;
+    co_opt.debug_output = fopen("a.log", "w");
+
     GTimer gtimer;
     int c = 100;
     co_chan<void> q(c);
@@ -57,6 +60,8 @@ TEST(Timer, OnTime2)
 
 TEST(Timer, OnTime3)
 {
+    co_opt.debug = 0;
+
     GTimer gtimer;
     int c = 100;
     co_chan<void> q(c);

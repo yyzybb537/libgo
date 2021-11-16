@@ -14,7 +14,7 @@
 #endif
 
 #ifndef TEST_MAX_THREAD
-#define TEST_MAX_THREAD 4
+#define TEST_MAX_THREAD TEST_MIN_THREAD
 #endif
 
 struct startScheduler {
@@ -64,6 +64,14 @@ struct GTimerT {
                 Clock::now() - tp_).count();
     }
 
+    void dumpBench(long c, const char* msg) {
+        long v = ms();
+        long persecond = v ? (c * 1000 / v) : 0;
+        long op = v * 1000 * 1000 / c;
+        printf("%s cost: %ld ms | %ld times persecond | %ld ns/op \n", 
+            msg, v, persecond, op);
+    }
+
 private:
     typename Clock::time_point tp_;
 };
@@ -110,6 +118,13 @@ struct CheckPoint
             auto c = t.ms(); \
             EXPECT_GT(c, val - 2); \
             EXPECT_LT(c, val + deviation); \
+        } while (0)
+
+#define TIMER_EQ_1(t, val) \
+        do { \
+            auto c = t.ms(); \
+            EXPECT_GT(c, val - 2); \
+            EXPECT_LT(c, val + 2); \
         } while (0)
 
 #if defined(DEBUG_CHECK_POINT)

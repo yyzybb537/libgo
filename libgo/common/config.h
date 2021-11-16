@@ -24,6 +24,7 @@
 #include <algorithm>
 
 #define LIBGO_DEBUG 0
+#define DEBUG_ROUTINE_SYNC_IN_LIBGO 1
 
 #if defined(__APPLE__) || defined(__FreeBSD__)
 # define LIBGO_SYS_FreeBSD 1
@@ -35,7 +36,7 @@
 # define LIBGO_SYS_Windows 1
 #endif
 
-// VS2013≤ª÷ß≥÷thread_local
+// VS2013‰∏çÊîØÊåÅthread_local
 #if defined(_MSC_VER) && _MSC_VER < 1900
 # define thread_local __declspec(thread)
 #endif
@@ -109,63 +110,67 @@ static const uint64_t dbg_debugger          = 0x1 << 14;
 static const uint64_t dbg_signal            = 0x1 << 15;
 static const uint64_t dbg_channel           = 0x1 << 16;
 static const uint64_t dbg_thread            = 0x1 << 17;
-static const uint64_t dbg_sys_max           = dbg_debugger;
+static const uint64_t dbg_rutex             = 0x1 << 18;
+static const uint64_t dbg_mutex             = 0x1 << 19;
+static const uint64_t dbg_cond_v            = 0x1 << 20;
+static const uint64_t dbg_test              = 0x1 << 21;
+static const uint64_t dbg_sys_max           = dbg_cond_v;
 ///-------------------
 
-// –≠≥Ã÷–≈◊≥ˆŒ¥≤∂ªÒ“Ï≥£ ±µƒ¥¶¿Ì∑Ω Ω
+// ÂçèÁ®ã‰∏≠ÊäõÂá∫Êú™ÊçïËé∑ÂºÇÂ∏∏Êó∂ÁöÑÂ§ÑÁêÜÊñπÂºè
 enum class eCoExHandle : uint8_t
 {
-    immedaitely_throw,  // ¡¢º¥≈◊≥ˆ
-    on_listener,        //  π”√listener¥¶¿Ì, »Áπ˚√ª…Ë÷√listener‘Ú¡¢øÃ≈◊≥ˆ
+    immedaitely_throw,  // Á´ãÂç≥ÊäõÂá∫
+    on_listener,        // ‰ΩøÁî®listenerÂ§ÑÁêÜ, Â¶ÇÊûúÊ≤°ËÆæÁΩÆlistenerÂàôÁ´ãÂàªÊäõÂá∫
 };
 
 typedef void*(*stack_malloc_fn_t)(size_t size);
 typedef void(*stack_free_fn_t)(void *ptr);
 
-///---- ≈‰÷√—°œÓ
+///---- ÈÖçÁΩÆÈÄâÈ°π
 struct CoroutineOptions
 {
     /*********************** Debug options **********************/
-    // µ˜ ‘—°œÓ, ¿˝»Á: dbg_switch ªÚ dbg_hook|dbg_task|dbg_wait
+    // Ë∞ÉËØïÈÄâÈ°π, ‰æãÂ¶Ç: dbg_switch Êàñ dbg_hook|dbg_task|dbg_wait
     uint64_t debug = 0;            
 
-    // µ˜ ‘–≈œ¢ ‰≥ˆŒª÷√£¨∏ƒ–¥’‚∏ˆ≈‰÷√œÓø…“‘÷ÿ∂®œÚ ‰≥ˆŒª÷√
+    // Ë∞ÉËØï‰ø°ÊÅØËæìÂá∫‰ΩçÁΩÆÔºåÊîπÂÜôËøô‰∏™ÈÖçÁΩÆÈ°πÂèØ‰ª•ÈáçÂÆöÂêëËæìÂá∫‰ΩçÁΩÆ
     FILE* debug_output = stdout;   
     /************************************************************/
 
     /**************** Stack and Exception options ***************/
-    // –≠≥Ã÷–≈◊≥ˆŒ¥≤∂ªÒ“Ï≥£ ±µƒ¥¶¿Ì∑Ω Ω
+    // ÂçèÁ®ã‰∏≠ÊäõÂá∫Êú™ÊçïËé∑ÂºÇÂ∏∏Êó∂ÁöÑÂ§ÑÁêÜÊñπÂºè
     eCoExHandle exception_handle = eCoExHandle::immedaitely_throw;
 
-    // –≠≥Ã’ª¥Û–°…œœﬁ, ÷ªª·”∞œÏ‘⁄¥À÷µ…Ë÷√÷Æ∫Û–¬¥¥Ω®µƒP, Ω®“È‘⁄ ◊¥ŒRun«∞…Ë÷√.
-    // stack_sizeΩ®“È…Ë÷√≤ª≥¨π˝1MB
-    // LinuxœµÕ≥œ¬, …Ë÷√2MBµƒstack_sizeª·µº÷¬Ã·Ωªƒ⁄¥Êµƒ π”√¡ø±»1MBµƒstack_size∂‡10±∂.
+    // ÂçèÁ®ãÊ†àÂ§ßÂ∞è‰∏äÈôê, Âè™‰ºöÂΩ±ÂìçÂú®Ê≠§ÂÄºËÆæÁΩÆ‰πãÂêéÊñ∞ÂàõÂª∫ÁöÑP, Âª∫ËÆÆÂú®È¶ñÊ¨°RunÂâçËÆæÁΩÆ.
+    // stack_sizeÂª∫ËÆÆËÆæÁΩÆ‰∏çË∂ÖËøá1MB
+    // LinuxÁ≥ªÁªü‰∏ã, ËÆæÁΩÆ2MBÁöÑstack_size‰ºöÂØºËá¥Êèê‰∫§ÂÜÖÂ≠òÁöÑ‰ΩøÁî®ÈáèÊØî1MBÁöÑstack_sizeÂ§ö10ÂÄç.
     uint32_t stack_size = 1 * 1024 * 1024; 
     /************************************************************/
 
-    // epoll√ø¥Œ¥•∑¢µƒevent ˝¡ø(Windowsœ¬Œﬁ–ß)
+    // epollÊØèÊ¨°Ëß¶ÂèëÁöÑeventÊï∞Èáè(Windows‰∏ãÊó†Êïà)
     uint32_t epoll_event_size = 10240;
 
-    //  «∑Ò∆Ù”√–≠≥ÃÕ≥º∆π¶ƒ‹(ª·”–“ªµ„–‘ƒ‹À∫ƒ, ƒ¨»œ≤ªø™∆Ù)
+    // ÊòØÂê¶ÂêØÁî®ÂçèÁ®ãÁªüËÆ°ÂäüËÉΩ(‰ºöÊúâ‰∏ÄÁÇπÊÄßËÉΩÊçüËÄó, ÈªòËÆ§‰∏çÂºÄÂêØ)
     bool enable_coro_stat = false;
 
-    // µ•–≠≥Ã÷¥––≥¨ ± ±≥§(µ•Œª£∫Œ¢√Î) (≥¨π˝ ±≥§ª·«ø÷∆steal £”‡»ŒŒÒ, ≈…∑¢µΩ∆‰À˚œﬂ≥Ã)
+    // ÂçïÂçèÁ®ãÊâßË°åË∂ÖÊó∂Êó∂Èïø(Âçï‰ΩçÔºöÂæÆÁßí) (Ë∂ÖËøáÊó∂Èïø‰ºöÂº∫Âà∂stealÂâ©‰Ωô‰ªªÂä°, Ê¥æÂèëÂà∞ÂÖ∂‰ªñÁ∫øÁ®ã)
     uint32_t cycle_timeout_us = 100 * 1000; 
 
-    // µ˜∂»œﬂ≥Ãµƒ¥•∑¢∆µ¬ (µ•Œª£∫Œ¢√Î)
+    // Ë∞ÉÂ∫¶Á∫øÁ®ãÁöÑËß¶ÂèëÈ¢ëÁéá(Âçï‰ΩçÔºöÂæÆÁßí)
     uint32_t dispatcher_thread_cycle_us = 1000; 
-    //  ∏∫‘ÿæ˘∫‚¥•∑¢µƒ±»¿˝,»°÷µ∑∂Œß 0 - 1
-    //  µ±ƒ≥∏ˆ÷¥––∆˜µƒ–≠≥Ã ˝…Ÿ”⁄∆Ωæ˘÷µµƒload_balance_rateæÕª·¥•∑¢∏∫‘ÿæ˘∫‚
-    //  »Ù÷¥––µƒ–≠≥Ã»ŒŒÒ±»Ωœ÷ÿ ±,¥À÷µΩ®“È…ËµÕ“ªµ„,–≠≥Ã»ŒŒÒ±»Ωœ«· ±,Ω®“È…Ë∏ﬂ“ªµ„
+    //  Ë¥üËΩΩÂùáË°°Ëß¶ÂèëÁöÑÊØî‰æã,ÂèñÂÄºËåÉÂõ¥ 0 - 1
+    //  ÂΩìÊüê‰∏™ÊâßË°åÂô®ÁöÑÂçèÁ®ãÊï∞Â∞ë‰∫éÂπ≥ÂùáÂÄºÁöÑload_balance_rateÂ∞±‰ºöËß¶ÂèëË¥üËΩΩÂùáË°°
+    //  Ëã•ÊâßË°åÁöÑÂçèÁ®ã‰ªªÂä°ÊØîËæÉÈáçÊó∂,Ê≠§ÂÄºÂª∫ËÆÆËÆæ‰Ωé‰∏ÄÁÇπ,ÂçèÁ®ã‰ªªÂä°ÊØîËæÉËΩªÊó∂,Âª∫ËÆÆËÆæÈ´ò‰∏ÄÁÇπ
     float load_balance_rate = 0.01; 
 
-    // ’ª∂•…Ë÷√±£ª§ƒ⁄¥Ê∂Œµƒƒ⁄¥Ê“≥ ˝¡ø(Ωˆlinuxœ¬”––ß)(ƒ¨»œŒ™0, º¥:≤ª…Ë÷√)
-    // ‘⁄’ª∂•ƒ⁄¥Ê∂‘∆Î∫Ûµƒ«∞º∏“≥…Ë÷√Œ™protect Ù–‘.
-    // À˘“‘ø™∆Ù¥À—°œÓ ±, stack_size≤ªƒ‹…Ÿ”⁄protect_stack_page+1“≥
+    // Ê†àÈ°∂ËÆæÁΩÆ‰øùÊä§ÂÜÖÂ≠òÊÆµÁöÑÂÜÖÂ≠òÈ°µÊï∞Èáè(‰ªÖlinux‰∏ãÊúâÊïà)(ÈªòËÆ§‰∏∫0, Âç≥:‰∏çËÆæÁΩÆ)
+    // Âú®Ê†àÈ°∂ÂÜÖÂ≠òÂØπÈΩêÂêéÁöÑÂâçÂá†È°µËÆæÁΩÆ‰∏∫protectÂ±ûÊÄß.
+    // ÊâÄ‰ª•ÂºÄÂêØÊ≠§ÈÄâÈ°πÊó∂, stack_size‰∏çËÉΩÂ∞ë‰∫éprotect_stack_page+1È°µ
     int & protect_stack_page;
 
-    // …Ë÷√’ªƒ⁄¥Êπ‹¿Ì(malloc/free)
-    //  π”√fiber◊ˆ–≠≥Ãµ◊≤„ ±Œﬁ–ß
+    // ËÆæÁΩÆÊ†àÂÜÖÂ≠òÁÆ°ÁêÜ(malloc/free)
+    // ‰ΩøÁî®fiberÂÅöÂçèÁ®ãÂ∫ïÂ±ÇÊó∂Êó†Êïà
     stack_malloc_fn_t & stack_malloc_fn;
     stack_free_fn_t & stack_free_fn;
 

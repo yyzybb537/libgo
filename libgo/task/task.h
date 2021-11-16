@@ -34,6 +34,7 @@ struct Task
     TaskF fn_;
     std::exception_ptr eptr_;           // 保存exception的指针
     TaskAnys anys_;
+    void* extern_switcher_ {nullptr};
 
     uint64_t yieldCount_ = 0;
 
