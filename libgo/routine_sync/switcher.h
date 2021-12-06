@@ -110,9 +110,14 @@ struct RoutineSyncPolicy
 public:
     // 注册switchers
     template <typename ... Switchers>
-    static void registerSwitchers() {
+    static bool registerSwitchers(int overlappedLevel = 1) {
+        if (overlappedLevel <= refOverlappedLevel())
+            return false;
+
+        refOverlappedLevel() = overlappedLevel;
         clsRefFunction() = &RoutineSyncPolicy::clsRef_T<Switchers...>;
         isInPThreadFunction() = &RoutineSyncPolicy::isInPThread<Switchers...>;
+        return true;
     }
 
     static RoutineSwitcherI& clsRef()
@@ -132,6 +137,11 @@ public:
 private:
     typedef std::function<RoutineSwitcherI& ()> ClsRefFunction;
     typedef std::function<bool()> IsInPThreadFunction;
+
+    static int& refOverlappedLevel() {
+        static int lv = -1;
+        return lv;
+    }
 
     static ClsRefFunction & clsRefFunction() {
         static ClsRefFunction fn;

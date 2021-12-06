@@ -7,7 +7,8 @@ namespace libgo
 // 在这个函数体内执行 RoutineSyncPolicy::registerSwitchers函数
 void routine_sync_init_callback()
 {
-    RoutineSyncPolicy::registerSwitchers<::co::LibgoSwitcher>();
+    // libgo默认用0级, 用户自定义更多协程支持的时候可以使用1级或更高等级
+    RoutineSyncPolicy::registerSwitchers<::co::LibgoSwitcher>(0);
 }
 
 } // namespace libgo
