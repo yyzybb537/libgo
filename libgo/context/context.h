@@ -17,7 +17,7 @@ public:
         DebugPrint(dbg_task, "valloc stack. size=%u ptr=%p",
                 stackSize_, stack_);
 
-        ctx_ = make_fcontext(stack_ + stackSize_, stackSize_, fn_);
+        ctx_ = libgo_make_fcontext(stack_ + stackSize_, stackSize_, fn_);
 
         int protectPage = StackTraits::GetProtectStackPageSize();
         if (protectPage && StackTraits::ProtectStack(stack_, stackSize_, protectPage))
@@ -36,17 +36,17 @@ public:
 
     ALWAYS_INLINE void SwapIn()
     {
-        jump_fcontext(&GetTlsContext(), ctx_, vp_);
+        libgo_jump_fcontext(&GetTlsContext(), ctx_, vp_);
     }
 
     ALWAYS_INLINE void SwapTo(Context & other)
     {
-        jump_fcontext(&ctx_, other.ctx_, other.vp_);
+        libgo_jump_fcontext(&ctx_, other.ctx_, other.vp_);
     }
 
     ALWAYS_INLINE void SwapOut()
     {
-        jump_fcontext(&ctx_, GetTlsContext(), 0);
+        libgo_jump_fcontext(&ctx_, GetTlsContext(), 0);
     }
 
     fcontext_t& GetTlsContext()
