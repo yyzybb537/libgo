@@ -10,7 +10,7 @@
 // # include <unistd.h>
 // # include <sys/syscall.h>
 
-namespace libgo
+namespace taf
 {
 
 
@@ -116,7 +116,7 @@ public:
 
         refOverlappedLevel() = overlappedLevel;
         clsRefFunction() = &RoutineSyncPolicy::clsRef_T<Switchers...>;
-        isInPThreadFunction() = &RoutineSyncPolicy::isInPThread<Switchers...>;
+        isInPThreadFunction() = &RoutineSyncPolicy::isInPThread_T<Switchers...>;
         return true;
     }
 
@@ -159,7 +159,7 @@ private:
             return S1::clsRef();
         }
 
-        return clsRef_T<S2, Switchers...>()();
+        return clsRef_T<S2, Switchers...>();
     }
 
     template <typename S1>
@@ -172,16 +172,16 @@ private:
     }
 
     template <typename S1, typename S2, typename ... Switchers>
-    inline static bool isInPThread() {
+    inline static bool isInPThread_T() {
         if (S1::isInRoutine()) {
             return false;
         }
 
-        return isInPThread<S2, Switchers...>()();
+        return isInPThread_T<S2, Switchers...>();
     }
 
     template <typename S1>
-    inline static bool isInPThread() {
+    inline static bool isInPThread_T() {
         if (S1::isInRoutine()) {
             return false;
         }
@@ -190,4 +190,4 @@ private:
     }
 };
 
-} // namespace libgo
+} // namespace taf
