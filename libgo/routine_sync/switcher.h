@@ -10,7 +10,7 @@
 // # include <unistd.h>
 // # include <sys/syscall.h>
 
-namespace taf
+namespace libgo
 {
 
 
@@ -190,4 +190,4 @@ private:
     }
 };
 
-} // namespace taf
+} // namespace libgo
