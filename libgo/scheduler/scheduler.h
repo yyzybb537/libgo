@@ -31,7 +31,7 @@ public:
     static Scheduler* Create();
 
     // 创建一个协程
-    void CreateTask(TaskF const& fn, TaskOpt const& opt);
+    void CreateTask(TaskF &&fn, TaskOpt const& opt);
 
     // 当前是否处于协程中
     bool IsCoroutine();

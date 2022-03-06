@@ -433,6 +433,7 @@ private:
     std::size_t cap_;
 };
 
+using std::nullptr_t;
 // 仅计数
 template <
     typename QueueT

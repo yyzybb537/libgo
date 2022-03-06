@@ -45,12 +45,19 @@ struct __go
         opt_.lineno_ = lineno;
     }
 
-    template <typename Function>
-    ALWAYS_INLINE void operator-(Function const& f)
+    template <typename F, typename = decltype(std::declval<F>()())>
+    ALWAYS_INLINE void operator-(F &&f)
     {
         if (!scheduler_) scheduler_ = Processer::GetCurrentScheduler();
         if (!scheduler_) scheduler_ = &Scheduler::getInstance();
-        scheduler_->CreateTask(f, opt_);
+        scheduler_->CreateTask(std::forward<F>(f), opt_);
+    }
+
+    ALWAYS_INLINE void operator-(TaskF &f)
+    {
+      if (!scheduler_) scheduler_ = Processer::GetCurrentScheduler();
+      if (!scheduler_) scheduler_ = &Scheduler::getInstance();
+      scheduler_->CreateTask(std::forward<TaskF>(f), opt_);
     }
 
     ALWAYS_INLINE __go& operator-(__go_option<opt_scheduler> const& opt)

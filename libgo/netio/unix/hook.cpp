@@ -516,8 +516,8 @@ struct hostent* gethostbyname(const char* name)
     int & host_errno = CLS(int);
 
 	int ret = -1;
-	while (ret = gethostbyname_r(name, host, &buf[0], 
-				buf.size(), &result, &host_errno) == ERANGE && 
+	while ((ret = gethostbyname_r(name, host, &buf[0],
+				buf.size(), &result, &host_errno)) == ERANGE &&
 				host_errno == NETDB_INTERNAL )
 	{
         if (buf.size() < 1024)
@@ -568,8 +568,8 @@ struct hostent* gethostbyname2(const char* name, int af)
     int & host_errno = CLS(int);
 
 	int ret = -1;
-	while (ret = gethostbyname2_r(name, af, host, &buf[0], 
-				buf.size(), &result, &host_errno) == ERANGE && 
+	while ((ret = gethostbyname2_r(name, af, host, &buf[0],
+				buf.size(), &result, &host_errno)) == ERANGE &&
 				host_errno == NETDB_INTERNAL )
 	{
         if (buf.size() < 1024)
@@ -618,8 +618,8 @@ struct hostent *gethostbyaddr(const void *addr, socklen_t len, int type)
     int & host_errno = CLS(int);
 
 	int ret = -1;
-	while (ret = gethostbyaddr_r(addr, len, type,
-                host, &buf[0], buf.size(), &result, &host_errno) == ERANGE && 
+	while ((ret = gethostbyaddr_r(addr, len, type,
+                host, &buf[0], buf.size(), &result, &host_errno)) == ERANGE &&
 				host_errno == NETDB_INTERNAL )
 	{
         if (buf.size() < 1024)

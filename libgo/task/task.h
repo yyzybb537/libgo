@@ -40,7 +40,7 @@ struct Task
 
     atomic_t<uint64_t> suspendId_ {0};
 
-    Task(TaskF const& fn, std::size_t stack_size);
+    Task(TaskF fn, std::size_t stack_size);
     ~Task();
 
     ALWAYS_INLINE void SwapIn()
