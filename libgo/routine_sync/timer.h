@@ -9,33 +9,28 @@
 namespace libgo
 {
 
-class RoutineSyncTimer
+template <typename MutexT, typename ConditionVariableT>
+class RoutineSyncTimerT
 {
 public:
-    static RoutineSyncTimer& getInstance() {
-        static RoutineSyncTimer * obj = new RoutineSyncTimer;
-        return *obj;
+    RoutineSyncTimerT() {}
+    RoutineSyncTimerT(RoutineSyncTimerT const&) = delete;
+    RoutineSyncTimerT& operator=(RoutineSyncTimerT const&) = delete;
+
+    virtual ~RoutineSyncTimerT() {
+        stop();
     }
 
-    RoutineSyncTimer() : thread_([this]{ run(); }) {
-    }
-
-    ~RoutineSyncTimer() {
-        
-        // printf("~RoutineSyncTimer\n");
-
-        {
-            std::unique_lock<std::mutex> lock(mtx_);
-            exit_ = true;
-            cv_.notify_one();
+    virtual void stop()
+    {
+        std::unique_lock<MutexT> lock(mtx_);
+        if (exit_) {
+            return ;
         }
 
-        if (thread_.joinable())
-            thread_.join();
+        exit_ = true;
+        cv_.notify_one();
     }
-
-    RoutineSyncTimer(RoutineSyncTimer const&) = delete;
-    RoutineSyncTimer& operator=(RoutineSyncTimer const&) = delete;
 
     typedef std::function<void()> func_type;
     typedef std::chrono::steady_clock clock_type;
@@ -54,7 +49,7 @@ public:
             done_ = false;
         }
 
-        std::mutex & mutex() { return mtx_; }
+        MutexT & mutex() { return mtx_; }
 
         bool invoke()
         {
@@ -79,16 +74,15 @@ public:
         }
 
     private:
-        friend class RoutineSyncTimer;
+        friend class RoutineSyncTimerT;
         func_type fn_;
-        std::mutex mtx_;
+        MutexT mtx_;
         std::atomic_bool canceled_ {false};
         bool done_ {false};
     };
 
     typedef LinkedSkipList<clock_type::time_point, FuncWrapper> container_type;
-    typedef container_type::Node TimerId;
-
+    typedef typename container_type::Node TimerId;
 
     inline static clock_type::time_point* null_tp() { return nullptr; }
 
@@ -109,7 +103,7 @@ public:
         id.value.set(fn);
         orderedList_.buildNode(&id);
 
-        std::unique_lock<std::mutex> lock(mtx_);
+        std::unique_lock<MutexT> lock(mtx_);
         insert(id);
     }
 
@@ -121,31 +115,31 @@ public:
         id.key = tp;
         id.value.reset();
         
-        std::unique_lock<std::mutex> lock(mtx_);
+        std::unique_lock<MutexT> lock(mtx_);
         insert(id);
     }
 
     bool join_unschedule(TimerId & id)
     {
-        std::unique_lock<std::mutex> invoke_lock(id.value.mutex()); // ABBA
+        std::unique_lock<MutexT> invoke_lock(id.value.mutex()); // ABBA
         id.value.cancel();
 
-        std::unique_lock<std::mutex> lock(mtx_);
+        std::unique_lock<MutexT> lock(mtx_);
         orderedList_.erase(&id);
 
         return id.value.done();
     }
 
-private:
+public:
     void run()
     {
-        std::unique_lock<std::mutex> lock(mtx_);
+        std::unique_lock<MutexT> lock(mtx_);
         while (!exit_)
         {
             TimerId* id = orderedList_.front();
             auto nowTp = now();
             if (id && nowTp >= id->key) {
-                std::unique_lock<std::mutex> invoke_lock(id->value.mutex(), std::defer_lock);
+                std::unique_lock<MutexT> invoke_lock(id->value.mutex(), std::defer_lock);
                 bool locked = invoke_lock.try_lock();   // ABBA
 
                 orderedList_.erase(id);
@@ -175,6 +169,7 @@ private:
         }
     }
 
+private:
     void insert(TimerId & id)
     {
         TimerId* front = orderedList_.front();
@@ -192,7 +187,6 @@ private:
         }
     }
 
-private:
     template<typename _Clock, typename _Duration>
     clock_type::time_point convert(const std::chrono::time_point<_Clock, _Duration> & abstime)
     {
@@ -209,12 +203,36 @@ private:
     }
 
 private:
-    std::mutex mtx_;
+    MutexT mtx_;
     container_type orderedList_;
-    std::condition_variable cv_;
+    ConditionVariableT cv_;
     bool exit_ {false};
-    std::thread thread_;
     int64_t nextCheckAbstime_ = 0;
+};
+
+class RoutineSyncTimer : public RoutineSyncTimerT<std::mutex, std::condition_variable>
+{
+public:
+    typedef RoutineSyncTimerT<std::mutex, std::condition_variable> base_t;
+    typedef base_t::func_type func_type;
+    typedef base_t::clock_type clock_type;
+    typedef base_t::TimerId TimerId;
+
+    static RoutineSyncTimer& getInstance() {
+        static RoutineSyncTimer * obj = new RoutineSyncTimer;
+        return *obj;
+    }
+
+    RoutineSyncTimer() : thread_([this]{ run(); }) {}
+
+    virtual void stop() {
+        base_t::stop();
+        if (thread_.joinable())
+            thread_.join();
+    }
+
+private:
+    std::thread thread_;
 };
 
 } // namespace libgo

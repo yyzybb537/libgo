@@ -95,7 +95,11 @@ public:
     {
         head_ = &dummy_;
         head_->height = 1;
-        memset(&head_->links, 0, sizeof(head_->links));
+        for (int i = 0; i < MaxHeight; ++i)
+        {
+            head_->links[i].prev = nullptr;
+            head_->links[i].next = nullptr;
+        }
     }
 
     // 设置增加节点高度的概率: 1/branching_factor

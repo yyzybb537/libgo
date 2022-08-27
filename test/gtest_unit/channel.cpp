@@ -4,7 +4,7 @@
 #include <vector>
 #include <list>
 #include <atomic>
-#define OPEN_ROUTINE_SYNC_DEBUG 1
+//#define OPEN_ROUTINE_SYNC_DEBUG 1
 #include "coroutine.h"
 #include "gtest_exit.h"
 using namespace std::chrono;
@@ -113,8 +113,15 @@ TEST(Channel, capacity1)
         EXPECT_EQ(ch.size(), 0u);
         EXPECT_EQ(i, 1);
 
-        go [=]{ ch << 2; EXPECT_YIELD(0);};
-        go [=, &i]{ SLEEP(50); ch >> i; EXPECT_YIELD(1);};
+        go [=]{
+            ch << 2;
+            EXPECT_YIELD(0);
+        };
+        go [=, &i]{
+            SLEEP(50);
+            ch >> i;
+            EXPECT_YIELD(1);
+        };
         WaitUntilNoTask();
         EXPECT_EQ(i, 2);
     }

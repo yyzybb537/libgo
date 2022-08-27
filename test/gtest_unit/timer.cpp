@@ -1,6 +1,6 @@
 #include "gtest/gtest.h"
 #include <boost/thread.hpp>
-#define OPEN_ROUTINE_SYNC_DEBUG 1
+//#define OPEN_ROUTINE_SYNC_DEBUG 1
 #include "coroutine.h"
 #include <vector>
 #include <list>

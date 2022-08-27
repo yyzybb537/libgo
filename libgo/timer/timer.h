@@ -1,7 +1,8 @@
 #pragma once
 #include "../common/config.h"
 #include "../common/spinlock.h"
-#include "../common/timer.h"
+#include "../routine_sync/timer.h"
+#include "../routine_sync/condition_variable.h"
 #include "../scheduler/scheduler.h"
 #include "../scheduler/processer.h"
 #include "../sync/channel.h"
@@ -9,55 +10,63 @@
 namespace co
 {
 
-class CoTimer {
-    class CoTimerImpl : private Timer<std::function<void()>>
+class CoTimer
+{
+public:
+    typedef ::libgo::RoutineSyncTimerT<::libgo::Mutex, ::libgo::ConditionVariable> CoroutineTimer;
+    typedef CoroutineTimer::func_type func_t;
+
+    struct TimerIdImpl
     {
     public:
-        typedef std::function<void()> func_t;
-        typedef Timer<func_t> base_t;
-        typedef base_t::TimerId TimerId;
+        explicit TimerIdImpl(std::shared_ptr<CoroutineTimer> const& timer) : timer_(timer) {}
 
-        explicit CoTimerImpl(FastSteadyClock::duration precision);
-        ~CoTimerImpl();
-
-        void BindScheduler(Scheduler* scheduler);
-
-        TimerId ExpireAt(FastSteadyClock::duration dur, func_t const& cb);
-
-        void RunInCoroutine();
-
-        void Stop();
+        bool join_unschedule()
+        {
+            auto timer = timer_.lock();
+            if (!timer) return false;
+            return timer->join_unschedule(id_);
+        }
 
     private:
-        LFLock lock_;
-
-        // 精度
-        FastSteadyClock::duration precision_;
-
-        Channel<void> trigger_{1};
-
-        Channel<void> quit_{1};
-
-        volatile bool terminate_ = false;
-
-        Scheduler* scheduler_ = nullptr;
+        friend class CoTimer;
+        std::weak_ptr<CoroutineTimer> timer_;
+        CoroutineTimer::TimerId id_;
     };
+    typedef std::shared_ptr<TimerIdImpl> TimerIdImplPtr;
 
-public:
-    typedef CoTimerImpl::func_t func_t;
-    typedef CoTimerImpl::TimerId TimerId;
+    struct TimerId
+    {
+    public:
+        TimerId() = default;
+        TimerId(TimerIdImplPtr const& ptr) : impl_(ptr) {}
+
+        explicit operator bool() const {
+            return !!impl_;
+        }
+
+        bool StopTimer() {
+            if (!impl_) return false;
+            return impl_->join_unschedule();
+        }
+
+    private:
+        TimerIdImplPtr impl_;
+    };
 
 public:
     template <typename Rep, typename Period>
     explicit CoTimer(std::chrono::duration<Rep, Period> dur, Scheduler * scheduler = nullptr)
-        : impl_(new CoTimerImpl(std::chrono::duration_cast<FastSteadyClock::duration>(dur)))
     {
+        impl_.reset(new CoroutineTimer);
         Initialize(scheduler);
     }
 
     explicit CoTimer(Scheduler * scheduler = nullptr)
-        : CoTimer(std::chrono::milliseconds(1), scheduler)
-    {}
+    {
+        impl_.reset(new CoroutineTimer);
+        Initialize(scheduler);
+    }
 
     ~CoTimer();
 
@@ -77,7 +86,7 @@ private:
     void Initialize(Scheduler * scheduler);
 
 private:
-    std::shared_ptr<CoTimerImpl> impl_;
+    std::shared_ptr<CoroutineTimer> impl_;
 };
 
 } //namespace co

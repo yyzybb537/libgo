@@ -128,16 +128,6 @@ void Scheduler::Start(int minThreadNumber, int maxThreadNumber)
         NewProcessThread();
     }
 
-    // 唤醒协程的定时器线程
-    if (timer_) {
-        timer_->SetPoolSize(1000, 100);
-        std::thread t([this]{ 
-                DebugPrint(dbg_thread, "Start alone timer(sched=%p) thread id: %lu", (void*)this, NativeThreadID());
-                this->timer_->ThreadRun(); 
-            });
-        timerThread_.swap(t);
-    }
-
     // 调度线程
     if (maxThreadNumber_ > 1) {
         DebugPrint(dbg_scheduler, "---> Create DispatcherThread");
@@ -173,45 +163,25 @@ void Scheduler::Stop()
             p->NotifyCondition();
     }
 
-    if (timer_) timer_->Stop();
+    if (timer_) timer_->stop();
 
     if (dispatchThread_.joinable())
         dispatchThread_.join();
-
-    if (timerThread_.joinable())
-        timerThread_.join();
 }
 void Scheduler::UseAloneTimerThread()
 {
-    TimerType * timer = new TimerType;
-
-    if (!started_.try_lock()) {
-        timer->SetPoolSize(1000, 100);
-        std::thread t([this, timer]{ 
-                DebugPrint(dbg_thread, "Start alone timer(sched=%p) thread id: %lu", (void*)this, NativeThreadID());
-                timer->ThreadRun(); 
-                });
-        timerThread_.swap(t);
-    } else {
-        started_.unlock();
+    if (!timer_) {
+        timer_ = new TimerType;
     }
-
-    std::atomic_thread_fence(std::memory_order_acq_rel);
-    timer_ = timer;
 }
 
 static Scheduler::TimerType& staticGetTimer() {
     static Scheduler::TimerType *ptimer = new Scheduler::TimerType;
-    std::thread *pt = new std::thread([=]{ 
-            DebugPrint(dbg_thread, "Start global timer thread id: %lu", NativeThreadID());
-            ptimer->ThreadRun();
-            });
+
     std::unique_lock<std::mutex> lock(ExitListMtx());
     auto vec = ExitList();
     vec->push_back([=] {
-            ptimer->Stop();
-            if (pt->joinable())
-                pt->join();
+            ptimer->stop();
         });
     return *ptimer;
 }

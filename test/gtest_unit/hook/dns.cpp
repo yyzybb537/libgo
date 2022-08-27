@@ -26,7 +26,19 @@ struct Cache {
     socklen_t len; 
     int type;
 
-    Cache() : addr(nullptr) {}
+    Cache() : addr(nullptr)
+    {
+        sockaddr_in *add_in = new sockaddr_in;
+        add_in->sin_family = AF_INET;
+        add_in->sin_port = htons(80);
+        add_in->sin_addr.s_addr = inet_addr("127.0.0.1");
+
+        this->addr = add_in;
+        this->len = sizeof(sockaddr_in);
+        this->type = AF_INET;
+
+        printf("[set cache] 127.0.0.1:80 (AF_INET)\n");
+    }
 //    ~Cache() { if (addr) free(addr); }
     operator bool() const { return addr != nullptr; }
 };
@@ -86,6 +98,8 @@ void test_getXXbyYY(int index, int &yield_c)
                 g_cache.addr = addr;
                 g_cache.len = sizeof(sockaddr_in);
                 g_cache.type = h->h_addrtype;
+
+                printf("[set cache] [%d] addr[%d]: %s\n", index, i, inet_ntop(h->h_addrtype, *p, buf, sizeof(buf)));
             }
         }
     } else {
@@ -203,13 +217,18 @@ TEST(testDns, testDns)
     go test_gethostbyname_r4;
     WaitUntilNoTask();
 
-    getXXbyYY funcs1[] = {getXXbyYY_1, getXXbyYY_2, getXXbyYY_3};
+    const int concurrency = 10;
+
+    getXXbyYY funcs1[] = {getXXbyYY_1, getXXbyYY_2,
+        // @ 很多机器没有反向解析服务, 不测试gethostbyaddr
+//        getXXbyYY_3
+    };
     const char* fnames1[] = {"gethostbyname", "gethostbyname2", "gethostbyaddr"};
     for (std::size_t idx = 0; idx < sizeof(funcs1)/sizeof(getXXbyYY); idx++) {
         g_getXXbyYY = funcs1[idx];
         fname = fnames1[idx];
         yield_c = 0;
-        for (int i = 0; i < 10; ++i)
+        for (int i = 0; i < concurrency; ++i)
         {
             go [i, &yield_c]{ 
                 test_getXXbyYY(i, yield_c); 
@@ -221,13 +240,15 @@ TEST(testDns, testDns)
         //printDebug();
     }
 
-    getXXbyYY_r funcs2[] = {getXXbyYY_r_1, getXXbyYY_r_2, getXXbyYY_r_3};
+    getXXbyYY_r funcs2[] = {getXXbyYY_r_1, getXXbyYY_r_2,
+//        getXXbyYY_r_3
+    };
     const char* fnames2[] = {"gethostbyname_r", "gethostbyname2_r", "gethostbyaddr_r"};
     for (std::size_t idx = 0; idx < sizeof(funcs2)/sizeof(getXXbyYY_r); idx++) {
         g_getXXbyYY_r = funcs2[idx];
         fname = fnames2[idx];
         yield_c = 0;
-        for (int i = 0; i < 10; ++i)
+        for (int i = 0; i < concurrency; ++i)
         {
             go [i, &yield_c]{ 
                 test_getXXbyYY_r(i, yield_c); 

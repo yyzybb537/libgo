@@ -4,7 +4,7 @@
 #include <vector>
 #include <list>
 #include <atomic>
-#define OPEN_ROUTINE_SYNC_DEBUG 1
+//#define OPEN_ROUTINE_SYNC_DEBUG 1
 // #define TEST_MIN_THREAD 1
 #include "coroutine.h"
 #include "gtest_exit.h"

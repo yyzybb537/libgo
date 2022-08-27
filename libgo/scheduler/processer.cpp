@@ -306,19 +306,28 @@ Processer::SuspendEntry Processer::Suspend()
 
 Processer::SuspendEntry Processer::Suspend(FastSteadyClock::duration dur)
 {
-    SuspendEntry entry = Suspend();
-    GetCurrentScheduler()->GetTimer().StartTimer(dur,
-            [entry]() mutable {
-                Processer::Wakeup(entry);
-            });
-    return entry;
+    FastSteadyClock::time_point tp = FastSteadyClock::now();
+    tp += dur;
+    return Suspend(tp);
 }
 Processer::SuspendEntry Processer::Suspend(FastSteadyClock::time_point timepoint)
 {
     SuspendEntry entry = Suspend();
-    GetCurrentScheduler()->GetTimer().StartTimer(timepoint,
-            [entry]() mutable {
-                Processer::Wakeup(entry);
+    Task* tk = GetCurrentTask();
+    if (tk->isInTimer_) {
+        tk->schedTimer_->join_unschedule(tk->suspendTimerId_);
+        tk->schedTimer_ = nullptr;
+    } else {
+        tk->isInTimer_ = true;
+    }
+
+    tk->schedTimer_ = &GetCurrentScheduler()->GetTimer();
+    tk->schedTimer_->schedule(tk->suspendTimerId_, timepoint,
+            [entry, tk]() mutable {
+                Processer::Wakeup(entry, [tk]{
+                        tk->isInTimer_ = false;
+                        tk->schedTimer_ = nullptr;
+                    });
             });
     return entry;
 }
@@ -366,8 +375,16 @@ bool Processer::WakeupBySelf(IncursivePtr<Task> const& tkPtr, uint64_t id, std::
     std::unique_lock<TaskQueue::lock_t> lock(waitQueue_.LockRef());
     if (id != TaskRefSuspendId(tk)) return false;
     ++ TaskRefSuspendId(tk);
+
     if (functor)
         functor();
+
+    if (tk->isInTimer_) {
+        tk->isInTimer_ = false;
+        tk->schedTimer_->join_unschedule(tk->suspendTimerId_);
+        tk->schedTimer_ = nullptr;
+    }
+
     bool ret = waitQueue_.eraseWithoutLock(tk, false, false);
     (void)ret;
     assert(ret);

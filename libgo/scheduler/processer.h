@@ -101,6 +101,7 @@ public:
     };
 
     // 挂起当前协程
+    // 不可以重复调用!
     static SuspendEntry Suspend();
 
     // 挂起当前协程, 并在指定时间后自动唤醒

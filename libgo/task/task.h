@@ -4,6 +4,7 @@
 #include "../common/anys.h"
 #include "../context/context.h"
 #include "../debug/debugger.h"
+#include "../routine_sync/timer.h"
 
 namespace co
 {
@@ -35,6 +36,10 @@ struct Task
     std::exception_ptr eptr_;           // 保存exception的指针
     TaskAnys anys_;
     void* extern_switcher_ {nullptr};
+
+    ::libgo::RoutineSyncTimer::TimerId suspendTimerId_;
+    ::libgo::RoutineSyncTimer* schedTimer_ = nullptr;
+    bool isInTimer_ {false};
 
     uint64_t yieldCount_ = 0;
 

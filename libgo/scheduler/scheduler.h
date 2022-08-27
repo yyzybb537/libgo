@@ -2,7 +2,7 @@
 #include "../common/config.h"
 #include "../common/deque.h"
 #include "../common/spinlock.h"
-#include "../common/timer.h"
+#include "../routine_sync/timer.h"
 #include "../task/task.h"
 #include "../debug/listener.h"
 #include "processer.h"
@@ -68,7 +68,7 @@ public:
     // 设置当前协程调试信息, 打印调试信息时将回显
     void SetCurrentTaskDebugInfo(std::string const& info);
 
-    typedef Timer<std::function<void()>> TimerType;
+    typedef ::libgo::RoutineSyncTimer TimerType;
 
 public:
     inline TimerType & GetTimer() { return timer_ ? *timer_ : StaticGetTimer(); }
@@ -122,8 +122,6 @@ private:
     int maxThreadNumber_ = 1;
 
     std::thread dispatchThread_;
-
-    std::thread timerThread_;
 
     std::mutex stopMtx_;
 
