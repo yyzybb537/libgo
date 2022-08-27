@@ -7,11 +7,7 @@
 #include "sync/channel.h"
 #include "sync/co_mutex.h"
 #include "sync/co_rwmutex.h"
-
-#if USE_ROUTINE_SYNC
-# include "routine_sync/condition_variable.h"
-#endif //USE_ROUTINE_SYNC
-
+#include "sync/co_condition_variable.h"
 #include "timer/timer.h"
 #include "scheduler/processer.h"
 #include "cls/co_local_storage.h"
@@ -58,9 +54,7 @@ using ::co::co_wmutex;
 // co_chan
 using ::co::co_chan;
 
-#if USE_ROUTINE_SYNC
-using co_condition_variable = ::libgo::ConditionVariable;
-#endif //USE_ROUTINE_SYNC
+using ::co::co_condition_variable;
 
 // co_timer
 typedef ::co::CoTimer co_timer;
