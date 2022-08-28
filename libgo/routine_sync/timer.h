@@ -37,6 +37,10 @@ public:
 
     struct FuncWrapper
     {
+        ~FuncWrapper() {
+            mtx_.lock();    // 保证run中invoke之后能安全unlock
+        }
+
         void set(func_type const& fn)
         {
             fn_ = fn;
@@ -149,8 +153,11 @@ public:
 
                     id->value.invoke();
 
+                    invoke_lock.unlock();   // 先解锁, 避免大锁卡住id释放
+
                     lock.lock();
                 }
+
                 continue;
             }
 

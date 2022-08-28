@@ -55,8 +55,8 @@ TEST(Channel, capacity0)
         go [&]{ before_pop = ++step; ch >> i; after_pop = ++step; EXPECT_YIELD(0);};
         WaitUntilNoTask();
         EXPECT_EQ(i, 3);
-        EXPECT_EQ(before_push, 1);
-        EXPECT_EQ(before_pop, 2);
+        EXPECT_EQ(before_push + before_pop, 1 + 2);
+        EXPECT_EQ(after_push + after_pop, 3 + 4);
         EXPECT_EQ(ch.size(), 0u);
     }
 
@@ -67,8 +67,8 @@ TEST(Channel, capacity0)
         go [&]{ before_push = ++step; ch << 3; after_push = ++step; EXPECT_YIELD(1);};
         go [&]{ before_pop = ++step; ch >> nullptr; after_pop = ++step; EXPECT_YIELD(0);};
         WaitUntilNoTask();
-        EXPECT_EQ(before_push, 1);
-        EXPECT_EQ(before_pop, 2);
+        EXPECT_EQ(before_push + before_pop, 1 + 2);
+        EXPECT_EQ(after_push + after_pop, 3 + 4);
     }
 
     // multi thread
