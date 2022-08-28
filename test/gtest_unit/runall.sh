@@ -1,6 +1,6 @@
 #!/bin/sh
 
-make $@
+make $@ -j
 ulimit -c 500000
 errinfo=''
 for t in `ls *.t`

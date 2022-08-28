@@ -37,9 +37,7 @@ public:
 
     struct FuncWrapper
     {
-        ~FuncWrapper() {
-            mtx_.lock();    // 保证run中invoke之后能安全unlock
-        }
+        FuncWrapper() : mtx_(std::make_shared<MutexT>()) {}
 
         void set(func_type const& fn)
         {
@@ -53,7 +51,7 @@ public:
             done_ = false;
         }
 
-        MutexT & mutex() { return mtx_; }
+        std::shared_ptr<MutexT> mutex() { return mtx_; }
 
         bool invoke()
         {
@@ -80,7 +78,7 @@ public:
     private:
         friend class RoutineSyncTimerT;
         func_type fn_;
-        MutexT mtx_;
+        std::shared_ptr<MutexT> mtx_;
         std::atomic_bool canceled_ {false};
         bool done_ {false};
     };
@@ -125,7 +123,9 @@ public:
 
     bool join_unschedule(TimerId & id)
     {
-        std::unique_lock<MutexT> invoke_lock(id.value.mutex()); // ABBA
+        std::shared_ptr<MutexT> invoke_mtx = id.value.mutex();
+
+        std::unique_lock<MutexT> invoke_lock(*invoke_mtx); // ABBA
         id.value.cancel();
 
         std::unique_lock<MutexT> lock(mtx_);
@@ -143,7 +143,8 @@ public:
             TimerId* id = orderedList_.front();
             auto nowTp = now();
             if (id && nowTp >= id->key) {
-                std::unique_lock<MutexT> invoke_lock(id->value.mutex(), std::defer_lock);
+                std::shared_ptr<MutexT> invoke_mtx = id->value.mutex();
+                std::unique_lock<MutexT> invoke_lock(*invoke_mtx, std::defer_lock);
                 bool locked = invoke_lock.try_lock();   // ABBA
 
                 orderedList_.erase(id);
@@ -152,8 +153,6 @@ public:
                     lock.unlock();
 
                     id->value.invoke();
-
-                    invoke_lock.unlock();   // 先解锁, 避免大锁卡住id释放
 
                     lock.lock();
                 }

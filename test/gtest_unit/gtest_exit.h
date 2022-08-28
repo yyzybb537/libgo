@@ -2,10 +2,13 @@
 #include "../../libgo/libgo.h"
 #include <thread>
 #include "gtest/gtest.h"
-# include <unistd.h>
-# include <sys/socket.h>
-# include <arpa/inet.h>
-# include <poll.h>
+#include <unistd.h>
+#include <sys/socket.h>
+#include <arpa/inet.h>
+#include <poll.h>
+#if defined(LIBGO_SYS_Linux)
+# include <sys/syscall.h>
+#endif
 
 #define DEBUG_CHECK_POINT
 
@@ -80,37 +83,77 @@ typedef GTimerT<co::FastSteadyClock> GTimer;
 struct CheckPoint
 {
     static CheckPoint & getInstance() {
-        static CheckPoint obj;
-        return obj;
+        static thread_local CheckPoint* obj = new CheckPoint;
+        return *obj;
     }
 
     CheckPoint() {
-        std::thread([this]{
+        bool isFirst = false;
+
+        {
+            std::unique_lock<std::mutex> lock(listMtx_);
+            isFirst = cpList_.empty();
+            cpList_.push_back(this);
+        }
+
+        if (isFirst) {
+            std::thread([]{
                     for (;;) {
                         sleep(1);
-                        this->CheckBlock();
+                        CheckPoint::CheckBlock();
                     }
                 }).detach();
+        }
+
+#if defined(LIBGO_SYS_Linux)
+        tid_ = syscall(SYS_gettid);
+#else
+        tid_ = 0;
+#endif
     }
 
     void Set(const char* file, int line) {
         tp_ = co::FastSteadyClock::now();
+        globalTp_ = co::FastSteadyClock::now();
         file_ = file;
         line_ = line;
     }
 
-    void CheckBlock() {
-        auto dur = co::FastSteadyClock::now() - tp_;
-        if (tp_.time_since_epoch().count() > 0 && dur > std::chrono::seconds(5)) {
-            printf("check block point: file(%s), line(%d)\n", file_, line_);
-            tp_ = co::FastSteadyClock::time_point();
+    static void CheckBlock() {
+        auto now = co::FastSteadyClock::now();
+        auto dur = now - globalTp_;
+        if (globalTp_.time_since_epoch().count() > 0 && dur > std::chrono::seconds(5)) {
+            std::unique_lock<std::mutex> lock(listMtx_);
+            auto minD = now - co::FastSteadyClock::time_point();
+            CheckPoint* lastCp = cpList_.front();
+            for (CheckPoint* cp : cpList_) {
+                auto d = now - cp->tp_;
+                if (d < minD) {
+                    minD = d;
+                    lastCp = cp;
+                }
+            }
+            for (CheckPoint* cp : cpList_) {
+                const char* flag = (cp == lastCp) ? "[*] " : "";
+                printf("check block point: tid(%ld), file(%s), line(%d) %s\n",
+                        cp->tid_, cp->file_, cp->line_, flag);
+            }
+            globalTp_ = co::FastSteadyClock::time_point();
         }
     }
 
+    long tid_;
     const char* file_;
     int line_;
     co::FastSteadyClock::time_point tp_;
+    static co::FastSteadyClock::time_point globalTp_;
+    static std::mutex listMtx_;
+    static std::list<CheckPoint*> cpList_;
 };
+
+co::FastSteadyClock::time_point CheckPoint::globalTp_ {};
+std::mutex CheckPoint::listMtx_;
+std::list<CheckPoint*> CheckPoint::cpList_;
 
 #define DEFAULT_DEVIATION 50
 #define TIMER_CHECK(t, val, deviation) \
@@ -131,8 +174,12 @@ struct CheckPoint
 # define CHECK_POINT() do {\
         CheckPoint::getInstance().Set(__FILE__, __LINE__); \
     } while(0)
+# define CHECK_POINT_NEXT() do {\
+        CheckPoint::getInstance().Set(__FILE__, __LINE__ + 1); \
+    } while(0)
 #else
 # define CHECK_POINT() do {} while(0)
+# define CHECK_POINT_NEXT() do {} while(0)
 #endif
 
 // hook gtest macros

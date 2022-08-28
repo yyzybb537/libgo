@@ -11,11 +11,13 @@ using namespace std::chrono;
 using namespace co;
 
 //#define EXPECT_YIELD(n) EXPECT_EQ(g_Scheduler.GetCurrentTaskYieldCount(), size_t(n))
-#define EXPECT_YIELD(n)
+#define EXPECT_YIELD(n) EXPECT_TRUE(true)
 
 #define SLEEP(ms) \
     do {\
+        CHECK_POINT();\
         Processer::Suspend(milliseconds(ms)); co_yield;\
+        CHECK_POINT_NEXT();\
     } while(0)
 
 TEST(Channel, capacity0)
@@ -463,18 +465,23 @@ TEST(Channel, capacity1Try)
         EXPECT_EQ(i, 2);
     }
 
+    EXPECT_TRUE(ch.empty());
+
     // try push
     {
         ch << 0;
         go [&]{
             EXPECT_FALSE(ch.TryPush(1));
             EXPECT_YIELD(0);
+//            SLEEP(50);
             SLEEP(100);
             EXPECT_TRUE(ch.TryPush(1));
             EXPECT_YIELD(1);
+//            SLEEP(60000);
         };
 
-        go [&]{ SLEEP(50);
+        go [&]{
+            SLEEP(50);
             ch >> i;
             EXPECT_YIELD(1);
         };
