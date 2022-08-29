@@ -1,5 +1,5 @@
 #pragma once
-#include "../../common/config.h"
+#include "../../../common/config.h"
 
 //#if 0
 #if defined(LIBGO_SYS_Unix)

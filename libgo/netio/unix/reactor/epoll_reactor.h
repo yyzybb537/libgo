@@ -1,15 +1,15 @@
 #pragma once
-#include "../../common/config.h"
+#include "../../../common/config.h"
 
-#if defined(LIBGO_SYS_FreeBSD)
+#if defined(LIBGO_SYS_Linux)
 #include "reactor.h"
 
 namespace co {
 
-class KqueueReactor : public Reactor
+class EpollReactor : public Reactor
 {
 public:
-    KqueueReactor();
+    EpollReactor();
 
     void Run() override;
 
@@ -18,7 +18,7 @@ public:
     bool DelEvent(int fd, short int delEvent, short int promiseEvent) override;
 
 private:
-    int kq_;
+    int epfd_;
 };
 
 } // namespace co

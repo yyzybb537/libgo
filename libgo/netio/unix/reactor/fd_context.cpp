@@ -1,7 +1,7 @@
 #include "fd_context.h"
 #include <sys/types.h>
 #include <sys/socket.h>
-#include "hook.h"
+#include "../hook.h"
 #include <fcntl.h>
 #include <poll.h>
 #if defined(LIBGO_SYS_Linux)
