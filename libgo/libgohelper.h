@@ -23,22 +23,14 @@ namespace libgohelper {
         co::Scheduler *sched;
         static ScheHandler*GetInst(){
             static std::unique_ptr<ScheHandler> instance;
-            static once_flag once;
+            static std::once_flag once;
             call_once(once, [&]() {
                 instance.reset(new ScheHandler());
             });
             return instance.get();
         };
 
-        static ScheHandler*GetInst(uint32_t maxThreadCount_){
-            static std::unique_ptr<ScheHandler> instance;
-            static std::once_flag once;
-            call_once(once, [&]() {
-                instance.reset(new ScheHandler(maxThreadCount_));
-            });
-            return instance.get();
-        };
-  
+
         inline void Finish(std::vector<std::function<void()>>  &list) { 
             std::atomic_int c {0};
             c+=list.size();
