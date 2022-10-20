@@ -3,7 +3,6 @@
 #pragma once
 #include "coroutine.h"
 namespace libgohelper {
-
     class RunB {
         public:
             RunB( std::function<void()> func):func(func){};
@@ -69,7 +68,7 @@ namespace libgohelper {
         };
     
         template <typename source,typename result,typename func>
-        inline void Mapreduce(const vector<source> &list,vector<result> &outList,func myfunc,void* handler)
+        inline void Mapreduce(const std::vector<source> &list,std::vector<result> &outList,func myfunc,void* handler)
         {
             using namespace std::placeholders;
             std::atomic_int c {0};
