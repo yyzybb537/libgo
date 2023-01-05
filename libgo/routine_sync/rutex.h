@@ -19,7 +19,7 @@ struct IntValue<IntValueType, true>
 {
 public:
     inline std::atomic<IntValueType>* value() { return ptr_; }
-    inline void ref(std::atomic<IntValueType>* ptr) { ptr_ = ptr; }
+    inline void ref(std::atomic<IntValueType>* ptr) { ptr_ = {ptr}; }
 
 protected:
     std::atomic<IntValueType>* ptr_ {nullptr};
@@ -32,7 +32,7 @@ public:
     inline std::atomic<IntValueType>* value() { return &value_; }
 
 protected:
-    std::atomic<IntValueType> value_ {0};
+    std::atomic<IntValueType> value_ = {0};
 };
 
 struct RutexBase
