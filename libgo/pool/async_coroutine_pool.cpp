@@ -7,9 +7,10 @@ AsyncCoroutinePool * AsyncCoroutinePool::Create(size_t maxCallbackPoints)
 {
     return new AsyncCoroutinePool(maxCallbackPoints);
 }
-void AsyncCoroutinePool::InitCoroutinePool(size_t maxCoroutineCount)
+void AsyncCoroutinePool::InitCoroutinePool(size_t maxCoroutineCount, size_t stackSize)
 {
     maxCoroutineCount_ = maxCoroutineCount;
+    stackSize_ = stackSize;
 }
 void AsyncCoroutinePool::Start(int minThreadNumber, int maxThreadNumber)
 {
@@ -21,11 +22,21 @@ void AsyncCoroutinePool::Start(int minThreadNumber, int maxThreadNumber)
         maxCoroutineCount_ = (std::max)(minThreadNumber * 128, maxThreadNumber);
         maxCoroutineCount_ = (std::min<size_t>)(maxCoroutineCount_, 10240);
     }
-    for (size_t i = 0; i < maxCoroutineCount_; ++i) {
-        go co_scheduler(scheduler_) [this]{
-            this->Go();
-        };
+
+    if(stackSize_ > 0) {
+        for (size_t i = 0; i < maxCoroutineCount_; ++i) {
+            go_stack(stackSize_) co_scheduler(scheduler_) [this]{
+                this->Go();
+            };
+        }
+    } else {
+        for (size_t i = 0; i < maxCoroutineCount_; ++i) {
+            go co_scheduler(scheduler_) [this]{
+                this->Go();
+            };
+        }
     }
+
 }
 void AsyncCoroutinePool::Go()
 {
@@ -55,6 +66,13 @@ void AsyncCoroutinePool::Post(Func const& func, Func const& callback)
     PoolTask task{func, callback};
     tasks_ << std::move(task);
 }
+
+void AsyncCoroutinePool::Post(Func const& func)
+{
+    PoolTask task{func, NULL};
+    tasks_ << std::move(task);
+}
+
 bool AsyncCoroutinePool::AddCallbackPoint(AsyncCoroutinePool::CallbackPoint * point)
 {
     size_t writeIdx = writePointsCount_++;

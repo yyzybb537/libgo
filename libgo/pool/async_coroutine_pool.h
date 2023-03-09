@@ -16,12 +16,14 @@ public:
     typedef std::function<void()> Func;
 
     // 初始化协程数量
-    void InitCoroutinePool(size_t maxCoroutineCount);
+    void InitCoroutinePool(size_t maxCoroutineCount, size_t stackSize = 0);
 
     // 启动协程池 
-    void Start(int minThreadNumber, int maxThreadNumber = 0);
+    void Start(int minThreadNumber, int maxThreadNumber);
 
     void Post(Func const& func, Func const& callback);
+
+    void Post(Func const& func);
 
     template <typename R>
     void Post(Channel<R> const& ret, std::function<R()> const& func) {
@@ -75,6 +77,7 @@ private:
 
 private:
     size_t maxCoroutineCount_;
+    size_t stackSize_;
     std::atomic<int> coroutineCount_{0};
     Scheduler* scheduler_;
     Channel<PoolTask> tasks_;
