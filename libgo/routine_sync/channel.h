@@ -97,6 +97,9 @@ public:
             return pop_impl_with_signal_noqueued(t, isWait, abstime, lock);
         }
 
+        if (closed_)
+            return false;
+
         if (!isWait) {
             RS_DBG(dbg_channel, "channel=%ld | %s | pop contended && not wait | return false",
                 id(), __func__);
@@ -381,9 +384,6 @@ private:
         RS_DBG(dbg_channel, "channel(queue)=%ld | %s | ptr(t)=0x%p | isWait=%d | abstime=%d | closed=%d | cap=%lu | size=%lu",
             id(), __func__, (void*)&t, isWait, !!abstime, closed_, cap_, q_.size());
 
-        if (closed_)
-            return false;
-
         if (!q_.empty()) {
             t = q_.front();
             q_.pop_front();
@@ -394,6 +394,9 @@ private:
 
             return true;
         }
+
+        if (closed_)
+            return false;
 
         if (!isWait) {
             RS_DBG(dbg_channel, "channel(queue)=%ld | %s | not match && not wait | return false",
@@ -586,9 +589,6 @@ private:
         RS_DBG(dbg_channel, "channel(void)=%ld | %s | isWait=%d | abstime=%d | closed=%d | cap=%lu | size=%lu",
             id(), __func__, isWait, !!abstime, closed_, cap_, count_);
 
-        if (closed_)
-            return false;
-
         if (count_ > 0) {
             --count_;
             pushCv_.notify_one();
@@ -597,6 +597,9 @@ private:
                 id(), __func__);
             return true;
         }
+
+        if (closed_)
+            return false;
 
         if (!isWait) {
             RS_DBG(dbg_channel, "channel(void)=%ld | %s | not match && not wait | return false",
