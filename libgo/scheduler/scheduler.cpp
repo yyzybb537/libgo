@@ -71,9 +71,9 @@ Scheduler::~Scheduler()
     Stop();
 }
 
-void Scheduler::CreateTask(TaskF const& fn, TaskOpt const& opt)
+void Scheduler::CreateTask(TaskF &&fn, TaskOpt const& opt)
 {
-    Task* tk = new Task(fn, opt.stack_size_ ? opt.stack_size_ : CoroutineOptions::getInstance().stack_size);
+    Task* tk = new Task(std::forward<TaskF>(fn), opt.stack_size_ ? opt.stack_size_ : CoroutineOptions::getInstance().stack_size);
 //    printf("new tk = %p  impl = %p\n", tk, tk->impl_);
     tk->SetDeleter(Deleter(&Scheduler::DeleteTask, this));
     tk->id_ = ++GetTaskIdFactory();

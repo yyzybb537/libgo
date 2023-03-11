@@ -80,8 +80,8 @@ void FCONTEXT_CALL Task::StaticRun(intptr_t vp)
     tk->Run();
 }
 
-Task::Task(TaskF const& fn, std::size_t stack_size)
-    : ctx_(&Task::StaticRun, (intptr_t)this, stack_size), fn_(fn)
+Task::Task(TaskF fn, std::size_t stack_size)
+    : ctx_(&Task::StaticRun, (intptr_t)this, stack_size), fn_(std::move(fn))
 {
 //    DebugPrint(dbg_task, "task(%s) construct. this=%p", DebugInfo(), this);
     extern_switcher_ = (void*)(new LibgoSwitcher);
@@ -99,8 +99,6 @@ Task::~Task()
 
 const char* Task::DebugInfo()
 {
-    if (reinterpret_cast<void*>(this) == nullptr) return "nil";
-
     return TaskDebugInfo(this);
 }
 
