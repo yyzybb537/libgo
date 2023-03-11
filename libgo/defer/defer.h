@@ -7,7 +7,7 @@ namespace co
     struct dismisser
     {
         virtual bool dismiss() = 0;
-
+        virtual ~dismisser() = default;
         static dismisser*& GetLastDefer();
         static void SetLastDefer(dismisser*);
         static void ClearLastDefer(dismisser*);

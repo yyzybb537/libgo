@@ -1,5 +1,9 @@
 #pragma once
-#define __const__
+
+#ifndef __const__
+#define __const__ __unused__
+#endif
+
 #include "common/config.h"
 #include "common/pp.h"
 #include "common/syntax_helper.h"
