@@ -1,6 +1,7 @@
 #include "scheduler.h"
 #include "../common/error.h"
 #include "../common/clock.h"
+#include "../debug/listener.h"
 #include <stdio.h>
 #include <system_error>
 #include <unistd.h>
@@ -11,7 +12,7 @@
 namespace co
 {
 
-inline atomic_t<unsigned long long> & GetTaskIdFactory()
+static inline atomic_t<unsigned long long> & GetTaskIdFactory()
 {
     static atomic_t<unsigned long long> factory;
     return factory;
@@ -71,22 +72,34 @@ Scheduler::~Scheduler()
     Stop();
 }
 
-void Scheduler::CreateTask(TaskF const& fn, TaskOpt const& opt)
+void Scheduler::CreateTask(TaskF const& _fn, TaskOpt const& _opt)
 {
+    uint64_t id = ++GetTaskIdFactory();
+
+#if ENABLE_LISTENER
+    TaskF fn = _fn;
+    TaskOpt opt = _opt;
+    auto* listener = Listener::GetTaskListener();
+    if (listener && !listener->onInit(id, fn, opt)) {
+        return;
+    }
+#else
+    auto& fn = _fn;
+    auto& opt = _opt;
+#endif
+
     Task* tk = new Task(fn, opt.stack_size_ ? opt.stack_size_ : CoroutineOptions::getInstance().stack_size);
+
 //    printf("new tk = %p  impl = %p\n", tk, tk->impl_);
     tk->SetDeleter(Deleter(&Scheduler::DeleteTask, this));
-    tk->id_ = ++GetTaskIdFactory();
+    tk->id_ = id;
     TaskRefAffinity(tk) = opt.affinity_;
     TaskRefLocation(tk).Init(opt.file_, opt.lineno_);
     ++taskCount_;
 
     DebugPrint(dbg_task, "task(%s) created in scheduler(%p).", TaskDebugInfo(tk), (void*)this);
-#if ENABLE_DEBUGGER
-    if (Listener::GetTaskListener()) {
-        Listener::GetTaskListener()->onCreated(tk->id_);
-    }
-#endif
+
+    SAFE_CALL_LISTENER(Listener::GetTaskListener(), onCreated, tk->id_);
 
     AddTask(tk);
 }

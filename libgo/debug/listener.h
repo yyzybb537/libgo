@@ -1,5 +1,7 @@
 #pragma once
+
 #include <exception>
+#include "../task/task.h"
 
 namespace co
 {
@@ -13,6 +15,20 @@ public:
      */
     class TaskListener {
     public:
+        /**
+         * 协程准备初始化、即将被创建的时候被调用，可以进行对协程的任务进行封装或者拦截
+         * （注意此时并未运行在协程中）
+         *
+         * @prarm task_id 协程ID
+         * @prarm fn 协程任务，可以赋值修改此参数对协程任务进行二次封装
+         * @param opt 协程创建的参数，可以赋值修改此参数值
+         *
+         * @return 返回true，正常创建该任务；返回false，放弃此任务
+         */
+        virtual bool onInit(uint64_t task_id, co::TaskF& fn, co::TaskOpt& opt) noexcept {
+            return true;
+        }
+
         /**
          * 协程被创建时被调用
          * （注意此时并未运行在协程中）
@@ -88,17 +104,17 @@ public:
         // s: Scheduler，表示该方法运行在调度器上下文中
         // c: Coroutine，表示该方法运行在协程上下文中
         //
-        //                                           -->[c]onCompleted->
-        //                                          |                   |
-        // [s]onCreated-->[s]onSwapIn-->[c]onStart->*--->[c]onSwapOut-- -->[c]onFinished-->[c]onSwapOut
-        //                                          |\                | |
-        //                                          | \<-[s]onSwapIn--V |
-        //                                          |                   |
-        //                                           -->[c]onException->
+        //                                                       -->[c]onCompleted->
+        //                                                      |                   |
+        // [s]onInit-->[s]onCreated-->[s]onSwapIn-->[c]onStart->*--->[c]onSwapOut-- -->[c]onFinished-->[c]onSwapOut
+        //                                                      |\                | |
+        //                                                      | \<-[s]onSwapIn--V |
+        //                                                      |                   |
+        //                                                       -->[c]onException->
     };
 
 public:
-#if ENABLE_DEBUGGER
+#if ENABLE_LISTENER
     ALWAYS_INLINE static TaskListener*& GetTaskListener() {
         static TaskListener* task_listener = nullptr;
         return task_listener;
@@ -107,6 +123,19 @@ public:
     static void SetTaskListener(TaskListener* listener) {
         GetTaskListener() = listener;
     }
+#endif
+
+#if ENABLE_LISTENER
+#define SAFE_CALL_LISTENER(listener, method, ...)               \
+    do {                                                        \
+        auto* __listener = (listener);                          \
+        if (__listener) {                                       \
+            __listener->method(__VA_ARGS__);                    \
+        }                                                       \
+    } while(0)
+
+#else
+#define SAFE_CALL_LISTENER(...)   do {} while(0)
 #endif
 };
 

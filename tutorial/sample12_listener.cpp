@@ -13,21 +13,40 @@ using namespace std;
 //协程监听器的调用过程：
 // s: Scheduler，表示该方法运行在调度器上下文中
 // c: Coroutine，表示该方法运行在协程上下文中
-//                                             (正常运行完成)
-//                                           -->[c]onCompleted->
-//                                          |                   |
-// [s]onCreated-->[s]onSwapIn-->[c]onStart->*--->[c]onSwapOut-- -->[c]onFinished-->[c]onSwapOut
-//                                          |\                | |
-//                                          | \<-[s]onSwapIn--V |
-//                                          |                   |
-//                                           -->[c]onException->               
-//                                         (运行时抛出未捕获的异常)
+//                                                          (正常运行完成)
+//                                                       -->[c]onCompleted->
+//                                                      |                   |
+// [s]onInit-->[s]onCreated-->[s]onSwapIn-->[c]onStart->*--->[c]onSwapOut-- -->[c]onFinished-->[c]onSwapOut
+//                                                      |\                | |
+//                                                      | \<-[s]onSwapIn--V |
+//                                                      |                   |
+//                                                       -->[c]onException->
+//                                                      (运行时抛出未捕获的异常)
 //
 //！！注意协程监听器回调方法均不能抛出异常，如果可能有异常抛出，请在回调方法内自行 try...catch 消化掉
 
 //覆盖 co::co_listener 的虚函数实现回调方法
 class CoListenerSample: public co::Listener::TaskListener {
 public:
+    /**
+     * 协程准备初始化、即将被创建的时候被调用，可以进行对协程的任务进行封装或者拦截
+     * （注意此时并未运行在协程中）
+     *
+     * @prarm task_id 协程ID
+     * @prarm fn 协程任务，可以赋值修改此参数对协程任务进行二次封装
+     * @param opt 协程创建的参数，可以赋值修改此参数值
+     *
+     * @return 返回true，正常创建该任务；返回false，放弃此任务
+     */
+    virtual bool onInit(uint64_t task_id, co::TaskF& fn, co::TaskOpt& opt) noexcept {
+        cout << "onInit task_id=" << task_id << endl;
+        fn = [fn]() {
+            cout << "haha, I'm coming.  " << endl;
+            fn();
+        };
+        return true;
+    }
+
     /**
      * 协程被创建时被调用
      * （注意此时并未运行在协程中）
@@ -99,6 +118,8 @@ public:
         } catch (...) {
             cout << "unknow exception." << endl;
         }
+
+        eptr = nullptr;
     }
 
     /**
@@ -125,7 +146,7 @@ public:
 };
 
 int main(int argc, char** argv) {
-#if ENABLE_DEBUGGER
+#if ENABLE_LISTENER
     CoListenerSample listener;
 
     //设置协程监听器，如果设置为NULL则为取消监听
