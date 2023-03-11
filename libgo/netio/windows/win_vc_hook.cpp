@@ -344,7 +344,7 @@ namespace co {
 			return 0;
 		}
 
-		if (res < 0 && WSAGetLastError() != WSAEINPROGRESS) {
+		if (res < 0 && WSAGetLastError() != WSAEWOULDBLOCK) {
 			ErrnoStore es;
 			setNonblocking(s, false);
 			return res;
@@ -362,6 +362,7 @@ namespace co {
         int err = 0;
         int errlen = sizeof(err);
         getsockopt(s, SOL_SOCKET, SO_ERROR, (char*)&err, &errlen);
+        setNonblocking(s, false);
         if (err) {
             WSASetLastError(err);
             return -1;
