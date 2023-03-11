@@ -1,5 +1,6 @@
 #pragma once
 #define __const__
+#include <atomic>
 #include "common/config.h"
 #include "common/pp.h"
 #include "common/syntax_helper.h"
@@ -51,6 +52,9 @@ using ::co::co_rwmutex;
 using ::co::co_rmutex;
 using ::co::co_wmutex;
 
+// co_condition_variable
+typedef ::co::ConditionVariableAny co_condition_variable;
+
 // co_chan
 using ::co::co_chan;
 
@@ -75,3 +79,34 @@ typedef ::co::CoTimer::TimerId co_timer_id;
 #define co_last_defer() ::co::GetLastDefer()
 #define co_defer_scope co_defer [&]
 
+class CountDownLatch {
+public:
+    explicit CountDownLatch(size_t n = 1) : mFlyingCount(n) {}
+
+    void Add(size_t i) {
+        std::unique_lock<co_mutex> lck(mu);
+        mFlyingCount += i;
+    }
+
+    void Done() {
+        std::unique_lock<co_mutex> lck(mu);
+        if (--mFlyingCount == 0) {
+            cv.notify_all();
+        }
+    }
+    void Wait() {
+        std::unique_lock<co_mutex> lck(mu);
+        while (mFlyingCount > 0) {
+            cv.wait(lck);
+        }
+    }
+private:
+    size_t mFlyingCount;
+    co_mutex mu;
+    co_condition_variable cv;
+
+    CountDownLatch(CountDownLatch const &) = delete;
+    CountDownLatch(CountDownLatch &&) = delete;
+    CountDownLatch& operator=(CountDownLatch const &) = delete;
+    CountDownLatch& operator=(CountDownLatch &&) = delete;
+};
