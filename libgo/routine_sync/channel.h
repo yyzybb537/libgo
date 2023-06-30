@@ -33,10 +33,7 @@ public:
         RS_DBG(dbg_channel, "channel=%ld | %s | ptr(t)=0x%p | isWait=%d | abstime=%d | closed=%d | popWaiting_=%p | pushWaiting_=%p",
             id(), __func__, (void*)&t, isWait, !!abstime, closed_, (void*)popWaiting_, (void*)pushWaiting_);
 
-        if (closed_)
-            return false;
-
-        if (pushWaiting_) {   // 有push协程在等待, 读出来 & 清理
+        if (pushWaiting_ && pushWaiting_ != (ConditionVariable*)kClosedWaiting) {   // 有push协程在等待, 读出来 & 清理
             t = *pushQ_;
             pushQ_ = nullptr;
 
@@ -50,6 +47,9 @@ public:
             popCv_.notify_one();
             return true;
         }
+
+        if (closed_)
+            return false;
 
         if (!isWait) {
             RS_DBG(dbg_channel, "channel=%ld | %s | not match && not wait | return false",
@@ -68,15 +68,16 @@ public:
             id(), __func__);
 
         (void)waiting.wait_until_p(lock, abstime, [&]{ return popWaiting_ != &waiting; });
-        bool ok = popWaiting_ != &waiting;
+        bool changed = (popWaiting_ != &waiting);
+        bool ok = changed && popWaiting_ != (ConditionVariable*)kClosedWaiting;
 
-        RS_DBG(dbg_channel, "channel=%ld | %s | waked | matched=%d",
-            id(), __func__, ok);
+        RS_DBG(dbg_channel, "channel=%ld | %s | waked | closed=%d | changed=%d | ok=%d",
+            id(), __func__, closed_, changed, ok);
 
         if (ok) {
             // 成功
             t = std::move(temp);    // 对外部T的写操作放到本线程来做, 降低使用难度
-        } else {
+        } else if (!changed) {
             // 超时，清理
             popQ_ = nullptr;
             popWaiting_ = nullptr;
@@ -92,6 +93,9 @@ public:
 
         RS_DBG(dbg_channel, "channel=%ld | %s | ptr(t)=0x%p | isWait=%d | abstime=%d | closed=%d | popWaiting_=%p | pushWaiting_=%p",
             id(), __func__, (void*)&t, isWait, !!abstime, closed_, (void*)popWaiting_, (void*)pushWaiting_);
+
+        if (closed_)
+            return false;
 
         if (!popWaiting_) {
             return pop_impl_with_signal_noqueued(t, isWait, abstime, lock);
@@ -116,8 +120,12 @@ public:
             }
         }
 
-        RS_DBG(dbg_channel, "channel=%ld | %s | waked | pop idle",
-            id(), __func__);
+        RS_DBG(dbg_channel, "channel=%ld | %s | waked | closed=%d | pop idle",
+            id(), __func__, closed_);
+
+        if (closed_)
+            return false;
+
         return pop_impl_with_signal_noqueued(t, isWait, abstime, lock);
     }
 
@@ -129,10 +137,7 @@ public:
         RS_DBG(dbg_channel, "channel=%ld | %s | ptr(t)=0x%p | isWait=%d | abstime=%d | closed=%d | popWaiting_=%p | pushWaiting_=%p",
             id(), __func__, (void*)&t, isWait, !!abstime, closed_, (void*)popWaiting_, (void*)pushWaiting_);
 
-        if (closed_)
-            return false;
-
-        if (popWaiting_) {   // 有pop协程在等待, 写入 & 清理
+        if (popWaiting_ && popWaiting_ != (ConditionVariable*)kClosedWaiting) {   // 有pop协程在等待, 写入 & 清理
             *popQ_ = t;
             popQ_ = nullptr;
 
@@ -146,6 +151,9 @@ public:
             popCv_.notify_one();
             return true;
         }
+
+        if (closed_)
+            return false;
 
         if (!isWait) {
             RS_DBG(dbg_channel, "channel=%ld | %s | not match && not wait | return false",
@@ -163,18 +171,20 @@ public:
             id(), __func__);
 
         (void)waiting.wait_until_p(lock, abstime, [&]{ return pushWaiting_ != &waiting; });
-        bool ok = pushWaiting_ != &waiting;
+        bool changed = (pushWaiting_ != &waiting);
+        bool ok = changed && pushWaiting_ != (ConditionVariable*)kClosedWaiting;
 
-        RS_DBG(dbg_channel, "channel=%ld | %s | waked | matched=%d",
-            id(), __func__, ok);
+        RS_DBG(dbg_channel, "channel=%ld | %s | waked | closed=%d | changed=%d | ok=%d",
+            id(), __func__, closed_, changed, ok);
 
         if (ok) {
             // 成功
-        } else {
+        } else if (!changed) {
             // 超时，清理
             pushQ_ = nullptr;
             pushWaiting_ = nullptr;
         }
+
         return ok;
     }
 
@@ -190,6 +200,9 @@ public:
         if (!pushQ_) {
             return push_impl_with_signal_noqueued(t, isWait, abstime, lock);
         }
+
+        if (closed_)
+            return false;
 
         if (!isWait) {
             RS_DBG(dbg_channel, "channel=%ld | %s | push contended && not wait | return false",
@@ -210,9 +223,36 @@ public:
             }
         }
 
-        RS_DBG(dbg_channel, "channel=%ld | %s | waked | push idle",
-            id(), __func__);
+        RS_DBG(dbg_channel, "channel=%ld | %s | waked | closed=%d | push idle",
+            id(), __func__, closed_);
+
+        if (closed_)
+            return false;
+
         return push_impl_with_signal_noqueued(t, isWait, abstime, lock);
+    }
+
+    void impl_with_signal_close(std::unique_lock<Mutex> & lock)
+    {
+        long push_wakeup = 0;
+        long pop_wakeup = 0;
+        pushQ_ = nullptr;
+        popQ_ = nullptr;
+        if (pushWaiting_) {
+            pushWaiting_->fast_notify_all(lock);
+            pushWaiting_ = (ConditionVariable*)kClosedWaiting;
+            push_wakeup = 1;
+        }
+        if (popWaiting_) {
+            popWaiting_->fast_notify_all(lock);
+            popWaiting_ = (ConditionVariable*)kClosedWaiting;
+            pop_wakeup = 1;
+        }
+
+        (void)push_wakeup;
+        (void)pop_wakeup;
+        RS_DBG(dbg_channel, "channel(...)=%ld | %s | no-cap branch | push-wakeup=%ld | pop-wakeup=%ld",
+                id(), __func__, push_wakeup, pop_wakeup);
     }
 
 protected:
@@ -225,6 +265,8 @@ protected:
     T* popQ_ {nullptr};
     ConditionVariable* pushWaiting_ {nullptr};
     ConditionVariable* popWaiting_ {nullptr};
+
+    static const std::size_t kClosedWaiting = (std::size_t)-1;
 };
 
 template <
@@ -245,6 +287,7 @@ public:
     using ChannelImplWithSignal<T>::pop_impl_with_signal;
     using ChannelImplWithSignal<T>::push_impl_with_signal;
     using ChannelImplWithSignal<T>::id;
+    using ChannelImplWithSignal<T>::impl_with_signal_close;
 
     explicit ChannelImpl(std::size_t capacity = 0)
         : cap_(capacity)
@@ -299,22 +342,16 @@ public:
         std::unique_lock<Mutex> lock(mtx_);
         closed_ = true;
         if (!cap_) {
-            pushQ_ = nullptr;
-            popQ_ = nullptr;
-            if (pushWaiting_) {
-                pushWaiting_->fast_notify_all(lock);
-                pushWaiting_ = nullptr;
-            }
-            if (popWaiting_) {
-                popWaiting_->fast_notify_all(lock);
-                popWaiting_ = nullptr;
-            }
+            impl_with_signal_close(lock);
         }
 
-        pushCv_.fast_notify_all(lock);
-        popCv_.fast_notify_all(lock);
-        QueueT q;
-        std::swap(q, q_);
+        long push_wakeup = pushCv_.fast_notify_all(lock);
+        long pop_wakeup = popCv_.fast_notify_all(lock);
+        (void)push_wakeup;
+        (void)pop_wakeup;
+
+        RS_DBG(dbg_channel, "channel(queue)=%ld | %s | cap=%lu | size=%lu | push-wakeup=%ld | pop-wakeup=%ld",
+            id(), __func__, cap_, q_.size(), push_wakeup, pop_wakeup);
     }
 
 private:
@@ -346,7 +383,7 @@ private:
             return false;
         }
 
-        auto p = [this]{ return q_.size() < cap_; };
+        auto p = [this]{ return q_.size() < cap_ || closed_; };
 
         RS_DBG(dbg_channel, "channel(queue)=%ld | %s | begin wait",
                 id(), __func__);
@@ -381,9 +418,6 @@ private:
         RS_DBG(dbg_channel, "channel(queue)=%ld | %s | ptr(t)=0x%p | isWait=%d | abstime=%d | closed=%d | cap=%lu | size=%lu",
             id(), __func__, (void*)&t, isWait, !!abstime, closed_, cap_, q_.size());
 
-        if (closed_)
-            return false;
-
         if (!q_.empty()) {
             t = q_.front();
             q_.pop_front();
@@ -395,13 +429,16 @@ private:
             return true;
         }
 
+        if (closed_)
+            return false;
+
         if (!isWait) {
             RS_DBG(dbg_channel, "channel(queue)=%ld | %s | not match && not wait | return false",
                 id(), __func__);
             return false;
         }
 
-        auto p = [this]{ return !q_.empty(); };
+        auto p = [this]{ return !q_.empty() || closed_; };
 
         RS_DBG(dbg_channel, "channel(queue)=%ld | %s | begin wait",
                 id(), __func__);
@@ -415,7 +452,7 @@ private:
         if (status == std::cv_status::timeout)
             return false;
 
-        if (closed_)
+        if (q_.empty())
             return false;
 
         t = q_.front();
@@ -451,6 +488,7 @@ public:
     using ChannelImplWithSignal<nullptr_t>::pop_impl_with_signal;
     using ChannelImplWithSignal<nullptr_t>::push_impl_with_signal;
     using ChannelImplWithSignal<nullptr_t>::id;
+    using ChannelImplWithSignal<nullptr_t>::impl_with_signal_close;
 
     explicit ChannelImpl(std::size_t capacity = 0)
         : cap_(capacity), count_(0)
@@ -505,21 +543,16 @@ public:
         std::unique_lock<Mutex> lock(mtx_);
         closed_ = true;
         if (!cap_) {
-            pushQ_ = nullptr;
-            popQ_ = nullptr;
-            if (pushWaiting_) {
-                pushWaiting_->fast_notify_all(lock);
-                pushWaiting_ = nullptr;
-            }
-            if (popWaiting_) {
-                popWaiting_->fast_notify_all(lock);
-                popWaiting_ = nullptr;
-            }
+            impl_with_signal_close(lock);
         }
 
-        pushCv_.fast_notify_all(lock);
-        popCv_.fast_notify_all(lock);
-        count_ = 0;
+        long push_wakeup = pushCv_.fast_notify_all(lock);
+        long pop_wakeup = popCv_.fast_notify_all(lock);
+        (void)push_wakeup;
+        (void)pop_wakeup;
+
+        RS_DBG(dbg_channel, "channel(void)=%ld | %s | cap=%lu | size=%lu | push-wakeup=%ld | pop-wakeup=%ld",
+            id(), __func__, cap_, count_, push_wakeup, pop_wakeup);
     }
 
 private:
@@ -551,7 +584,7 @@ private:
             return false;
         }
 
-        auto p = [this]{ return count_ < cap_; };
+        auto p = [this]{ return count_ < cap_ || closed_; };
 
         RS_DBG(dbg_channel, "channel(void)=%ld | %s | begin wait",
                 id(), __func__);
@@ -586,9 +619,6 @@ private:
         RS_DBG(dbg_channel, "channel(void)=%ld | %s | isWait=%d | abstime=%d | closed=%d | cap=%lu | size=%lu",
             id(), __func__, isWait, !!abstime, closed_, cap_, count_);
 
-        if (closed_)
-            return false;
-
         if (count_ > 0) {
             --count_;
             pushCv_.notify_one();
@@ -598,13 +628,16 @@ private:
             return true;
         }
 
+        if (closed_)
+            return false;
+
         if (!isWait) {
             RS_DBG(dbg_channel, "channel(void)=%ld | %s | not match && not wait | return false",
                 id(), __func__);
             return false;
         }
 
-        auto p = [this]{ return count_ > 0; };
+        auto p = [this]{ return count_ > 0 || closed_; };
 
         RS_DBG(dbg_channel, "channel(void)=%ld | %s | begin wait",
                 id(), __func__);
@@ -618,7 +651,7 @@ private:
         if (status == std::cv_status::timeout)
             return false;
 
-        if (closed_)
+        if (count_ <= 0)
             return false;
 
         --count_;

@@ -4,7 +4,8 @@
 #include <vector>
 #include <list>
 #include <atomic>
-//#define OPEN_ROUTINE_SYNC_DEBUG 1
+#include <stdio.h>
+#define OPEN_ROUTINE_SYNC_DEBUG 1
 #include "coroutine.h"
 #include "gtest_exit.h"
 using namespace std::chrono;
@@ -22,8 +23,8 @@ using namespace co;
 
 TEST(Channel, capacity0)
 {
-    // co_opt.debug = dbg_channel | dbg_rutex | dbg_mutex;
-    co_opt.debug_output = fopen("a.log", "w");
+//    co_opt.debug = dbg_channel | dbg_rutex | dbg_mutex;
+//    co_opt.debug_output = fopen("a.log", "w");
 
     co_chan<int> ch;
     EXPECT_TRUE(ch.empty());
@@ -658,5 +659,251 @@ TEST(Channel, capacity0Timed)
             EXPECT_EQ(p[i], 1);
         }
         delete[] p;
+    }
+}
+
+TEST(Channel, read_waiting_close)
+{
+//    co_opt.debug = dbg_channel | dbg_rutex | dbg_mutex | dbg_cond_v;
+//    co_opt.debug_output = fopen("a.log", "w");
+
+    {
+        co_chan<int> ch(3);
+
+        go [=] {
+            int v = 0;
+            bool b = ch.pop(v);
+            EXPECT_FALSE(b);
+        };
+
+        usleep(100 * 1000);
+
+        ch.close();
+
+        WaitUntilNoTask();
+
+        int v = 0;
+        bool b = ch.pop(v);
+        EXPECT_FALSE(b);
+    }
+
+    {
+        co_chan<int> ch(3);
+
+        ch.push(1);
+        ch.push(2);
+        ch.push(3);
+
+        go [=] {
+            int v = 0;
+            bool b = ch.push(v);
+            EXPECT_FALSE(b);
+        };
+
+        usleep(100 * 1000);
+
+        ch.close();
+
+        WaitUntilNoTask();
+
+        int v = 0;
+        bool b = ch.push(v);
+        EXPECT_FALSE(b);
+    }
+
+    {
+        co_chan<int> ch;
+
+        go [=] {
+            int v = 0;
+            bool b = ch.pop(v);
+            EXPECT_FALSE(b);
+        };
+
+        usleep(100 * 1000);
+
+        ch.close();
+
+        WaitUntilNoTask();
+
+        int v = 0;
+        bool b = ch.pop(v);
+        EXPECT_FALSE(b);
+    }
+
+    {
+        co_chan<void> ch(3);
+
+        go [=] {
+            bool b = ch.pop(nullptr);
+            EXPECT_FALSE(b);
+        };
+
+        usleep(100 * 1000);
+
+        ch.close();
+
+        WaitUntilNoTask();
+
+        bool b = ch.pop(nullptr);
+        EXPECT_FALSE(b);
+    }
+
+    {
+        co_chan<void> ch;
+
+        go [=] {
+            bool b = ch.pop(nullptr);
+            EXPECT_FALSE(b);
+        };
+
+        usleep(100 * 1000);
+
+        ch.close();
+
+        WaitUntilNoTask();
+
+        bool b = ch.pop(nullptr);
+        EXPECT_FALSE(b);
+    }
+}
+
+TEST(Channel, read_after_close)
+{
+    {
+        co_chan<int> ch(3);
+
+        go [=] {
+            for (int i = 0; i < 3; ++i) {
+                GTimer t;
+                int v = 0;
+                bool ok = ch.pop(v);
+                EXPECT_TRUE(ok);
+                EXPECT_EQ(v, i + 1);
+            }
+
+            int v = 0;
+            bool b = ch.pop(v);
+            EXPECT_FALSE(b);
+        };
+
+        usleep(100 * 1000);
+
+        ch.push(1);
+        ch.push(2);
+        ch.push(3);
+        ch.close();
+
+        WaitUntilNoTask();
+
+        int v = 0;
+        bool b = ch.pop(v);
+        EXPECT_FALSE(b);
+    }
+
+    {
+        co_chan<int> ch(3);
+
+        ch.push(1);
+        ch.push(2);
+        ch.push(3);
+
+        go [=] {
+            int v = 0;
+            bool b = ch.push(v);
+            EXPECT_FALSE(b);
+        };
+
+        usleep(100 * 1000);
+
+        int v;
+        ch.pop(v);
+        ch.pop(v);
+        ch.pop(v);
+        ch.close();
+
+        WaitUntilNoTask();
+    }
+
+    {
+        co_chan<int> ch(3);
+
+        ch.push(1);
+        ch.push(2);
+        ch.push(3);
+        ch.close();
+
+        int v;
+        bool b;
+        b = ch.pop(v);
+        EXPECT_TRUE(b);
+        EXPECT_EQ(v, 1);
+
+        b = ch.pop(v);
+        EXPECT_TRUE(b);
+        EXPECT_EQ(v, 2);
+
+        b = ch.pop(v);
+        EXPECT_TRUE(b);
+        EXPECT_EQ(v, 3);
+
+        b = ch.pop(v);
+        EXPECT_FALSE(b);
+    }
+
+    {
+        co_chan<void> ch(3);
+
+        ch.push(nullptr);
+        ch.push(nullptr);
+        ch.push(nullptr);
+        ch.close();
+
+        bool b;
+        b = ch.pop(nullptr);
+        EXPECT_TRUE(b);
+
+        b = ch.pop(nullptr);
+        EXPECT_TRUE(b);
+
+        b = ch.pop(nullptr);
+        EXPECT_TRUE(b);
+
+        b = ch.pop(nullptr);
+        EXPECT_FALSE(b);
+    }
+
+    {
+        co_chan<int> ch;
+
+        go [=] {
+            int v = 0;
+            bool b = ch.pop(v);
+            EXPECT_TRUE(b);
+            EXPECT_EQ(v, 1);
+        };
+
+        usleep(100 * 1000);
+
+        ch.push(1);
+        ch.close();
+
+        WaitUntilNoTask();
+    }
+
+    {
+        co_chan<void> ch;
+
+        go [=] {
+            bool b = ch.pop(nullptr);
+            EXPECT_TRUE(b);
+        };
+
+        usleep(100 * 1000);
+
+        ch.push(nullptr);
+        ch.close();
+
+        WaitUntilNoTask();
     }
 }
