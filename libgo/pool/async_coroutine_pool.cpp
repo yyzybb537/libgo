@@ -94,6 +94,10 @@ AsyncCoroutinePool::AsyncCoroutinePool(size_t maxCallbackPoints)
     points_ = new CallbackPoint*[maxCallbackPoints_];
 }
 
+void AsyncCoroutinePool::WaitStop(){
+    while (!tasks_.empty());
+}
+
 size_t AsyncCoroutinePool::CallbackPoint::Run(size_t maxTrigger)
 {
     size_t i = 0;
