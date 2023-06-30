@@ -25,6 +25,8 @@ public:
 
     void Post(Func const& func);
 
+    void WaitStop();
+
     template <typename R>
     void Post(Channel<R> const& ret, std::function<R()> const& func) {
         Post([=]{ ret << func(); }, NULL);
@@ -83,6 +85,7 @@ private:
     Channel<PoolTask> tasks_;
     std::atomic<size_t> pointsCount_{0};
     std::atomic<size_t> writePointsCount_{0};
+    std::atomic<size_t> taskRunningPoints{0};
     size_t maxCallbackPoints_;
     std::atomic<size_t> robin_{0};
     CallbackPoint ** points_;

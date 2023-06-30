@@ -44,6 +44,8 @@ void AsyncCoroutinePool::Go()
         PoolTask task;
         tasks_ >> task;
 
+        taskRunningPoints++;
+
         if (task.func_)
             task.func_();
 
@@ -59,6 +61,8 @@ void AsyncCoroutinePool::Go()
         size_t idx = ++robin_ % pointsCount;
         points_[idx]->Post(std::move(task.cb_));
         points_[idx]->Notify();
+
+        taskRunningPoints--;
     }
 }
 void AsyncCoroutinePool::Post(Func const& func, Func const& callback)
@@ -95,7 +99,7 @@ AsyncCoroutinePool::AsyncCoroutinePool(size_t maxCallbackPoints)
 }
 
 void AsyncCoroutinePool::WaitStop(){
-    while (!tasks_.empty());
+    while (!tasks_.empty() && taskRunningPoints == 0);
 }
 
 size_t AsyncCoroutinePool::CallbackPoint::Run(size_t maxTrigger)
