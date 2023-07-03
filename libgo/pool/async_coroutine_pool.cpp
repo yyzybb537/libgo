@@ -49,12 +49,15 @@ void AsyncCoroutinePool::Go()
         if (task.func_)
             task.func_();
 
-        if (!task.cb_)
+        if (!task.cb_) {
+            taskRunningPoints--;
             continue;
+        }
 
         size_t pointsCount = pointsCount_;
         if (!pointsCount) {
             task.cb_();
+            taskRunningPoints--;
             continue;
         }
 
@@ -98,8 +101,9 @@ AsyncCoroutinePool::AsyncCoroutinePool(size_t maxCallbackPoints)
     points_ = new CallbackPoint*[maxCallbackPoints_];
 }
 
-void AsyncCoroutinePool::WaitStop(){
-    while (!tasks_.empty() && taskRunningPoints == 0);
+void AsyncCoroutinePool::WaitStop()
+{
+    while (!tasks_.empty() || taskRunningPoints.load() != 0);
 }
 
 size_t AsyncCoroutinePool::CallbackPoint::Run(size_t maxTrigger)
