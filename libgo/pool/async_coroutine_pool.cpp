@@ -7,9 +7,10 @@ AsyncCoroutinePool * AsyncCoroutinePool::Create(size_t maxCallbackPoints)
 {
     return new AsyncCoroutinePool(maxCallbackPoints);
 }
-void AsyncCoroutinePool::InitCoroutinePool(size_t maxCoroutineCount)
+void AsyncCoroutinePool::InitCoroutinePool(size_t maxCoroutineCount, size_t stackSize)
 {
     maxCoroutineCount_ = maxCoroutineCount;
+    stackSize_ = stackSize;
 }
 void AsyncCoroutinePool::Start(int minThreadNumber, int maxThreadNumber)
 {
@@ -21,11 +22,21 @@ void AsyncCoroutinePool::Start(int minThreadNumber, int maxThreadNumber)
         maxCoroutineCount_ = (std::max)(minThreadNumber * 128, maxThreadNumber);
         maxCoroutineCount_ = (std::min<size_t>)(maxCoroutineCount_, 10240);
     }
-    for (size_t i = 0; i < maxCoroutineCount_; ++i) {
-        go co_scheduler(scheduler_) [this]{
-            this->Go();
-        };
+
+    if(stackSize_ > 0) {
+        for (size_t i = 0; i < maxCoroutineCount_; ++i) {
+            go_stack(stackSize_) co_scheduler(scheduler_) [this]{
+                this->Go();
+            };
+        }
+    } else {
+        for (size_t i = 0; i < maxCoroutineCount_; ++i) {
+            go co_scheduler(scheduler_) [this]{
+                this->Go();
+            };
+        }
     }
+
 }
 void AsyncCoroutinePool::Go()
 {
@@ -33,21 +44,28 @@ void AsyncCoroutinePool::Go()
         PoolTask task;
         tasks_ >> task;
 
+        taskRunningPoints++;
+
         if (task.func_)
             task.func_();
 
-        if (!task.cb_)
+        if (!task.cb_) {
+            taskRunningPoints--;
             continue;
+        }
 
         size_t pointsCount = pointsCount_;
         if (!pointsCount) {
             task.cb_();
+            taskRunningPoints--;
             continue;
         }
 
         size_t idx = ++robin_ % pointsCount;
         points_[idx]->Post(std::move(task.cb_));
         points_[idx]->Notify();
+
+        taskRunningPoints--;
     }
 }
 void AsyncCoroutinePool::Post(Func const& func, Func const& callback)
@@ -55,6 +73,13 @@ void AsyncCoroutinePool::Post(Func const& func, Func const& callback)
     PoolTask task{func, callback};
     tasks_ << std::move(task);
 }
+
+void AsyncCoroutinePool::Post(Func const& func)
+{
+    PoolTask task{func, NULL};
+    tasks_ << std::move(task);
+}
+
 bool AsyncCoroutinePool::AddCallbackPoint(AsyncCoroutinePool::CallbackPoint * point)
 {
     size_t writeIdx = writePointsCount_++;
@@ -74,6 +99,11 @@ AsyncCoroutinePool::AsyncCoroutinePool(size_t maxCallbackPoints)
     maxCallbackPoints_ = maxCallbackPoints;
     scheduler_ = Scheduler::Create();
     points_ = new CallbackPoint*[maxCallbackPoints_];
+}
+
+void AsyncCoroutinePool::WaitStop()
+{
+    while (!tasks_.empty() || taskRunningPoints.load() != 0);
 }
 
 size_t AsyncCoroutinePool::CallbackPoint::Run(size_t maxTrigger)
